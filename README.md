@@ -17,7 +17,6 @@
 
 <p align="center">
   <a href="#core-features">Core features</a> ·
-  <a href="#roadmap">Roadmap</a> ·
   <a href="#opening-an-unsigned-build">Unsigned builds</a> ·
   <a href="#build">Build</a> ·
   <a href="docs/cli/README.md">CLI</a> ·
@@ -81,15 +80,6 @@ This is early software under active development. Unsigned builds and source buil
 - **Starts read-only.** Mail first asks Gmail for read-only access and changes nothing until you turn on write mode. It never asks to delete mail permanently or to change Gmail settings or filters.
 - **Themes.** Six built-in themes, and [your own](docs/themes.md) as plain JSON files.
 - **A CLI for agents.** `openhuman` reads the same local mail, writes drafts for you to review, and never sends. It includes an MCP server. See the [CLI documentation](docs/cli/README.md).
-
-## Roadmap
-
-Next, from our own backlog:
-
-- **Search ranking**, with options to adjust how results are ordered.
-- **A clear “Why is this back?” tag** on email that a reminder brings back to your inbox.
-- **Better search coverage.**
-- **Configurable AI defaults.**
 
 ## Opening an unsigned build
 
