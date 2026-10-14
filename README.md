@@ -1,4 +1,30 @@
-# OpenHuman
+<p align="center">
+  <img src="docs/images/logo.png" alt="Mail by OpenHuman app icon" width="128" height="128">
+</p>
+
+<h1 align="center">OpenHuman</h1>
+
+<p align="center">
+  <b>Mail by OpenHuman is a keyboard-first Gmail client for macOS, with AI that runs on your Mac.</b>
+</p>
+
+<p align="center">
+  <img alt="macOS 27 on Apple silicon" src="https://img.shields.io/badge/macOS-27%20%C2%B7%20Apple%20silicon-17614d?style=flat-square&logo=apple&logoColor=white">
+  <img alt="Swift 6.4" src="https://img.shields.io/badge/Swift-6.4-F05138?style=flat-square&logo=swift&logoColor=white">
+  <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-3a3a3a?style=flat-square"></a>
+  <img alt="Status: early development" src="https://img.shields.io/badge/status-early%20development-c98a1b?style=flat-square">
+</p>
+
+<p align="center">
+  <a href="#core-features">Core features</a> ·
+  <a href="#roadmap">Roadmap</a> ·
+  <a href="#opening-an-unsigned-build">Unsigned builds</a> ·
+  <a href="#build">Build</a> ·
+  <a href="docs/cli/README.md">CLI</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+<br>
 
 OpenHuman is an open-source, clean-room clone of Superhuman.
 
@@ -7,6 +33,63 @@ It is Swift-native, runs locally (including its AI features), and is agent-ready
 It has only been tested on Apple silicon, macOS 27, Xcode 27, and Swift 6.4.
 
 This is early software under active development. Unsigned builds and source builds are available now. Signed binary downloads and Homebrew installation will be announced when ready.
+
+<br>
+
+<p align="center">
+  <img src="docs/images/inbox.png" alt="The inbox in the Light theme, split into Important, Newsletters and Other, with conversations from invented example senders" width="100%">
+  <br>
+  <sub>The inbox, split into Important, Newsletters and Other. Every screenshot here shows invented sample data.</sub>
+</p>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/reply.png" alt="A reply written inline under the last message, with Send, Send later and Remind me buttons">
+      <br>
+      <sub>Reply inline, then send now, send later, or get a reminder.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/undo-send.png" alt="The inbox in the Dark theme with a Reply sent notice and an Undo button">
+      <br>
+      <sub>A few seconds to take back a send, in the Dark theme.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/images/search.png" alt="The search field open over the inbox, listing search operators such as from:, to:, subject: and has:attachment">
+      <br>
+      <sub>Search with Gmail operators such as from: and has:attachment.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/images/calendar.png" alt="A conversation with the calendar sidebar open and a new event drafted from the email">
+      <br>
+      <sub>Your calendar beside the conversation, with an event drafted from the email.</sub>
+    </td>
+  </tr>
+</table>
+
+## Core features
+
+- **Keyboard first.** Superhuman-style shortcuts, a command palette on ⌘K, and shortcuts you can change.
+- **Split inbox.** Important mail apart from the rest, plus your own splits made from any search. “Why is this here?” explains where a conversation landed.
+- **Snooze, reminders and send later.** Snooze a conversation, get a reminder if nobody replies, schedule a send, and undo a send while its undo window is open.
+- **Search.** Gmail search syntax, related matches from an index built on your Mac, and a Gmail lookup for mail that is not on your Mac yet.
+- **AI on your Mac.** Summaries, quick replies, rewrites and Ask AI about your mail. AI runs on your Mac by default, and providers that would send mail off your Mac stay off until you allow them. Every prompt can be read and edited in Settings.
+- **Calendar beside your mail.** Your Google Calendar day next to the conversation, events created from an email, and free times inserted into a reply.
+- **Less noise.** Mute a conversation, block a sender or a domain, unsubscribe, and clear out old mail with Get me to zero.
+- **Starts read-only.** Mail first asks Gmail for read-only access and changes nothing until you turn on write mode. It never asks to delete mail permanently or to change Gmail settings or filters.
+- **Themes.** Six built-in themes, and [your own](docs/themes.md) as plain JSON files.
+- **A CLI for agents.** `openhuman` reads the same local mail, writes drafts for you to review, and never sends. It includes an MCP server. See the [CLI documentation](docs/cli/README.md).
+
+## Roadmap
+
+Next, from our own backlog:
+
+- **Search ranking**, with options to adjust how results are ordered.
+- **A clear “Why is this back?” tag** on email that a reminder brings back to your inbox.
+- **Better search coverage.**
+- **Configurable AI defaults.**
 
 ## Opening an unsigned build
 
