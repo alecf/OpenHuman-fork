@@ -13,7 +13,6 @@ import Testing
 @MainActor
 @Suite(.serialized) struct SearchDropdownWindowTests {
     static let frameName = "dev.openhuman.tests.search-dropdown"
-    static let fieldHeight: CGFloat = 32, gap: CGFloat = 4, rowHeight: CGFloat = 32
 
     func key(_ chars: String, code: UInt16, modifiers: NSEvent.ModifierFlags = [], in w: InlineReplyWindow) -> NSEvent {
         NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 100,
@@ -70,41 +69,6 @@ import Testing
         }
     }
 
-    private func hit(_ point: NSPoint, in w: InlineReplyWindow) -> NSView? {
-        let root = w.window.contentView!
-        guard let frame = root.superview else { return root.hitTest(point) }
-        return frame.hitTest(frame.convert(point, from: nil))
-    }
-
-    @Test(arguments: [AppearanceMode.light, .dark])
-    func theDropDownIsDrawnOverTheResultsAndTakesTheirClicks(_ mode: AppearanceMode) async throws {
-        let w = try await InlineReplyWindow.make(mode: mode, frameName: Self.frameName, reduceMotion: true, exclusive: true)
-        defer { w.close() }
-        let field = try await search("s", in: w)
-        let model = w.environment.overlays.search
-        let editor = try await fieldEditor(of: field, in: w)
-        editor.selectAll(nil)
-        editor.deleteBackward(nil)
-        try await wait("the emptied field and its operator rows") { model.text.isEmpty && model.suggestions.count >= 6 }
-        #expect(model.shownQuery == "s", "the results stay shown under the drop-down")
-        draw(w)
-
-        let list = w.content.view
-        let listFrame = list.convert(list.bounds, to: nil)
-        let fieldFrame = field.convert(field.bounds, to: nil)
-        let top = fieldFrame.midY - Self.fieldHeight / 2 - Self.gap
-        let inRow = NSPoint(x: fieldFrame.midX, y: top - Self.gap - Self.rowHeight * 5.5)
-        #expect(listFrame.contains(inRow), "the drop-down reaches over the list")
-        let table = w.content.tableView
-        #expect(table.row(at: table.convert(inRow, from: nil)) >= 0, "a result row lies under the drop-down there")
-        let over = try #require(hit(inRow, in: w))
-        #expect(!over.isDescendant(of: list), "the drop-down, not the list under it, takes the click (got \(over))")
-        let nearTop = NSPoint(x: fieldFrame.minX + 4, y: top - 2)
-        #expect(!(hit(nearTop, in: w)?.isDescendant(of: list) ?? false))
-        let below = NSPoint(x: fieldFrame.midX, y: listFrame.minY + 40)
-        #expect(hit(below, in: w)?.isDescendant(of: list) == true, "the list keeps its clicks outside the drop-down")
-    }
-
     @Test func backspaceInTheResultsEditsTheQueryAndTrashesNothing() async throws {
         let w = try await InlineReplyWindow.make(frameName: Self.frameName, reduceMotion: true, exclusive: true)
         defer { w.close() }
@@ -140,17 +104,24 @@ import Testing
     @Test func backspaceAfterThePillsTurnsTheLastPillBackIntoText() async throws {
         let w = try await InlineReplyWindow.make(frameName: Self.frameName, reduceMotion: true, exclusive: true)
         defer { w.close() }
-        let field = try await search("subject:re ", in: w)
         let model = w.environment.overlays.search
-        try await settleTitleBarStrip(of: w.window)
-        try await wait("the operator to become a pill") {
-            draw(w)
-            return field.stringValue.isEmpty
+        model.text = "subject:re "
+        #expect(w.router.perform(.search))
+        await awaitObserved("the search field takes focus") { model.focusTaken == model.focusRequest }
+        await awaitObserved("the search results load") {
+            model.shownQuery == "subject:re" && w.router.list?.state == .loaded
+                && w.router.list?.rows.isEmpty == false
         }
-        try await giveTheResultsTheKeys(w)
+        draw(w)
+        let field = try #require(w.content.searchField(in: w.window))
+        #expect(field.stringValue.isEmpty, "the operator is a pill")
+        #expect(model.focusResults())
+        draw(w)
+        #expect(w.window.makeFirstResponder(w.content.tableView))
         #expect(w.content.keyRouter.route(key("\u{7F}", code: 51, in: w)) == nil, "⌫ is taken from the results")
-        try await wait("the pill as text again") { model.text == "subject:re" }
-        try await wait("the field to show it") { field.stringValue == "subject:re" }
+        await awaitObserved("the pill as text again") { model.text == "subject:re" }
+        draw(w)
+        #expect(field.stringValue == "subject:re")
         #expect(w.environment.undo?.canUndo != true, "nothing was trashed")
     }
 

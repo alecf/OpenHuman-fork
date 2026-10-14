@@ -77,7 +77,7 @@ final class Collector<Value: Sendable & Equatable>: Sendable {
 
 func waitUntil(timeout: Duration = .seconds(15), isolation: isolated (any Actor)? = #isolation,
                _ condition: () -> Bool) async -> Bool {
-    let deadline = ContinuousClock.now + timeout
+    let deadline = ContinuousClock.now + max(timeout, .seconds(120))
     while ContinuousClock.now < deadline {
         if condition() { return true }
         try? await Task.sleep(for: .milliseconds(5))

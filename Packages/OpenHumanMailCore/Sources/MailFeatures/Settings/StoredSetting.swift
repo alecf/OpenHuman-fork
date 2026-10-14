@@ -50,6 +50,14 @@ public final class StoredSetting<Value: Codable & Sendable & Equatable> {
         }
     }
 
+    // Read persisted state because a late initial snapshot can replace the displayed value.
+    public func update(_ transform: (inout Value) -> Void) async {
+        guard let port else { return }
+        var next = (try? await port.get(key)) ?? value
+        transform(&next)
+        await set(next)
+    }
+
     static func message(_ error: Error) -> String {
         (error as? MailPortError)?.description ?? "That change couldn't be saved."
     }

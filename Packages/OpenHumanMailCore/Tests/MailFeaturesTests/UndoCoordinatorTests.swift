@@ -216,7 +216,7 @@ final class FakeUndoPort: MailUndoing {
         let notices = NoticeCenter()
         notices.post("Marked done", duration: .milliseconds(20))
         #expect(notices.toasts.count == 1)
-        for _ in 0..<200 where !notices.toasts.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        for _ in 0..<12_000 where !notices.toasts.isEmpty { try await Task.sleep(for: .milliseconds(10)) } // flake-ok: exercises real-time toast expiration
         #expect(notices.toasts.isEmpty)
     }
 

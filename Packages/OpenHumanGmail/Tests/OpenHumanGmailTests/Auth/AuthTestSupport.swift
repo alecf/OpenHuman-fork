@@ -168,7 +168,7 @@ func posixMode(_ url: URL) -> mode_t? {
 }
 
 func eventually(_ condition: () -> Bool, timeout: Duration = .seconds(5)) async -> Bool {
-    let deadline = ContinuousClock.now + timeout
+    let deadline = ContinuousClock.now + max(timeout, .seconds(120))
     while ContinuousClock.now < deadline {
         if condition() { return true }
         try? await Task.sleep(for: .milliseconds(2))

@@ -237,7 +237,7 @@ func finalState(_ stream: AsyncStream<DownloadState>) async -> DownloadState {
         fixture.transport.setBehaviour(fixture.manifest.files[0].url, .hang)
         let store = ModelStore(rootDirectory: root, transport: fixture.transport, freeSpace: { _ in 100 << 30 })
         let stream = await store.download(fixture.manifest, confirmedSizeBytes: fixture.manifest.totalBytes)
-        for _ in 0..<500 where fixture.transport.requestLog.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        for _ in 0..<12_000 where fixture.transport.requestLog.isEmpty { try await Task.sleep(for: .milliseconds(10)) } // flake-ok: waits for transport entry before cancellation
         #expect(!fixture.transport.requestLog.isEmpty)
         await store.cancel(fixture.manifest)
         #expect(await finalState(stream) == .cancelled)

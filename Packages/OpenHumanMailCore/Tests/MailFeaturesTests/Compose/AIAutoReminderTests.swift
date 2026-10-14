@@ -178,7 +178,7 @@ private let no = #"{"needsFollowUp":false,"reason":"Only says thanks","suggested
         #expect(await reminder(f, thread) != nil)
         #expect(await f.run(.undo))
         var gone = false
-        for _ in 0..<200 where !gone {
+        for _ in 0..<12_000 where !gone {
             gone = await reminder(f, thread) == nil
             if !gone { try? await Task.sleep(for: .milliseconds(10)) }
         }

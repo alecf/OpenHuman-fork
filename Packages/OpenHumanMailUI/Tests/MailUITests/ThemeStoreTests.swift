@@ -4,7 +4,7 @@ import Testing
 @testable import MailUI
 
 @MainActor
-func waitUntil(timeout: Duration = .seconds(60), _ condition: @MainActor () -> Bool) async throws {
+func waitUntil(timeout: Duration = testBackstop, _ condition: @MainActor () -> Bool) async throws {
     let clock = ContinuousClock()
     let deadline = clock.now + timeout
     while !condition() {

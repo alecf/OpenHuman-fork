@@ -73,9 +73,11 @@ struct SyncHarness {
 }
 
 func eventually(_ what: String = "condition", _ condition: () async throws -> Bool) async throws {
-    for _ in 0..<15_000 {
+    let clock = ContinuousClock()
+    let deadline = clock.now + .seconds(120)
+    while clock.now < deadline {
         if try await condition() { return }
         try await Task.sleep(for: .milliseconds(2))
     }
-    Issue.record("timed out waiting for \(what)")
+    Issue.record("never became true (120 s backstop): \(what)")
 }

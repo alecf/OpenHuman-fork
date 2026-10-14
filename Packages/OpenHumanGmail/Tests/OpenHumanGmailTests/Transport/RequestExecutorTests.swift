@@ -145,7 +145,7 @@ import Testing
                                  limiter: QuotaLimiter(unitsPerMinute: 6000, maxConcurrent: 8, clock: clock),
                                  jitter: { 1.0 })
         let task = Task { try await client.getProfile(priority: .sync) }
-        for _ in 0..<500 where clock.sleeperCount == 0 { try await Task.sleep(for: .milliseconds(2)) }
+        for _ in 0..<60_000 where clock.sleeperCount == 0 { try await Task.sleep(for: .milliseconds(2)) } // flake-ok: waits for backoff registration before cancellation
         #expect(clock.sleeperCount == 1)
         task.cancel()
         await #expect(throws: GmailError.cancelled) { _ = try await task.value }

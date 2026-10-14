@@ -28,9 +28,10 @@ onboarding explains Google client setup for a real account.
 
 ```sh
 Tools/ci/check-imports.sh
+python3 -B Tools/ci/check-test-patterns.py
 Tools/ci/build-all.sh
 Tools/ci/test-all.sh
-xcodebuild test -project Apps/Mail/Mail.xcodeproj -scheme Mail \
+xcodebuild test -skipPackageUpdates -project Apps/Mail/Mail.xcodeproj -scheme Mail \
   -destination 'platform=macOS,arch=arm64' \
   CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
 ```

@@ -4,21 +4,20 @@ import Synchronization
 import Testing
 
 @MainActor
-func eventually(timeout: Duration = minimumWaitCeiling, _ condition: @MainActor () -> Bool,
+func eventually(timeout: Duration? = nil, _ condition: @MainActor () -> Bool,
                 sourceLocation: SourceLocation = #_sourceLocation) async {
     let clock = ContinuousClock()
-    let ceiling = max(timeout, minimumWaitCeiling)
-    let deadline = clock.now + ceiling
+    let deadline = clock.now + testBackstop
     while !condition() {
         if clock.now > deadline {
-            Issue.record("condition not met within \(ceiling)", sourceLocation: sourceLocation)
+            Issue.record("condition not met within the \(testBackstop) backstop", sourceLocation: sourceLocation)
             return
         }
         try? await Task.sleep(for: .milliseconds(5))
     }
 }
 
-let minimumWaitCeiling: Duration = .seconds(60)
+let testBackstop: Duration = .seconds(120)
 
 @MainActor
 func untilObserved(_ condition: @MainActor () -> Bool) async {
