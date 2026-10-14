@@ -1,0 +1,29 @@
+fixture: c14-low-contrast-midtones
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<div style="background:#777777;padding:12px"><p style="color:#888888">Gray on gray: barely readable in the original.</p></div>
+<div style="background:#3a3a3a;padding:12px"><p style="color:#555555">Dark gray on darker gray.</p><p style="color:#1a73e8">A blue link-like color.</p></div>
+<div style="background:#d9d9d9;padding:12px"><p style="color:#bbbbbb">Light gray on light gray.</p><a href="https://example.com/x" rel="noopener noreferrer">Default link color here</a></div>
+<p style="color:#ffff00">Yellow text on the default canvas.</p>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<div style="background:#777777;padding:12px"><p style="color:#888888">Gray on gray: barely readable in the original.</p></div>
+<div style="background:#3a3a3a;padding:12px"><p style="color:#555555">Dark gray on darker gray.</p><p style="color:#1a73e8">A blue link-like color.</p></div>
+<div style="background:#d9d9d9;padding:12px"><p style="color:#bbbbbb">Light gray on light gray.</p><a href="https://example.com/x" rel="noopener noreferrer">Default link color here</a></div>
+<p style="color:#ffff00">Yellow text on the default canvas.</p>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<div style="background:#777777;padding:12px"><p style="color:#030303 !important">Gray on gray: barely readable in the original.</p></div>
+<div style="background:#3a3a3a;padding:12px"><p style="color:#a5a5a5 !important">Dark gray on darker gray.</p><p style="color:#69a6ff !important">A blue link-like color.</p></div>
+<div style="background:#050505;padding:12px"><p style="color:#bbbbbb">Light gray on light gray.</p><a href="https://example.com/x" rel="noopener noreferrer">Default link color here</a></div>
+<p style="color:#ffff00">Yellow text on the default canvas.</p>
+

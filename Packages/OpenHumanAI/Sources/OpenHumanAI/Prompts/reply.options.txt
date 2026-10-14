@@ -1,0 +1,7 @@
+---
+id: reply.options
+version: 2
+---
+Task: suggest exactly three clearly different replies the user could send to the latest message of the thread, written in the user's voice and without a signature. The user's name is in the context block. Give each reply a short label.
+Return only JSON in this form, with no other text:
+{"options":[{"label":"...","body":"..."},{"label":"...","body":"..."},{"label":"...","body":"..."}]}

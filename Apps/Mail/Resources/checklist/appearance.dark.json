@@ -1,0 +1,11 @@
+{
+  "id": "appearance.dark",
+  "area": "Appearance",
+  "title": "Use a dark theme",
+  "steps": [
+    "Open Settings and choose a dark appearance",
+    "Open the inbox and a fixture thread"
+  ],
+  "expected": "Both surfaces update without a relaunch.",
+  "requires": "fake"
+}

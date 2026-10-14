@@ -1,0 +1,14 @@
+{
+  "id": "labels.default-rules-visible",
+  "area": "Auto labels",
+  "title": "The nine default rules are listed and can be switched off (fake data)",
+  "steps": [
+    "Launch with -UseFakeData and open Settings › Importance & labels (Rules tab)",
+    "Read the Default rules section, then switch off “Bulk or automated mail is never Respond”",
+    "Press ⌘Z in the mail window, then come back to Settings"
+  ],
+  "deepLink": null,
+  "expected": "Nine default rows show a title, one line on what each does and a switch; the importance-guard row says it is not active in this build and its switch is disabled. Switching a row off shows the new version number under the page; ⌘Z switches it back on.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

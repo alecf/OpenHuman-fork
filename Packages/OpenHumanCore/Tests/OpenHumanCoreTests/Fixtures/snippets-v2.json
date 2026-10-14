@@ -1,0 +1,51 @@
+{
+  "format" : "openhuman-snippets",
+  "snippets" : [
+    {
+      "bcc" : [
+        {
+          "email" : "records@example.com"
+        }
+      ],
+      "bodyHTML" : "<p>Welcome, {{first_name}}. Your guide is attached.<\/p><p>{{team}}<\/p>",
+      "cc" : [
+        {
+          "email" : "team@example.com"
+        }
+      ],
+      "files" : [
+        {
+          "contentHash" : "464d54094d4303fbe370eb9d8eb652b1b2ec4a5ecb982dda826f05af837fa663",
+          "data" : "U3ludGhldGljIG9uYm9hcmRpbmcgZ3VpZGUuCg==",
+          "filename" : "guide.txt",
+          "mimeType" : "text\/plain",
+          "size" : 28
+        }
+      ],
+      "name" : "Onboarding",
+      "shortcut" : "onb",
+      "subject" : "Welcome aboard",
+      "to" : [
+        {
+          "email" : "dana@example.com",
+          "name" : "Dana Ruiz"
+        }
+      ],
+      "variables" : [
+        {
+          "defaultValue" : "The Example team",
+          "name" : "team"
+        }
+      ]
+    },
+    {
+      "bodyHTML" : "<p>Best,<br>Sam<\/p>",
+      "name" : "Sign-off",
+      "shortcut" : "so",
+      "variables" : [
+
+      ]
+    }
+  ],
+  "version" : 2
+}

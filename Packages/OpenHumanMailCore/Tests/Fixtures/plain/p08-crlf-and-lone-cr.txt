@@ -1,0 +1,7 @@
+# plain-fixture: format=fixed
+Line one␍
+Line two␍
+␍
+> quoted line␍
+Old style break␍after a lone CR␍
+Back to the reply␍

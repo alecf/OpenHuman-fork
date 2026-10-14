@@ -1,0 +1,5 @@
+---
+id: composer.improve
+version: 1
+---
+Improve the writing: clearer, tighter, same meaning. Keep every fact, name, number and link.

@@ -1,0 +1,4 @@
+These fixtures are SYNTHETIC. They follow the published event shapes of Claude Code's stream-json and json result
+objects and of Codex `exec --json` JSONL, but they were written by hand, not recorded from the real CLIs, so they do
+not show compatibility with any installed version. Replacing them with recorded output of the installed versions
+(claude 2.1.295, codex) and re-checking the parsers is still to do. Texts are invented; no real email.

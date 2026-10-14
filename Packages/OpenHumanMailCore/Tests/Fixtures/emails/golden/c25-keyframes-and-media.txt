@@ -1,0 +1,23 @@
+fixture: c25-keyframes-and-media
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+css: @keyframes pulse{from{background-color:#ffe4e6}to{background-color:#fecdd3}}.oh-body .badge{animation:pulse 2s infinite;color:#9f1239;padding:2px 6px;border-radius:4px}@media only screen and (max-width: 480px){.oh-body .col{display:block !important;width:100% !important}}@supports (display: grid){.oh-body .grid{display:grid;grid-template-columns:1fr 1fr}}
+body:
+<p><span class="badge">LIVE</span> The auction closes at 18:00.</p><div class="grid"><div class="col">Lot 12</div><div class="col">Lot 13</div></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+css: @keyframes pulse{from{background-color:#ffe4e6}to{background-color:#fecdd3}}.oh-body .badge{animation:pulse 2s infinite;color:#9f1239;padding:2px 6px;border-radius:4px}@media only screen and (max-width: 480px){.oh-body .col{display:block !important;width:100% !important}}@supports (display: grid){.oh-body .grid{display:grid;grid-template-columns:1fr 1fr}}
+body:
+<p><span class="badge">LIVE</span> The auction closes at 18:00.</p><div class="grid"><div class="col">Lot 12</div><div class="col">Lot 13</div></div>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+css: @keyframes pulse{from{background-color:#030000}to{background-color:#0f0002}}.oh-body .badge{animation:pulse 2s infinite;color:#9f1239;padding:2px 6px;border-radius:4px}@media only screen and (max-width: 480px){.oh-body .col{display:block !important;width:100% !important}}@supports (display: grid){.oh-body .grid{display:grid;grid-template-columns:1fr 1fr}}
+body:
+<p><span class="badge">LIVE</span> The auction closes at 18:00.</p><div class="grid"><div class="col">Lot 12</div><div class="col">Lot 13</div></div>
+

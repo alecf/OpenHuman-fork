@@ -1,0 +1,5 @@
+---
+id: summarize.chunk
+version: 2
+---
+Task: summarize the one email, or part of an email, in the email_data blocks. Start with the sender's name and the date. Keep requests, deadlines, decisions and questions.

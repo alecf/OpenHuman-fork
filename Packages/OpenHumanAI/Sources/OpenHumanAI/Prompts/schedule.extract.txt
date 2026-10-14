@@ -1,0 +1,7 @@
+---
+id: schedule.extract
+version: 3
+---
+Task: list the meeting times the message in the email_data block of kind emailBody proposes or asks about. Use only what the message says; never invent a time. For each time give "day" as the person wrote it in plain English (a relative day, a weekday, a calendar date or a week), "start" and "end" as clock times (an empty string when the message names none), and "zone" as the time zone abbreviation the message names (an abbreviation), or an empty string. Translate a vague part of the day into reasonable clock times. List the soonest first, and an empty list when the message proposes no time.
+Return only JSON in this form, with no other text:
+{"times":[{"day":"<day as written>","start":"<clock time>","end":"<clock time>","zone":"<abbreviation or empty>"}]}

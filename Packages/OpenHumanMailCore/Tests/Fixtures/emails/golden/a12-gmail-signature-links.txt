@@ -1,0 +1,23 @@
+fixture: a12-gmail-signature-links
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body
+body:
+<div dir="ltr">Hi all,<div><br></div><div>Three links for Friday:</div><ul><li><a href="https://docs.example.com/agenda" rel="noopener noreferrer">Agenda</a></li><li><a href="https://docs.example.com/notes" rel="noopener noreferrer">Notes from last time</a></li><li><a href="https://maps.example.com/?q=hall" rel="noopener noreferrer">Directions</a></li></ul><div>See you there.</div></div>
+<br clear="all"><div><br></div><span class="gmail_signature_prefix">-- </span><br><details class="oh-quoted oh-signature"><summary title="Show signature">•••</summary><div dir="ltr" class="gmail_signature"><div dir="ltr">Ana Costa<div>Community events</div></div></div></details>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted true
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div dir="ltr">Hi all,<div><br></div><div>Three links for Friday:</div><ul><li><a href="https://docs.example.com/agenda" rel="noopener noreferrer">Agenda</a></li><li><a href="https://docs.example.com/notes" rel="noopener noreferrer">Notes from last time</a></li><li><a href="https://maps.example.com/?q=hall" rel="noopener noreferrer">Directions</a></li></ul><div>See you there.</div></div>
+<br clear="all"><div><br></div><span class="gmail_signature_prefix">-- </span><br><details class="oh-quoted oh-signature"><summary title="Show signature">•••</summary><div dir="ltr" class="gmail_signature"><div dir="ltr">Ana Costa<div>Community events</div></div></div></details>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div dir="ltr">Hi all,<div><br></div><div>Three links for Friday:</div><ul><li><a href="https://docs.example.com/agenda" rel="noopener noreferrer">Agenda</a></li><li><a href="https://docs.example.com/notes" rel="noopener noreferrer">Notes from last time</a></li><li><a href="https://maps.example.com/?q=hall" rel="noopener noreferrer">Directions</a></li></ul><div>See you there.</div></div>
+<br clear="all"><div><br></div><span class="gmail_signature_prefix">-- </span><br><details class="oh-quoted oh-signature"><summary title="Show signature">•••</summary><div dir="ltr" class="gmail_signature"><div dir="ltr">Ana Costa<div>Community events</div></div></div></details>
+

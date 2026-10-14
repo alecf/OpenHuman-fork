@@ -1,0 +1,20 @@
+fixture: a17-apple-forward
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body style="overflow-wrap:break-word"
+body:
+See the note from Jonas below.<br><div><br><blockquote type="cite"><div>Begin forwarded message:</div><br><div><b>From: </b>Jonas &lt;jonas@example.org&gt;</div><div><b>Subject: </b>Keys</div><br><div>The spare keys are with the neighbor at number 8.</div></blockquote></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body style="overflow-wrap:break-word"
+body:
+See the note from Jonas below.<br><div><br><blockquote type="cite"><div>Begin forwarded message:</div><br><div><b>From: </b>Jonas &lt;jonas@example.org&gt;</div><div><b>Subject: </b>Keys</div><br><div>The spare keys are with the neighbor at number 8.</div></blockquote></div>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body style="overflow-wrap:break-word"
+body:
+See the note from Jonas below.<br><div><br><blockquote type="cite"><div>Begin forwarded message:</div><br><div><b>From: </b>Jonas &lt;jonas@example.org&gt;</div><div><b>Subject: </b>Keys</div><br><div>The spare keys are with the neighbor at number 8.</div></blockquote></div>
+

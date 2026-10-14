@@ -1,0 +1,11 @@
+|This paragraph was written as one long line and wrapped by the sender's mail program at about seventy characters.
+|
+|A hard break stays here
+|and here.
+|
+•••
+>|The quoted text was flowed too.
+>>|A deeper quote that also flowed.
+|
+--|--␠
+--|Sam Example Co.

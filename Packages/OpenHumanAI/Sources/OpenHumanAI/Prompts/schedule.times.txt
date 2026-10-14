@@ -1,0 +1,6 @@
+---
+id: schedule.times
+version: 1
+---
+Times:
+{{times}}

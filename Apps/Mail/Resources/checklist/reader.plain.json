@@ -1,0 +1,11 @@
+{
+  "id": "reader.plain",
+  "area": "Reader",
+  "title": "Read a plain-text message",
+  "steps": [
+    "Launch Mail with -UseFakeData",
+    "Open a plain-text fixture message"
+  ],
+  "expected": "The text is readable without clipped lines.",
+  "requires": "fake"
+}

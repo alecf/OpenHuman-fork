@@ -1,0 +1,6 @@
+|Totals for the week:
+|    Monday       12
+|    Tuesday       9
+|  Code sample:
+|      let x = 1
+|Lines that start with spaces keep them.

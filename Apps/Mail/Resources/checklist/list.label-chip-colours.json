@@ -1,0 +1,15 @@
+{
+  "id": "list.label-chip-colours",
+  "area": "Thread list",
+  "title": "Label chips have their own soft colours",
+  "steps": [
+    "Launch Mail with -UseFakeData and open the Inbox",
+    "Find rows with the Clients, Receipts, Hiring or Atlas labels and a category chip",
+    "Search for one of those labels' subjects (/) and look at the result rows",
+    "Switch View › Appearance to Dark, then try Paper and Midnight"
+  ],
+  "deepLink": null,
+  "expected": "Each label chip is a soft pastel with dark text of the same hue (light themes) or a deep tint with light text (dark themes); a label has the same colour in every row and in search results. Important, VIP and +N stay grey; a Superhuman category not imported yet is muted grey. Every chip reads easily, also on the highlighted row.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

@@ -1,0 +1,3835 @@
+{
+  "command": "schema",
+  "data": {
+    "cliVersion": "0.1.0",
+    "commands": [
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": false,
+        "network": true,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--manual"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Paste flow instead of the loopback browser flow."
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--alias"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Alias for the account.",
+            "valueName": "alias"
+          }
+        ],
+        "output": "Account",
+        "path": "accounts.add",
+        "plainColumns": [],
+        "priority": "P1",
+        "stage": "2",
+        "summary": "Add an account (needs the app in Phase 1).",
+        "writeScope": "localData",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "target",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Account email or alias.",
+            "valueName": "target"
+          },
+          {
+            "kind": "positional",
+            "name": "alias",
+            "optional": false,
+            "repeatable": false,
+            "summary": "New alias.",
+            "valueName": "alias"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Account",
+        "path": "accounts.alias",
+        "plainColumns": [
+          "email",
+          "alias"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Give an account a short local alias.",
+        "writeScope": "localData",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "target",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Account email or alias.",
+            "valueName": "target"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Account",
+        "path": "accounts.default",
+        "plainColumns": [
+          "email",
+          "default"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Set the default account.",
+        "writeScope": "localData",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Account[]",
+        "path": "accounts.list",
+        "plainColumns": [
+          "email",
+          "alias",
+          "status",
+          "default",
+          "syncedAt"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "List accounts with their sync state.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "account",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Account email or alias.",
+            "valueName": "account"
+          }
+        ],
+        "confirmation": true,
+        "implemented": false,
+        "network": true,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--yes"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Confirm under --no-input."
+          }
+        ],
+        "output": "Account",
+        "path": "accounts.remove",
+        "plainColumns": [],
+        "priority": "P1",
+        "stage": "2",
+        "summary": "Remove an account (needs the app in Phase 1).",
+        "writeScope": "localData",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "email",
+            "optional": true,
+            "repeatable": false,
+            "summary": "Account email.",
+            "valueName": "email"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": true,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--manual"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Paste flow."
+          }
+        ],
+        "output": "Account",
+        "path": "auth.login",
+        "plainColumns": [],
+        "priority": "P1",
+        "stage": "2",
+        "summary": "Sign in (needs the app in Phase 1).",
+        "writeScope": "localData",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "account",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Account email or alias.",
+            "valueName": "account"
+          }
+        ],
+        "confirmation": true,
+        "implemented": false,
+        "network": true,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--purge"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Also delete the cached mail."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--yes"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Confirm under --no-input."
+          }
+        ],
+        "output": "Account",
+        "path": "auth.logout",
+        "plainColumns": [],
+        "priority": "P1",
+        "stage": "2",
+        "summary": "Sign out (needs the app in Phase 1).",
+        "writeScope": "localData",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Account[]",
+        "path": "auth.status",
+        "plainColumns": [
+          "email",
+          "status",
+          "scopes",
+          "syncPhase",
+          "syncedAt"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Accounts with status and granted scopes (the CLI never reads tokens).",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "rest",
+            "optional": true,
+            "repeatable": true,
+            "valueName": "rest"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": true,
+        "options": [],
+        "output": "Event[]",
+        "path": "calendar.events",
+        "plainColumns": [],
+        "priority": "P5",
+        "stage": "2",
+        "summary": "Calendar events (needs network access: deferred).",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "key",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Setting name.",
+            "valueName": "key"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Setting",
+        "path": "config.get",
+        "plainColumns": [
+          "key",
+          "value"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Read one setting.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Setting[]",
+        "path": "config.list",
+        "plainColumns": [
+          "key",
+          "value",
+          "safety"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "All settings.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "key",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Setting name.",
+            "valueName": "key"
+          },
+          {
+            "kind": "positional",
+            "name": "value",
+            "optional": false,
+            "repeatable": false,
+            "summary": "New value.",
+            "valueName": "value"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Setting",
+        "path": "config.set",
+        "plainColumns": [
+          "key",
+          "value"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Change a setting. Safety keys need a terminal and the account email.",
+        "writeScope": "localData",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Check[]",
+        "path": "doctor",
+        "plainColumns": [
+          "name",
+          "status",
+          "detail"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Check the store, schema, FTS5, accounts and the app. Prints no mail content.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "message-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Gmail message id.",
+            "valueName": "message-id"
+          },
+          {
+            "kind": "positional",
+            "name": "part-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Attachment part id.",
+            "valueName": "part-id"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [
+          {
+            "kind": "option",
+            "names": [
+              "--out"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Output path.",
+            "valueName": "out"
+          }
+        ],
+        "output": "Attachment",
+        "path": "gmail.attachments.get",
+        "plainColumns": [],
+        "priority": "P2",
+        "stage": "later",
+        "summary": "Copy a downloaded attachment (planned).",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [
+          {
+            "kind": "option",
+            "names": [
+              "--ids"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Message ids, comma separated.",
+            "valueName": "ids"
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--stdin"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Read ids from stdin."
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--add"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Labels to add, comma separated.",
+            "valueName": "add"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--remove"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Labels to remove, comma separated.",
+            "valueName": "remove"
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.batch.modify",
+        "plainColumns": [],
+        "priority": "P2",
+        "stage": "later",
+        "summary": "Modify labels on many messages (planned).",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Counts[]",
+        "path": "gmail.counts",
+        "plainColumns": [
+          "account",
+          "inboxUnread",
+          "drafts",
+          "pendingReview",
+          "failedOperations"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Unread, draft, review and failure counts.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [
+          "gmail.archive"
+        ],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-ids",
+            "optional": false,
+            "repeatable": true,
+            "summary": "Gmail thread ids.",
+            "valueName": "thread-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.done",
+        "plainColumns": [
+          "status",
+          "operationIds",
+          "threadIds"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Mark done (removes INBOX).",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--to"
+            ],
+            "optional": true,
+            "repeatable": true,
+            "summary": "Recipient (repeatable, or comma separated).",
+            "valueName": "to"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--cc"
+            ],
+            "optional": true,
+            "repeatable": true,
+            "summary": "Cc (repeatable).",
+            "valueName": "cc"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--bcc"
+            ],
+            "optional": true,
+            "repeatable": true,
+            "summary": "Bcc (repeatable).",
+            "valueName": "bcc"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--subject"
+            ],
+            "optional": false,
+            "repeatable": false,
+            "summary": "Subject.",
+            "valueName": "subject"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--body-file"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Body text file (`-` for stdin).",
+            "valueName": "body-file"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--body"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Body text, or `-` for stdin.",
+            "valueName": "body"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--note"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "A note for the reviewer.",
+            "valueName": "note"
+          }
+        ],
+        "output": "Draft",
+        "path": "gmail.drafts.create",
+        "plainColumns": [
+          "draftId",
+          "account",
+          "origin",
+          "review",
+          "state",
+          "to",
+          "subject",
+          "reviewLink"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Create a draft for review. It is never sent from the CLI.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "draft-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Draft id (local UUID or Gmail draft id).",
+            "valueName": "draft-id"
+          }
+        ],
+        "confirmation": true,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--yes"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Confirm under --no-input."
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.drafts.delete",
+        "plainColumns": [
+          "status",
+          "draftId",
+          "operationIds"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "Delete an agent draft that is not approved. Needs --yes under --no-input.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "message-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Gmail message id to forward.",
+            "valueName": "message-id"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--to"
+            ],
+            "optional": true,
+            "repeatable": true,
+            "summary": "Recipient (repeatable, or comma separated).",
+            "valueName": "to"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--cc"
+            ],
+            "optional": true,
+            "repeatable": true,
+            "summary": "Cc (repeatable).",
+            "valueName": "cc"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--bcc"
+            ],
+            "optional": true,
+            "repeatable": true,
+            "summary": "Bcc (repeatable).",
+            "valueName": "bcc"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--body-file"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Text above the forwarded message, from a file (`-` for stdin).",
+            "valueName": "body-file"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--body"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Text above the forwarded message, or `-` for stdin.",
+            "valueName": "body"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--note"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "A note for the reviewer.",
+            "valueName": "note"
+          }
+        ],
+        "output": "Draft",
+        "path": "gmail.drafts.forward",
+        "plainColumns": [
+          "draftId",
+          "account",
+          "origin",
+          "review",
+          "state",
+          "to",
+          "subject",
+          "reviewLink"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "Create a forward draft for review. It is never sent from the CLI.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [
+          "gmail.drafts.show"
+        ],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "draft-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Draft id (local UUID or Gmail draft id).",
+            "valueName": "draft-id"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Draft",
+        "path": "gmail.drafts.get",
+        "plainColumns": [
+          "draftId",
+          "account",
+          "origin",
+          "review",
+          "state",
+          "to",
+          "subject",
+          "reviewLink"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "One draft by local id or Gmail draft id.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "all",
+            "kind": "option",
+            "names": [
+              "--review"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "pending or all (default).",
+            "valueName": "review",
+            "values": [
+              "pending",
+              "all"
+            ]
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--origin"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "agent, user or cli.",
+            "valueName": "origin",
+            "values": [
+              "agent",
+              "user",
+              "cli"
+            ]
+          }
+        ],
+        "output": "Draft[]",
+        "path": "gmail.drafts.list",
+        "plainColumns": [
+          "draftId",
+          "account",
+          "origin",
+          "review",
+          "state",
+          "to",
+          "subject",
+          "reviewLink"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Drafts in the cache.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "message-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Gmail message id to reply to.",
+            "valueName": "message-id"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--all"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Reply to all."
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--body-file"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Body text file (`-` for stdin).",
+            "valueName": "body-file"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--body"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Body text, or `-` for stdin.",
+            "valueName": "body"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--note"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "A note for the reviewer.",
+            "valueName": "note"
+          }
+        ],
+        "output": "Draft",
+        "path": "gmail.drafts.reply",
+        "plainColumns": [
+          "draftId",
+          "account",
+          "origin",
+          "review",
+          "state",
+          "to",
+          "subject",
+          "reviewLink"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Create a reply draft for review. It is never sent from the CLI.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "rest",
+            "optional": true,
+            "repeatable": true,
+            "valueName": "rest"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [],
+        "output": "Error",
+        "path": "gmail.drafts.send",
+        "plainColumns": [],
+        "priority": "P1",
+        "reserved": "send_not_supported",
+        "stage": "later",
+        "summary": "Reserved: the CLI never sends.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "draft-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Draft id (local UUID or Gmail draft id).",
+            "valueName": "draft-id"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--to"
+            ],
+            "optional": true,
+            "repeatable": true,
+            "summary": "Recipient (repeatable). Empty keeps the stored ones.",
+            "valueName": "to"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--cc"
+            ],
+            "optional": true,
+            "repeatable": true,
+            "summary": "Cc (repeatable).",
+            "valueName": "cc"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--bcc"
+            ],
+            "optional": true,
+            "repeatable": true,
+            "summary": "Bcc (repeatable).",
+            "valueName": "bcc"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--subject"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Subject. Empty keeps the stored one.",
+            "valueName": "subject"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--body-file"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Body text file (`-` for stdin).",
+            "valueName": "body-file"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--body"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Body text, or `-` for stdin.",
+            "valueName": "body"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--note"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "A note for the reviewer.",
+            "valueName": "note"
+          }
+        ],
+        "output": "Draft",
+        "path": "gmail.drafts.update",
+        "plainColumns": [
+          "draftId",
+          "account",
+          "origin",
+          "review",
+          "state",
+          "to",
+          "subject",
+          "reviewLink"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Replace the text of an agent draft; it goes back to review.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "rest",
+            "optional": true,
+            "repeatable": true,
+            "valueName": "rest"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [],
+        "output": "Error",
+        "path": "gmail.filters",
+        "plainColumns": [],
+        "priority": "P1",
+        "reserved": "not_supported",
+        "stage": "later",
+        "summary": "Not supported: filters and Gmail settings edits.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "rest",
+            "optional": true,
+            "repeatable": true,
+            "valueName": "rest"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [],
+        "output": "Error",
+        "path": "gmail.forward",
+        "plainColumns": [],
+        "priority": "P1",
+        "reserved": "send_not_supported",
+        "stage": "later",
+        "summary": "Reserved: the CLI never sends. Use `drafts forward`.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "message-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Gmail message id.",
+            "valueName": "message-id"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "full",
+            "kind": "option",
+            "names": [
+              "--format"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "full, metadata, text, html or raw (raw needs the network: exits 12).",
+            "valueName": "format",
+            "values": [
+              "full",
+              "metadata",
+              "text",
+              "html",
+              "raw"
+            ]
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--headers"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Only these headers, comma separated.",
+            "valueName": "headers"
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--fetch"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Download a missing body (needs the network: exits 12)."
+          }
+        ],
+        "output": "Message",
+        "path": "gmail.get",
+        "plainColumns": [
+          "messageId",
+          "threadId",
+          "date",
+          "from",
+          "subject",
+          "link"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "One cached message.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": false,
+        "network": true,
+        "options": [
+          {
+            "kind": "option",
+            "names": [
+              "--since"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "History id to start from.",
+            "valueName": "since"
+          }
+        ],
+        "output": "History",
+        "path": "gmail.history",
+        "plainColumns": [],
+        "priority": "P3",
+        "stage": "2",
+        "summary": "Gmail history passthrough (needs network access: deferred).",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "25",
+            "kind": "option",
+            "names": [
+              "--max"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Maximum rows (1 to 500).",
+            "valueName": "max"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--cursor"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Opaque cursor from the previous page (meta.nextCursor).",
+            "valueName": "cursor"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--split"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Split name or id.",
+            "valueName": "split"
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--other"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Threads in no split."
+          }
+        ],
+        "output": "ThreadSummary[]",
+        "path": "gmail.inbox",
+        "plainColumns": [
+          "threadId",
+          "account",
+          "lastMessageAt",
+          "unread",
+          "from",
+          "subject",
+          "snippet",
+          "link"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "The inbox, or one split of it.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "name",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Label name.",
+            "valueName": "name"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [],
+        "output": "OperationResult",
+        "path": "gmail.labels.create",
+        "plainColumns": [],
+        "priority": "P2",
+        "stage": "later",
+        "summary": "Create a label (planned).",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--counts"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Include thread counts."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--all"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Include hidden OpenHuman schedule labels."
+          }
+        ],
+        "output": "Label[]",
+        "path": "gmail.labels.list",
+        "plainColumns": [
+          "labelId",
+          "account",
+          "name",
+          "type",
+          "totalThreads",
+          "unreadThreads"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Labels of the account(s).",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "25",
+            "kind": "option",
+            "names": [
+              "--max"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Maximum rows (1 to 500).",
+            "valueName": "max"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--cursor"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Opaque cursor from the previous page (meta.nextCursor).",
+            "valueName": "cursor"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--label"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Label name or id (one account).",
+            "valueName": "label"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--view"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "View: inbox, starred, important, unread, sent, drafts, all, trash, spam, snoozed, scheduled, reminders.",
+            "valueName": "view"
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--unread"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Only unread threads."
+          }
+        ],
+        "output": "ThreadSummary[]",
+        "path": "gmail.list",
+        "plainColumns": [
+          "threadId",
+          "account",
+          "lastMessageAt",
+          "unread",
+          "from",
+          "subject",
+          "snippet",
+          "link"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "List threads of a label or view.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [
+          "gmail.unarchive"
+        ],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-ids",
+            "optional": false,
+            "repeatable": true,
+            "summary": "Gmail thread ids.",
+            "valueName": "thread-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.move-to-inbox",
+        "plainColumns": [
+          "status",
+          "operationIds",
+          "threadIds"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Back to the inbox.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-ids",
+            "optional": true,
+            "repeatable": true,
+            "summary": "Gmail thread ids.",
+            "valueName": "thread-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [],
+        "output": "OperationResult",
+        "path": "gmail.not-spam",
+        "plainColumns": [],
+        "priority": "P2",
+        "stage": "later",
+        "summary": "Not spam (planned).",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-ids",
+            "optional": false,
+            "repeatable": true,
+            "summary": "Gmail thread ids.",
+            "valueName": "thread-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.read",
+        "plainColumns": [
+          "status",
+          "operationIds",
+          "threadIds"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Mark read.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Gmail thread id.",
+            "valueName": "thread-id"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--at"
+            ],
+            "optional": false,
+            "repeatable": false,
+            "summary": "ISO 8601, `tomorrow 8am`, `+2h`, `monday`.",
+            "valueName": "at"
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--if-no-reply"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Only remind when nobody has replied."
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.remind",
+        "plainColumns": [
+          "status",
+          "operationIds",
+          "threadIds"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Remind me about a thread. Reminders are kept on this Mac only.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "rest",
+            "optional": true,
+            "repeatable": true,
+            "valueName": "rest"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [],
+        "output": "Error",
+        "path": "gmail.reply",
+        "plainColumns": [],
+        "priority": "P1",
+        "reserved": "send_not_supported",
+        "stage": "later",
+        "summary": "Reserved: the CLI never sends. Use `drafts reply`.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "rest",
+            "optional": true,
+            "repeatable": true,
+            "valueName": "rest"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [],
+        "output": "Error",
+        "path": "gmail.reply-all",
+        "plainColumns": [],
+        "priority": "P1",
+        "reserved": "send_not_supported",
+        "stage": "later",
+        "summary": "Reserved: the CLI never sends. Use `drafts reply --all`.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "draft-ids",
+            "optional": true,
+            "repeatable": true,
+            "summary": "Draft ids (local UUID or Gmail draft id).",
+            "valueName": "draft-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          }
+        ],
+        "output": "Draft[]",
+        "path": "gmail.review.approve",
+        "plainColumns": [
+          "draftId",
+          "account",
+          "origin",
+          "review",
+          "state",
+          "to",
+          "subject",
+          "reviewLink"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "Approve agent drafts (Review: keep). It never sends. A person's decision: interactive terminal only.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Draft[]",
+        "path": "gmail.review.list",
+        "plainColumns": [
+          "draftId",
+          "account",
+          "origin",
+          "review",
+          "state",
+          "to",
+          "subject",
+          "reviewLink"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Agent drafts waiting for review.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "draft-ids",
+            "optional": true,
+            "repeatable": true,
+            "summary": "Draft ids (default: every draft waiting for review).",
+            "valueName": "draft-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--print-only"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Print the link only; do not open the app."
+          }
+        ],
+        "output": "Link",
+        "path": "gmail.review.open",
+        "plainColumns": [
+          "link",
+          "count",
+          "opened"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "Open the review queue in Mail by OpenHuman (prints the link).",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "draft-ids",
+            "optional": true,
+            "repeatable": true,
+            "summary": "Draft ids (local UUID or Gmail draft id).",
+            "valueName": "draft-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          }
+        ],
+        "output": "Draft[]",
+        "path": "gmail.review.reject",
+        "plainColumns": [
+          "draftId",
+          "account",
+          "origin",
+          "review",
+          "state",
+          "to",
+          "subject",
+          "reviewLink"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "Reject agent drafts and delete them (Review: discard). A person's decision: interactive terminal only.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "draft-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Draft id (local UUID or Gmail draft id).",
+            "valueName": "draft-id"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--diff"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Show the diff against what the agent wrote."
+          }
+        ],
+        "output": "Draft",
+        "path": "gmail.review.show",
+        "plainColumns": [
+          "draftId",
+          "account",
+          "origin",
+          "review",
+          "state",
+          "to",
+          "subject",
+          "reviewLink"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "Show a draft under review; --diff shows what changed since the agent wrote it.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "query",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Query, e.g. `from:alice has:attachment invoice`.",
+            "valueName": "query"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "25",
+            "kind": "option",
+            "names": [
+              "--max"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Maximum rows (1 to 500).",
+            "valueName": "max"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--cursor"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Opaque cursor from the previous page (meta.nextCursor).",
+            "valueName": "cursor"
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--local"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Search the local cache (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--remote"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Search Gmail itself (needs the network: exits 12 in Phase 1)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--auto"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Local, plus Gmail when the cache is incomplete (Phase 1: local only)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--messages"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Include the matching messages of each thread."
+          }
+        ],
+        "output": "ThreadSummary[]",
+        "path": "gmail.search",
+        "plainColumns": [
+          "threadId",
+          "account",
+          "lastMessageAt",
+          "unread",
+          "from",
+          "subject",
+          "snippet",
+          "link"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Search the local cache (FTS5; Gmail operators).",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "rest",
+            "optional": true,
+            "repeatable": true,
+            "valueName": "rest"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [],
+        "output": "Error",
+        "path": "gmail.send",
+        "plainColumns": [],
+        "priority": "P1",
+        "reserved": "send_not_supported",
+        "stage": "later",
+        "summary": "Reserved: the CLI never sends.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "name",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Snippet name.",
+            "valueName": "name"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "option",
+            "names": [
+              "--body-file"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Body text file (`-` for stdin).",
+            "valueName": "body-file"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--body"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Body text, or `-` for stdin. {{name}} marks a variable.",
+            "valueName": "body"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--subject"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Subject the snippet sets.",
+            "valueName": "subject"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--shortcut"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Shortcut typed after ;; in the composer.",
+            "valueName": "shortcut"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--var"
+            ],
+            "optional": true,
+            "repeatable": true,
+            "summary": "A variable, name or name=default (repeatable).",
+            "valueName": "var"
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--replace"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Replace the text of the snippet with the same name instead of refusing; its recipients and files stay."
+          }
+        ],
+        "output": "Snippet",
+        "path": "gmail.snippets.add",
+        "plainColumns": [
+          "snippetId",
+          "name",
+          "shortcut",
+          "account",
+          "subject",
+          "variables",
+          "useCount"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "Add a snippet (or --replace the one with that name). Local only.",
+        "writeScope": "storedItems",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "name",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Snippet name, ;;shortcut or id.",
+            "valueName": "name"
+          }
+        ],
+        "confirmation": true,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--yes"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Confirm under --no-input."
+          }
+        ],
+        "output": "Snippet",
+        "path": "gmail.snippets.delete",
+        "plainColumns": [
+          "snippetId",
+          "name",
+          "shortcut",
+          "account",
+          "subject",
+          "variables",
+          "useCount"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "Delete a snippet on this Mac. Needs --yes under --no-input.",
+        "writeScope": "storedItems",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "option",
+            "names": [
+              "--out"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "File to write. Without it the file is in data.file.",
+            "valueName": "out"
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--force"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Overwrite an existing --out file."
+          }
+        ],
+        "output": "SnippetFile",
+        "path": "gmail.snippets.export",
+        "plainColumns": [
+          "format",
+          "version",
+          "count",
+          "path"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "Write every snippet to an openhuman-snippets file (no account addresses).",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "file",
+            "optional": false,
+            "repeatable": false,
+            "summary": "An openhuman-snippets file.",
+            "valueName": "file"
+          }
+        ],
+        "confirmation": true,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--yes"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Confirm under --no-input."
+          }
+        ],
+        "output": "SnippetImport",
+        "path": "gmail.snippets.import",
+        "plainColumns": [
+          "status",
+          "toAdd",
+          "toReplace",
+          "shortcutsDropped"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "Add or replace snippets from an openhuman-snippets file; never deletes. --dry-run shows the preview. Needs --yes under --no-input.",
+        "writeScope": "storedItems",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Snippet[]",
+        "path": "gmail.snippets.list",
+        "plainColumns": [
+          "snippetId",
+          "name",
+          "shortcut",
+          "account",
+          "subject",
+          "variables",
+          "useCount"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "List snippets (with --account: that account's and the shared ones).",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "name",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Snippet name, ;;shortcut or id.",
+            "valueName": "name"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "option",
+            "names": [
+              "--var"
+            ],
+            "optional": true,
+            "repeatable": true,
+            "summary": "A variable, name=value (repeatable).",
+            "valueName": "var"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--to"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "The recipient for {{first_name}}, {{last_name}} and {{full_name}}.",
+            "valueName": "to"
+          }
+        ],
+        "output": "RenderedSnippet",
+        "path": "gmail.snippets.render",
+        "plainColumns": [
+          "name",
+          "subject",
+          "bodyText",
+          "unresolved"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "Fill a snippet's {{variables}} and print the text. Writes nothing.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "name",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Snippet name, ;;shortcut or id.",
+            "valueName": "name"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Snippet",
+        "path": "gmail.snippets.show",
+        "plainColumns": [
+          "snippetId",
+          "name",
+          "shortcut",
+          "account",
+          "subject",
+          "variables",
+          "useCount"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "Show one snippet by name, ;;shortcut or id.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-ids",
+            "optional": false,
+            "repeatable": true,
+            "summary": "Gmail thread ids.",
+            "valueName": "thread-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--until"
+            ],
+            "optional": false,
+            "repeatable": false,
+            "summary": "ISO 8601, `tomorrow 8am`, `+2h`, `monday`.",
+            "valueName": "until"
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.snooze",
+        "plainColumns": [
+          "status",
+          "operationIds",
+          "threadIds"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Snooze until a time (writes Gmail schedule labels via the queue).",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-ids",
+            "optional": true,
+            "repeatable": true,
+            "summary": "Gmail thread ids.",
+            "valueName": "thread-ids"
+          }
+        ],
+        "confirmation": true,
+        "implemented": false,
+        "network": false,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--yes"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Confirm under --no-input."
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.spam",
+        "plainColumns": [],
+        "priority": "P2",
+        "stage": "later",
+        "summary": "Report spam (planned; needs --yes under --no-input).",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "name",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Split name.",
+            "valueName": "name"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [
+          {
+            "kind": "option",
+            "names": [
+              "--rule"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Rule text.",
+            "valueName": "rule"
+          }
+        ],
+        "output": "Split",
+        "path": "gmail.splits.create",
+        "plainColumns": [],
+        "priority": "P2",
+        "stage": "later",
+        "summary": "Create a split (planned).",
+        "writeScope": "localData",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "split",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Split name or id.",
+            "valueName": "split"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [],
+        "output": "Split",
+        "path": "gmail.splits.delete",
+        "plainColumns": [],
+        "priority": "P2",
+        "stage": "later",
+        "summary": "Delete a split (planned).",
+        "writeScope": "localData",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Split[]",
+        "path": "gmail.splits.list",
+        "plainColumns": [
+          "splitId",
+          "account",
+          "name",
+          "unreadThreads",
+          "totalThreads"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Splits of the account(s).",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "splits",
+            "optional": true,
+            "repeatable": true,
+            "summary": "Split names or ids in the new order.",
+            "valueName": "splits"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [],
+        "output": "Split[]",
+        "path": "gmail.splits.reorder",
+        "plainColumns": [],
+        "priority": "P2",
+        "stage": "later",
+        "summary": "Reorder splits (planned).",
+        "writeScope": "localData",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "split",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Split name or id.",
+            "valueName": "split"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "25",
+            "kind": "option",
+            "names": [
+              "--max"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Maximum rows (1 to 500).",
+            "valueName": "max"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--cursor"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Opaque cursor from the previous page (meta.nextCursor).",
+            "valueName": "cursor"
+          }
+        ],
+        "output": "ThreadSummary[]",
+        "path": "gmail.splits.show",
+        "plainColumns": [
+          "threadId",
+          "account",
+          "lastMessageAt",
+          "unread",
+          "from",
+          "subject",
+          "snippet",
+          "link"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Threads of one split (alias of inbox --split).",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "split",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Split name or id.",
+            "valueName": "split"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [
+          {
+            "kind": "option",
+            "names": [
+              "--name"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "New name.",
+            "valueName": "name"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--rule"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Rule text.",
+            "valueName": "rule"
+          }
+        ],
+        "output": "Split",
+        "path": "gmail.splits.update",
+        "plainColumns": [],
+        "priority": "P2",
+        "stage": "later",
+        "summary": "Update a split (planned).",
+        "writeScope": "localData",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-ids",
+            "optional": false,
+            "repeatable": true,
+            "summary": "Gmail thread ids.",
+            "valueName": "thread-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.star",
+        "plainColumns": [
+          "status",
+          "operationIds",
+          "threadIds"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Star.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Gmail thread id.",
+            "valueName": "thread-id"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "metadata",
+            "kind": "option",
+            "names": [
+              "--format"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "metadata (default), text or full.",
+            "valueName": "format",
+            "values": [
+              "full",
+              "metadata",
+              "text"
+            ]
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--bodies"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Include message bodies."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--fetch"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Download missing bodies (needs the network: exits 12)."
+          }
+        ],
+        "output": "ThreadDetail",
+        "path": "gmail.thread.get",
+        "plainColumns": [
+          "messageId",
+          "threadId",
+          "date",
+          "from",
+          "subject",
+          "link"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "A cached thread with its messages.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-ids",
+            "optional": true,
+            "repeatable": true,
+            "summary": "Gmail thread ids.",
+            "valueName": "thread-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [
+          {
+            "kind": "option",
+            "names": [
+              "--add"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Labels to add, comma separated.",
+            "valueName": "add"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--remove"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Labels to remove, comma separated.",
+            "valueName": "remove"
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.thread.modify",
+        "plainColumns": [],
+        "priority": "P2",
+        "stage": "later",
+        "summary": "Add or remove labels on threads (planned).",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-ids",
+            "optional": true,
+            "repeatable": true,
+            "summary": "Gmail thread ids.",
+            "valueName": "thread-ids"
+          }
+        ],
+        "confirmation": true,
+        "implemented": false,
+        "network": false,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--yes"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Confirm under --no-input."
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.trash",
+        "plainColumns": [],
+        "priority": "P2",
+        "stage": "later",
+        "summary": "Move threads to Trash (planned; needs --yes under --no-input).",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "token",
+            "optional": false,
+            "repeatable": false,
+            "summary": "The undo token from a triage command's output (data.undo).",
+            "valueName": "token"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.undo",
+        "plainColumns": [
+          "status",
+          "operationIds",
+          "threadIds"
+        ],
+        "priority": "P2",
+        "stage": "1c",
+        "summary": "Take back a triage change by the undo token it printed (data.undo).",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-ids",
+            "optional": false,
+            "repeatable": true,
+            "summary": "Gmail thread ids.",
+            "valueName": "thread-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.unread",
+        "plainColumns": [
+          "status",
+          "operationIds",
+          "threadIds"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Mark unread.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Gmail thread id.",
+            "valueName": "thread-id"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.unremind",
+        "plainColumns": [
+          "status",
+          "operationIds",
+          "threadIds"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Cancel the thread's reminder.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-ids",
+            "optional": false,
+            "repeatable": true,
+            "summary": "Gmail thread ids.",
+            "valueName": "thread-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.unsnooze",
+        "plainColumns": [
+          "status",
+          "operationIds",
+          "threadIds"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Wake a snoozed thread now.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-ids",
+            "optional": false,
+            "repeatable": true,
+            "summary": "Gmail thread ids.",
+            "valueName": "thread-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "default": "--wait",
+            "kind": "flag",
+            "names": [
+              "--wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--no-wait"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Wait for the app to apply the write (default)."
+          }
+        ],
+        "output": "OperationResult",
+        "path": "gmail.unstar",
+        "plainColumns": [
+          "status",
+          "operationIds",
+          "threadIds"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Remove the star.",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-ids",
+            "optional": true,
+            "repeatable": true,
+            "summary": "Gmail thread ids.",
+            "valueName": "thread-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": false,
+        "network": false,
+        "options": [],
+        "output": "OperationResult",
+        "path": "gmail.untrash",
+        "plainColumns": [],
+        "priority": "P2",
+        "stage": "later",
+        "summary": "Restore threads from Trash (planned).",
+        "writeScope": "mail",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "option",
+            "names": [
+              "--to"
+            ],
+            "optional": true,
+            "repeatable": true,
+            "summary": "Recipient (repeatable).",
+            "valueName": "to"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--cc"
+            ],
+            "optional": true,
+            "repeatable": true,
+            "summary": "Cc (repeatable).",
+            "valueName": "cc"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--subject"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Subject.",
+            "valueName": "subject"
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--body"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Body text.",
+            "valueName": "body"
+          },
+          {
+            "kind": "flag",
+            "names": [
+              "--open"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Open it with /usr/bin/open."
+          }
+        ],
+        "output": "Link",
+        "path": "link.compose",
+        "plainColumns": [
+          "link"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Link that opens a pre-filled composer (never sends).",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "draft-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Draft id (local UUID or Gmail draft id).",
+            "valueName": "draft-id"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--open"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Open it with /usr/bin/open."
+          }
+        ],
+        "output": "Link",
+        "path": "link.draft",
+        "plainColumns": [
+          "link"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Link to a draft.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "draft-ids",
+            "optional": false,
+            "repeatable": true,
+            "summary": "Draft ids (local UUID or Gmail draft id).",
+            "valueName": "draft-ids"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--open"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Open it with /usr/bin/open."
+          }
+        ],
+        "output": "Link",
+        "path": "link.review",
+        "plainColumns": [
+          "link"
+        ],
+        "priority": "P1",
+        "stage": "1b",
+        "summary": "Link to the review queue for these drafts.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "query",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Query.",
+            "valueName": "query"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--open"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Open it with /usr/bin/open."
+          }
+        ],
+        "output": "Link",
+        "path": "link.search",
+        "plainColumns": [
+          "link"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Link that runs a search in the app.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "thread-id",
+            "optional": false,
+            "repeatable": false,
+            "summary": "Gmail thread id.",
+            "valueName": "thread-id"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--open"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Open it with /usr/bin/open."
+          }
+        ],
+        "output": "Link",
+        "path": "link.thread",
+        "plainColumns": [
+          "link"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Link to a thread.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--list-tools"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Print the tools this server would offer and exit."
+          }
+        ],
+        "output": "McpServer",
+        "path": "mcp",
+        "plainColumns": [
+          "name",
+          "group",
+          "path",
+          "writes"
+        ],
+        "priority": "P3",
+        "stage": "1c",
+        "summary": "Local MCP server on stdin/stdout: read tools, agent drafts into review, local triage with undo. No send tool.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [
+          {
+            "kind": "positional",
+            "name": "command",
+            "optional": true,
+            "repeatable": true,
+            "summary": "Command path, e.g. gmail.search or `gmail search`. Default: all.",
+            "valueName": "command"
+          }
+        ],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [],
+        "output": "Schema",
+        "path": "schema",
+        "plainColumns": [],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Every command, option, output type and exit code, as data.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "flag",
+            "names": [
+              "--full"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Full resync (not available through the app request)."
+          },
+          {
+            "kind": "option",
+            "names": [
+              "--initial-timeout"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Initial sync wait.",
+            "valueName": "initial-timeout"
+          }
+        ],
+        "output": "SyncRequest",
+        "path": "sync.run",
+        "plainColumns": [
+          "requested",
+          "ownerPid",
+          "dataAgeSeconds"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Ask the running app to sync now.",
+        "writeScope": "localData",
+        "writes": true
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": true,
+        "network": false,
+        "options": [
+          {
+            "kind": "option",
+            "names": [
+              "--log"
+            ],
+            "optional": true,
+            "repeatable": false,
+            "summary": "Include the last N sync log rows per account.",
+            "valueName": "log"
+          }
+        ],
+        "output": "SyncStatus[]",
+        "path": "sync.status",
+        "plainColumns": [
+          "email",
+          "phase",
+          "lastSuccessAt",
+          "pendingOperations",
+          "failedOperations"
+        ],
+        "priority": "P1",
+        "stage": "1",
+        "summary": "Sync state, queue depth and the app's lease.",
+        "writeScope": "none",
+        "writes": false
+      },
+      {
+        "aliases": [],
+        "arguments": [],
+        "confirmation": false,
+        "implemented": false,
+        "network": true,
+        "options": [],
+        "output": "SyncEvent[]",
+        "path": "sync.watch",
+        "plainColumns": [],
+        "priority": "P3",
+        "stage": "2",
+        "summary": "Keep syncing (needs network access: deferred).",
+        "writeScope": "none",
+        "writes": false
+      }
+    ],
+    "exitCodes": [
+      {
+        "code": 0,
+        "meaning": "success",
+        "name": "ok"
+      },
+      {
+        "code": 1,
+        "meaning": "unexpected runtime error",
+        "name": "failure"
+      },
+      {
+        "code": 2,
+        "meaning": "bad arguments, ambiguous label or account, confirmation required under --no-input",
+        "name": "usage"
+      },
+      {
+        "code": 3,
+        "meaning": "thread, message, draft or account not in the cache",
+        "name": "not_found"
+      },
+      {
+        "code": 4,
+        "meaning": "no account, or the account needs reauthorization in the app",
+        "name": "auth_required"
+      },
+      {
+        "code": 5,
+        "meaning": "read-only mode, safe mode, send_not_supported, not_supported, reserved_label or command not allowed",
+        "name": "policy_blocked"
+      },
+      {
+        "code": 6,
+        "meaning": "write accepted and queued; the app has not confirmed it yet",
+        "name": "queued"
+      },
+      {
+        "code": 7,
+        "meaning": "the store stayed busy beyond retries",
+        "name": "busy"
+      },
+      {
+        "code": 8,
+        "meaning": "Gmail rate limit and the command needed the network",
+        "name": "rate_limited"
+      },
+      {
+        "code": 9,
+        "meaning": "database schema newer than this CLI, or SQLite without FTS5",
+        "name": "incompatible"
+      },
+      {
+        "code": 10,
+        "meaning": "a batch succeeded for some items and failed for others",
+        "name": "partial"
+      },
+      {
+        "code": 11,
+        "meaning": "the command needed the network and it is unreachable",
+        "name": "offline"
+      },
+      {
+        "code": 12,
+        "meaning": "the command needs Gmail access, which only the app has in Phase 1",
+        "name": "app_required"
+      },
+      {
+        "code": 13,
+        "meaning": "listed in schema.json but not built in this release",
+        "name": "not_implemented"
+      }
+    ],
+    "globalOptions": [
+      {
+        "kind": "option",
+        "names": [
+          "-a",
+          "--account"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Account email, alias or `all` (default: the default_account setting, else the only account).",
+        "valueName": "account"
+      },
+      {
+        "kind": "flag",
+        "names": [
+          "--json"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "JSON envelope on stdout (default when stdout is not a terminal)."
+      },
+      {
+        "kind": "flag",
+        "names": [
+          "--jsonl"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "One JSON item per line for list commands."
+      },
+      {
+        "kind": "flag",
+        "names": [
+          "--plain"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Tab-separated records."
+      },
+      {
+        "kind": "flag",
+        "names": [
+          "--human"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Human-readable text (default on a terminal)."
+      },
+      {
+        "kind": "flag",
+        "names": [
+          "--header"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Add a header line to --plain output."
+      },
+      {
+        "kind": "flag",
+        "names": [
+          "--no-input"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Never prompt; a needed confirmation exits 2."
+      },
+      {
+        "kind": "flag",
+        "names": [
+          "--readonly"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Open the store read-only; every write command exits 5."
+      },
+      {
+        "kind": "flag",
+        "names": [
+          "--dry-run"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Validate and print what would happen; write nothing."
+      },
+      {
+        "kind": "flag",
+        "names": [
+          "--wrap-untrusted"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Wrap email-derived text in nonce-tagged markers."
+      },
+      {
+        "kind": "flag",
+        "names": [
+          "--sanitize-content"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Strip control characters, bidi marks and HTML tags; truncate bodies."
+      },
+      {
+        "default": "32768",
+        "kind": "option",
+        "names": [
+          "--max-body-bytes"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Body size cap for --sanitize-content, in bytes.",
+        "valueName": "max-body-bytes"
+      },
+      {
+        "kind": "option",
+        "names": [
+          "--home"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Store directory (default: OPENHUMAN_HOME, else Application Support).",
+        "valueName": "home"
+      },
+      {
+        "kind": "option",
+        "names": [
+          "--timeout"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Wait limit for writes, e.g. 30s, 2s, 1m; at most 1h.",
+        "valueName": "timeout"
+      },
+      {
+        "kind": "flag",
+        "names": [
+          "--sync"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Sync first. Needs network access: exits 12 in Phase 1."
+      },
+      {
+        "kind": "flag",
+        "names": [
+          "-q",
+          "--quiet"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "No stderr chatter."
+      },
+      {
+        "kind": "flag",
+        "names": [
+          "-v",
+          "--verbose"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "More stderr detail."
+      },
+      {
+        "default": "auto",
+        "kind": "option",
+        "names": [
+          "--color"
+        ],
+        "optional": true,
+        "repeatable": false,
+        "summary": "Color: auto, always or never.",
+        "valueName": "color",
+        "values": [
+          "auto",
+          "always",
+          "never"
+        ]
+      }
+    ],
+    "version": "openhuman.cli/v1"
+  },
+  "meta": {
+    "accounts": [],
+    "warnings": []
+  },
+  "ok": true,
+  "schema": "openhuman.cli/v1"
+}

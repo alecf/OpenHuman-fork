@@ -1,0 +1,15 @@
+{
+  "id": "calendar.full-edit.form",
+  "area": "Calendar",
+  "title": "Edit form: every field of an event, one form in the panel and the popover",
+  "steps": [
+    "With -UseFakeData -UseFakeCalendar open Calendar (2) and click one of your own morning events",
+    "Change the title, tick All day, set the end date two days later, pick another time zone, add a guest (mark Optional), tick Google Meet, add a reminder, set Free, a visibility and a colour",
+    "Press Save (or Cmd+Return), choose Don't send or Send to guests when asked, then press Cmd+Z once",
+    "Press n for a new event and compare the fields with the card"
+  ],
+  "deepLink": null,
+  "expected": "The popover and the new-event panel show the same form with the same fields. Save changes only what you edited; with guests it waits a few seconds (Undo stops it) and the choice is preselected to Send to guests only when the guests or the time changed. Cmd+Z puts the event back.",
+  "requires": "fake",
+  "addedIn": "2026-10-13"
+}

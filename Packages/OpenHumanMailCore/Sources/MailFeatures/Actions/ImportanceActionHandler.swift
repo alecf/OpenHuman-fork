@@ -1,0 +1,114 @@
+import Foundation
+import MailActions
+import MailModel
+import Observation
+import OpenHumanCore
+
+@MainActor @Observable
+public final class ImportanceActionHandler: ActionHandler {
+    public static let ids: [ActionID] = [.alwaysImportantSender, .alwaysImportantDomain, .neverImportant,
+                                         .neverImportantDomain, .removeFromSplit, .notAPitch, .explainPlacement,
+                                         .moveToImportant, .moveToOther]
+
+    public private(set) var lastExplanation: (thread: ThreadKey, explanation: ImportanceExplanation)?
+
+    @ObservationIgnored private weak var environment: AppEnvironment?
+    @ObservationIgnored private let feedback: ActionFeedback
+
+    init(environment: AppEnvironment, feedback: ActionFeedback) {
+        self.environment = environment
+        self.feedback = feedback
+    }
+
+    public func availability(of id: ActionID, in context: ActionContext, host: (any ActionHost)?) -> ActionAvailability {
+        environment?.importance == nil ? .hidden : .enabled
+    }
+
+    public func perform(_ request: ActionRequest) -> ActionPerformance {
+        guard let port = environment?.importance, let thread = request.context.focusedThread else { return .notHandled }
+        let c = request.context
+        if request.id == .explainPlacement { return explain(thread, port: port) }
+        let account = c.account ?? thread.account
+        let change: ImportanceChange
+        let title: LocalizedStringResource
+        switch request.id {
+        case .alwaysImportantSender:
+            guard let sender = c.sender else { return .notHandled }
+            change = ImportanceChange(kind: .alwaysSender, account: account, value: sender, thread: thread)
+            title = "Always important from \(sender)"
+        case .alwaysImportantDomain:
+            guard let domain = c.senderDomain else { return .notHandled }
+            change = ImportanceChange(kind: .alwaysDomain, account: account, value: domain, thread: thread)
+            title = "Always important from \(domain)"
+        case .neverImportant:
+            guard let sender = c.sender else { return .notHandled }
+            change = ImportanceChange(kind: .neverSender, account: account, value: sender, thread: thread)
+            title = "Never important from \(sender)"
+        case .neverImportantDomain:
+            guard let domain = c.senderDomain else { return .notHandled }
+            change = ImportanceChange(kind: .neverDomain, account: account, value: domain, thread: thread)
+            title = "Never important from \(domain)"
+        case .removeFromSplit:
+            guard case .split(let split) = c.location, let sender = c.sender else { return .notHandled }
+            change = ImportanceChange(kind: .excludeFromSplit, account: account, value: sender, split: split,
+                                      thread: thread)
+            title = "Removed from \(splitName(split, account: account, router: request.router))"
+        case .notAPitch:
+            guard let sender = c.sender else { return .notHandled }
+            change = ImportanceChange(kind: .notPitch, account: account, value: sender, thread: thread)
+            title = "Not a pitch: \(sender)"
+        case .moveToImportant:
+            change = ImportanceChange(kind: .alwaysThread, account: account, value: thread.gmailThreadID.rawValue,
+                                      thread: thread)
+            title = "Moved to Important"
+        case .moveToOther:
+            change = ImportanceChange(kind: .neverThread, account: account, value: thread.gmailThreadID.rawValue,
+                                      thread: thread)
+            title = "Moved to Other"
+        default:
+            return .notHandled
+        }
+        guard let undo = environment?.undo else { return .notHandled }
+        let feedback = self.feedback
+        let id = request.id
+        let movesOne = id == .moveToImportant || id == .moveToOther
+        let pitchLabel = id == .notAPitch && c.targets.autoLabel == "Pitch"
+            ? environment?.autoLabels : nil
+        let (row, labels) = AutoLabelActionHandler.row(of: thread, router: request.router)
+        return .started(Task { [weak self] in
+            do {
+                try await undo.perform(title, threads: [thread], via: port) { try await port.apply(change) }
+                if let pitchLabel { _ = try? await pitchLabel.markWrong(thread, row: row, labels: labels) }
+                if movesOne, let explanation = try? await port.explain(thread),
+                   explanation.isImportant != (id == .moveToImportant) {
+                    self?.environment?.notices.post(Self.senderRuleWinsText(explanation), style: .info)
+                }
+            } catch MailPortError.blockedBySafeMode {
+                feedback.refuse(id, .safeMode)
+            } catch {
+                feedback.failed("Couldn't change the importance rule")
+            }
+        })
+    }
+
+    private func explain(_ thread: ThreadKey, port: any ImportanceRulesPort) -> ActionPerformance {
+        .started(Task { [weak self] in
+            guard let self else { return }
+            do {
+                let explanation = try await port.explain(thread)
+                self.lastExplanation = (thread, explanation)
+                self.environment?.notices.post(explanation.line, style: .info)
+            } catch {
+                self.feedback.failed("Couldn't explain why this conversation is here")
+            }
+        })
+    }
+
+    nonisolated static func senderRuleWinsText(_ explanation: ImportanceExplanation) -> String {
+        "\(explanation.line). A rule for the sender wins; change it in Settings › Importance."
+    }
+
+    private func splitName(_ split: SplitKey, account: AccountID, router: AppRouter?) -> String {
+        router?.accounts.first { $0.id == account }?.splits.first { $0.id == split }?.name ?? "this split"
+    }
+}

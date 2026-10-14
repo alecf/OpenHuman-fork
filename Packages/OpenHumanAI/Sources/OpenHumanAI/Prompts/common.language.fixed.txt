@@ -1,0 +1,5 @@
+---
+id: common.language.fixed
+version: 1
+---
+Write in {{language}}.

@@ -1,0 +1,21 @@
+// Build settings shared by every configuration.
+#include "Version.xcconfig"
+
+OH_BUNDLE_ID_PREFIX = dev.openhuman
+OH_GIT_COMMIT = unknown
+
+PRODUCT_NAME = OpenHumanMail
+PRODUCT_BUNDLE_IDENTIFIER = $(OH_BUNDLE_ID_PREFIX).mail
+MACOSX_DEPLOYMENT_TARGET = 27.0
+ARCHS = arm64
+SWIFT_VERSION = 6.0
+SWIFT_STRICT_CONCURRENCY = complete
+ENABLE_APP_SANDBOX = NO
+ENABLE_HARDENED_RUNTIME = NO
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = -
+CURRENT_PROJECT_VERSION = 1
+GENERATE_INFOPLIST_FILE = NO
+
+// Local overrides go last so they win over the defaults above (a developer's signing team, identity and bundle id prefix).
+#include? "Local.xcconfig"

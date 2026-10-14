@@ -1,0 +1,14 @@
+{
+  "id": "move-to.query-split-disabled",
+  "area": "Overlays",
+  "title": "Move to (V) shows a rule split but does not move to it",
+  "steps": [
+    "On the fake data, in the Inbox press V on a conversation and type news",
+    "Press Return, then press the down arrow",
+    "Choose Add this sender to Newsletters, then press Cmd-Z"
+  ],
+  "deepLink": null,
+  "expected": "Step 1: Newsletters is dimmed under Splits with This split is made by a rule, not a label; the cursor starts on Add this sender to Newsletters below it. Step 2: Return on the dimmed row does nothing and the arrow skips it. Step 3: the toast says the sender was added to Newsletters and Cmd-Z restores the rule. With Settings > General > Show splits and places in Move to off, V lists labels only.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

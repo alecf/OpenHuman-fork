@@ -1,0 +1,26 @@
+fixture: c16-remote-media
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<div style="background:#e8f5e9;padding:16px"><img class="oh-blocked" width="300" height="150" alt="Product">
+<p><img class="oh-blocked" width="300" height="150" alt="Detail"></p>
+<span class="oh-placeholder">(media not shown)</span></div>
+
+counts: remote 2, blocked 2, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<div style="background:#e8f5e9;padding:16px"><img class="oh-blocked" width="300" height="150" alt="Product">
+<p><img class="oh-blocked" width="300" height="150" alt="Detail"></p>
+<span class="oh-placeholder">(media not shown)</span></div>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<div style="background:#000000;padding:16px"><img class="oh-blocked" width="300" height="150" alt="Product">
+<p><img class="oh-blocked" width="300" height="150" alt="Detail"></p>
+<span class="oh-placeholder">(media not shown)</span></div>
+

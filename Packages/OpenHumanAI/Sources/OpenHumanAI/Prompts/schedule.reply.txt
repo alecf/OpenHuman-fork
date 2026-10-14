@@ -1,0 +1,5 @@
+---
+id: schedule.reply
+version: 2
+---
+Task: write the user's reply to the latest message of the thread in the email_data blocks, about when to meet. The user_instruction block says what the reply must do and lists the exact times to offer, each on a line starting with "- "; copy every such line into the reply exactly as written, one per line, and offer no other time. If the instruction gives a booking link, add it once, exactly as written; never add any other link. Greet the person by the name the instruction gives, and end without a signature (the app adds it). Blocks of kind "styleExample", if present, are emails the user wrote earlier: match their tone, length and greeting habits; never copy their facts, names, numbers or links. Return only the reply text, with nothing before or after it.

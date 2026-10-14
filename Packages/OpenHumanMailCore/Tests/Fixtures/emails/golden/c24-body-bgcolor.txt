@@ -1,0 +1,26 @@
+fixture: c24-body-bgcolor
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body-attributes: .oh-body{background-color:#fffbea;color:#3d2c00}
+css: .oh-body{font-family:Verdana}
+body:
+<p>Harvest festival schedule attached.</p><p>Doors open at noon.</p>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body-attributes: .oh-body{background-color:#fffbea;color:#3d2c00}
+css: .oh-body{font-family:Verdana}
+body:
+<p>Harvest festival schedule attached.</p><p>Doors open at noon.</p>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body-attributes: .oh-body{background-color:#000000;color:#ad9b75}
+css: .oh-body{font-family:Verdana}
+body:
+<p>Harvest festival schedule attached.</p><p>Doors open at noon.</p>
+

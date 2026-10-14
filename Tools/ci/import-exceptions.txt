@@ -1,0 +1,3 @@
+# Documented exceptions to Tools/ci/check-imports.sh. One per line: "<file path glob> <module>".
+# Every entry needs a comment saying why the import is needed.
+# (none yet)

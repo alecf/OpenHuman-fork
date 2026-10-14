@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  macos-app:
+    runs-on: ${{ vars.MACOS_RUNNER_LABEL || 'xcode-27' }}
+    timeout-minutes: 90
+    env:
+      # Why: a released Xcode, never the newest installed beta
+      XCODE_APP: ${{ vars.XCODE_APP || '/Applications/Xcode_27.0.app' }}
+      XCODE_VERSION: ${{ vars.XCODE_VERSION || '27.0' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        id: xcode
+        run: |
+          if [ ! -d "$XCODE_APP" ]; then
+            echo "::error::$XCODE_APP is not installed on this runner; set the XCODE_APP and XCODE_VERSION repository variables"
+            ls -d /Applications/Xcode*.app || true
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          xcodebuild -version
+          found="$(xcodebuild -version | sed -n 's/^Xcode //p')"
+          if [ "$found" != "$XCODE_VERSION" ]; then
+            echo "::error::$XCODE_APP is Xcode $found, expected $XCODE_VERSION"
+            exit 1
+          fi
+          echo "build=$(xcodebuild -version | sed -n 's/^Build version //p')" >> "$GITHUB_OUTPUT"
+          xcrun swift --version
+
+      # Why: MLX compiles Metal shaders, and the runner image does not install the Metal toolchain for every Xcode
+      - name: Install the Metal toolchain
+        run: |
+          if ! xcrun metal --version >/dev/null 2>&1; then
+            xcodebuild -downloadComponent MetalToolchain
+          fi
+          xcrun metal --version
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            Packages/*/.build
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+          key: macos-spm-${{ steps.xcode.outputs.build }}-${{ hashFiles('Packages/*/Package.resolved', 'Apps/Mail/project.yml') }}
+
+      - name: Check imports and generated contracts
+        run: |
+          Tools/ci/check-imports.sh
+          python3 Tools/ci/check-checklist.py
+          python3 -m unittest discover -s Tools/ci/tests -p 'test_*.py'
+
+      - name: Build and test packages
+        run: Tools/ci/build-packages.sh --platform macos
+
+      - name: Bootstrap app project
+        run: Tools/bootstrap.sh
+
+      - name: Generate the project from a source archive
+        run: |
+          src="$RUNNER_TEMP/source-archive"
+          rm -rf "$src" && mkdir -p "$src"
+          git archive HEAD | tar -x -C "$src"
+          mkdir -p "$src/Tools" && cp -R Tools/.bin "$src/Tools/.bin"
+          "$src/Tools/bootstrap.sh"
+          test -d "$src/Apps/Mail/Mail.xcodeproj"
+
+      - name: Test app against fixtures
+        run: |
+          mkdir -p build
+          xcodebuild test -project Apps/Mail/Mail.xcodeproj -scheme Mail \
+            -destination 'platform=macOS,arch=arm64' \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            -resultBundlePath build/TestResults.xcresult
+
+      - name: Build development artifact
+        run: Tools/ci/build-app.sh --build-number "${{ github.run_number }}"
+
+      - name: Package development artifact
+        run: Tools/ci/package-app.sh build/dd/Build/Products/Release/OpenHumanMail.app build/OpenHumanMail.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OpenHumanMail-${{ github.run_number }}
+          path: build/OpenHumanMail.zip
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results
+          path: build/TestResults.xcresult

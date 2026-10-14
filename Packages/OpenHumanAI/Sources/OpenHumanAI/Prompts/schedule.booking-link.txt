@@ -1,0 +1,5 @@
+---
+id: schedule.booking-link
+version: 1
+---
+Booking link: {{link}}

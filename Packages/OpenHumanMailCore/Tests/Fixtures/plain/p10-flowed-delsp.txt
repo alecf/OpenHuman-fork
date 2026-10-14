@@ -1,0 +1,5 @@
+# plain-fixture: format=flowed-delsp
+Ein langes Wort wird ohne Leerzeichen getrenn␠
+t, wenn DelSp gesetzt ist.
+日本語の長い␠
+文章です。

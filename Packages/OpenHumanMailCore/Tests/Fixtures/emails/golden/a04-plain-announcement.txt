@@ -1,0 +1,32 @@
+fixture: a04-plain-announcement
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body
+body:
+<div style="font-family:Helvetica, Arial, sans-serif;font-size:14px;color:var(--oh-text)">
+<h2 style="font-size:18px;margin:0 0 12px">Office closed on Monday</h2>
+<p>The office will be closed on Monday for maintenance work on the heating system. Remote work as usual.</p>
+<p>If you need access to the building, contact the front desk before Friday.</p>
+<p style="color:var(--oh-text-secondary);font-size:12px">You receive this because you are on the all-staff list.</p></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div style="font-family:Helvetica, Arial, sans-serif;font-size:14px;color:var(--oh-text)">
+<h2 style="font-size:18px;margin:0 0 12px">Office closed on Monday</h2>
+<p>The office will be closed on Monday for maintenance work on the heating system. Remote work as usual.</p>
+<p>If you need access to the building, contact the front desk before Friday.</p>
+<p style="color:var(--oh-text-secondary);font-size:12px">You receive this because you are on the all-staff list.</p></div>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div style="font-family:Helvetica, Arial, sans-serif;font-size:14px;color:var(--oh-text)">
+<h2 style="font-size:18px;margin:0 0 12px">Office closed on Monday</h2>
+<p>The office will be closed on Monday for maintenance work on the heating system. Remote work as usual.</p>
+<p>If you need access to the building, contact the front desk before Friday.</p>
+<p style="color:var(--oh-text-secondary);font-size:12px">You receive this because you are on the all-staff list.</p></div>
+

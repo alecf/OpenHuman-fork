@@ -1,0 +1,22 @@
+extension ActionID {
+    public static let goDone = ActionID("nav.goDone")
+    public static let goWaiting = ActionID("nav.goWaiting")
+    public static let unsubscribeAndDone = ActionID("thread.unsubscribeAndDone")
+    public static let unsubscribeAndTrash = ActionID("thread.unsubscribeAndTrash")
+    public static let getMeToZero = ActionID("hygiene.getMeToZero")
+    public static let undoBulkArchive = ActionID("hygiene.undoBulkArchive")
+
+    public static let removeLabelAndDone = ActionID("thread.removeLabelAndDone")
+    public static let checkFromHere = ActionID("selection.fromHere")
+    public static let printConversation = ActionID("thread.print")
+    public static let zoomIn = ActionID("view.zoomIn")
+    public static let zoomOut = ActionID("view.zoomOut")
+    public static let zoomReset = ActionID("view.zoomReset")
+    public static let toggleContextSidebar = ActionID("view.toggleContextSidebar")
+    public static let includeOriginalAttachments = ActionID("compose.includeAttachments")
+    public static let addToSplit = ActionID("split.addThread")
+    public static let splitFromSearch = ActionID("split.fromSearch")
+    public static let addEventsTab = ActionID("split.addEventsTab")
+    public static let rescanEvents = ActionID("split.rescanEvents")
+    public static let saveMessageAsSnippet = ActionID("snippet.saveMessage")
+}

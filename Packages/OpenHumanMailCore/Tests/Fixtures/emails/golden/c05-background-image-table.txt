@@ -1,0 +1,23 @@
+fixture: c05-background-image-table
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<table width="600" style="background-size:cover"><tbody><tr><td style="padding:40px;color:#ffffff;font:bold 28px Arial">You're invited!</td></tr>
+<tr><td bgcolor="#ffffff" style="padding:20px;font:14px Arial">Saturday, November 8, 7 pm, Lakeside Hall.</td></tr></tbody></table>
+
+counts: remote 1, blocked 1, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<table width="600" style="background-size:cover"><tbody><tr><td style="padding:40px;color:#ffffff;font:bold 28px Arial">You're invited!</td></tr>
+<tr><td bgcolor="#ffffff" style="padding:20px;font:14px Arial">Saturday, November 8, 7 pm, Lakeside Hall.</td></tr></tbody></table>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<table width="600" style="background-size:cover"><tbody><tr><td style="padding:40px;color:#ffffff;font:bold 28px Arial">You're invited!</td></tr>
+<tr><td bgcolor="#000000" style="padding:20px;font:14px Arial">Saturday, November 8, 7 pm, Lakeside Hall.</td></tr></tbody></table>
+

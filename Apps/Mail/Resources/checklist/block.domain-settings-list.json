@@ -1,0 +1,15 @@
+{
+  "id": "block.domain-settings-list",
+  "area": "Block",
+  "title": "Block domain, search the Blocked list, change a rule's choice, Unblock",
+  "steps": [
+    "Launch with -UseFakeGmail (fake mail only), open a conversation and choose Block domain from its ... menu (or Option-Shift-Command-B); ignore the cleanup toast",
+    "Cmd-K, Go to Blocked (or Settings > Blocked); type part of the domain in Search blocked",
+    "In the rule's New mail menu choose Move to Trash, then change 'By default' to Move to Trash and back",
+    "Press Unblock on the rule, then Undo beside the page's list"
+  ],
+  "deepLink": null,
+  "expected": "The domain shows as '<domain> (whole domain)' with its choice under it; the search narrows the list and says when nothing matches. The rule's own choice shows Move to Trash; the default menu changes the rules without a choice. Unblock removes the rule at once; Undo (or Cmd-Z in the mail window) brings it back. A conversation's right-click menu also has Block sender and Block domain.",
+  "requires": "fake",
+  "addedIn": "2026-10-13"
+}

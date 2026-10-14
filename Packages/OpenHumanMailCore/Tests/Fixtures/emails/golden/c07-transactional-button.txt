@@ -1,0 +1,29 @@
+fixture: c07-transactional-button
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<table role="presentation" width="100%"><tbody><tr><td style="font-family:-apple-system,Helvetica,Arial;padding:24px">
+<p>Hi Robin,</p><p>Your password was changed on October 9 at 14:02.</p>
+<table role="presentation"><tbody><tr><td bgcolor="#2f6feb" style="border-radius:6px"><a href="https://accounts.example.com/security" style="display:inline-block;padding:10px 16px;color:#ffffff;text-decoration:none" rel="noopener noreferrer">Review security settings</a></td></tr></tbody></table>
+<p style="color:#57606a;font-size:12px">If this wasn't you, reset your password right away.</p></td></tr></tbody></table>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<table role="presentation" width="100%"><tbody><tr><td style="font-family:-apple-system,Helvetica,Arial;padding:24px">
+<p>Hi Robin,</p><p>Your password was changed on October 9 at 14:02.</p>
+<table role="presentation"><tbody><tr><td bgcolor="#2f6feb" style="border-radius:6px"><a href="https://accounts.example.com/security" style="display:inline-block;padding:10px 16px;color:#ffffff;text-decoration:none" rel="noopener noreferrer">Review security settings</a></td></tr></tbody></table>
+<p style="color:#57606a;font-size:12px">If this wasn't you, reset your password right away.</p></td></tr></tbody></table>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<table role="presentation" width="100%"><tbody><tr><td style="font-family:-apple-system,Helvetica,Arial;padding:24px">
+<p>Hi Robin,</p><p>Your password was changed on October 9 at 14:02.</p>
+<table role="presentation"><tbody><tr><td bgcolor="#2f6feb" style="border-radius:6px"><a href="https://accounts.example.com/security" style="display:inline-block;padding:10px 16px;color:#ffffff;text-decoration:none" rel="noopener noreferrer">Review security settings</a></td></tr></tbody></table>
+<p style="font-size:12px;color:#98a2ac !important">If this wasn't you, reset your password right away.</p></td></tr></tbody></table>
+

@@ -1,0 +1,36 @@
+{
+  "format": "openhuman-accent",
+  "formatVersion": 1,
+  "id": "openhuman.accent.iris",
+  "name": "Iris",
+  "primitives": {
+    "color": {
+      "gray.1000": "#FFFFFF",
+      "iris.941": "#EFECFD",
+      "iris.724": "#B3A7FB",
+      "iris.660": "#A193F9",
+      "iris.441": "#6352DD",
+      "iris.417": "#5E4AD9",
+      "iris.410": "#5B45E0",
+      "iris.389": "#5641D6",
+      "iris.350": "#4B36CC",
+      "iris.156": "#28233F"
+    }
+  },
+  "light": {
+    "accent.fill": "{iris.410}",
+    "accent.fillHover": "{iris.350}",
+    "accent.text": "{iris.389}",
+    "accent.subtle": "{iris.941}",
+    "accent.onFill": "{gray.1000}",
+    "accent.ring": "{iris.410}"
+  },
+  "dark": {
+    "accent.fill": "{iris.417}",
+    "accent.fillHover": "{iris.441}",
+    "accent.text": "{iris.724}",
+    "accent.subtle": "{iris.156}",
+    "accent.onFill": "{gray.1000}",
+    "accent.ring": "{iris.660}"
+  }
+}

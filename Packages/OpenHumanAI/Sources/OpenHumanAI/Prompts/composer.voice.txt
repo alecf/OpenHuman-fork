@@ -1,0 +1,5 @@
+---
+id: composer.voice
+version: 1
+---
+Rewrite it in my own voice, like my earlier emails. Keep every fact, name, number and link.

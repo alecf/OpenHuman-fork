@@ -1,0 +1,14 @@
+{
+  "id": "block.written-to-confirmation",
+  "area": "Block",
+  "title": "Blocking someone you have written to asks first",
+  "steps": [
+    "Launch with -UseFakeGmail (fake mail only); open Sent and note an address you wrote to, then open a conversation from that same address in the Inbox or All mail",
+    "Press Option-Command-B",
+    "In the toast press Cancel, then press Option-Command-B again and press Block anyway"
+  ],
+  "deepLink": null,
+  "expected": "A toast says 'You've written to <address>. Block it anyway?' with Block anyway and Cancel, and nothing is saved until Block anyway. Cancel leaves no rule. The same question appears in Settings > Blocked when you type such an address and press Block. Sent mail is never moved or hidden by a block.",
+  "requires": "fake",
+  "addedIn": "2026-10-13"
+}

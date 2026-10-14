@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"th-0001"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"reasoning","text":"Considering the thread."}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Summary: the launch review moved to Friday.\nDana sends the agenda."}}
+{"type":"turn.completed","usage":{"input_tokens":512,"cached_input_tokens":128,"output_tokens":24,"reasoning_output_tokens":8}}

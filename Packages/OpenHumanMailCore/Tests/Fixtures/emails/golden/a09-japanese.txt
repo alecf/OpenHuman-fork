@@ -1,0 +1,20 @@
+fixture: a09-japanese
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body
+body:
+<div>山田さん</div><div><br></div><div>会議は火曜日の午後三時に変更になりました。資料は前日までに共有します。</div><div><br></div><div>よろしくお願いします。<br>佐藤</div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div>山田さん</div><div><br></div><div>会議は火曜日の午後三時に変更になりました。資料は前日までに共有します。</div><div><br></div><div>よろしくお願いします。<br>佐藤</div>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div>山田さん</div><div><br></div><div>会議は火曜日の午後三時に変更になりました。資料は前日までに共有します。</div><div><br></div><div>よろしくお願いします。<br>佐藤</div>
+

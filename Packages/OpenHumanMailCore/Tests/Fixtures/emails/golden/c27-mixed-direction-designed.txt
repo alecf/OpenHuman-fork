@@ -1,0 +1,23 @@
+fixture: c27-mixed-direction-designed
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<table dir="rtl" width="100%" bgcolor="#e0f2fe"><tbody><tr><td style="color:#0c4a6e;padding:12px">עדכון: הגרסה החדשה זמינה (version 2.4.1) — <a href="https://updates.example.com/2.4.1" rel="noopener noreferrer">הורדה</a></td></tr></tbody></table>
+<p dir="ltr">English line after the RTL table, with an Arabic name: <bdi>سامي</bdi>.</p>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<table dir="rtl" width="100%" bgcolor="#e0f2fe"><tbody><tr><td style="color:#0c4a6e;padding:12px">עדכון: הגרסה החדשה זמינה (version 2.4.1) — <a href="https://updates.example.com/2.4.1" rel="noopener noreferrer">הורדה</a></td></tr></tbody></table>
+<p dir="ltr">English line after the RTL table, with an Arabic name: <bdi>سامي</bdi>.</p>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<table dir="rtl" width="100%" bgcolor="#000001"><tbody><tr><td style="color:#5789ac;padding:12px">עדכון: הגרסה החדשה זמינה (version 2.4.1) — <a href="https://updates.example.com/2.4.1" rel="noopener noreferrer">הורדה</a></td></tr></tbody></table>
+<p dir="ltr">English line after the RTL table, with an Arabic name: <bdi>سامي</bdi>.</p>
+

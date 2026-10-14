@@ -1,0 +1,5 @@
+---
+id: schedule.ask.accept-move
+version: 1
+---
+Write to {{name}}. Accept the time they proposed (the user moves another meeting to make room) and confirm it.

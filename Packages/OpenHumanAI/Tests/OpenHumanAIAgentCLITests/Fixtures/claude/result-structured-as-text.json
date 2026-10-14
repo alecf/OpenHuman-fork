@@ -1,0 +1,1 @@
+{"type":"result","subtype":"success","is_error":false,"result":"```json\n{\"category\":\"newsletter\",\"priority\":0,\"reason\":\"Weekly digest.\"}\n```","usage":{"input_tokens":280,"output_tokens":20}}

@@ -1,0 +1,12 @@
+{
+  "id": "signin.import-client",
+  "area": "Sign-in",
+  "title": "Import a Google client",
+  "steps": [
+    "Start Mail without an account",
+    "Use the setup guide to create your own Desktop OAuth client",
+    "Import the downloaded JSON"
+  ],
+  "expected": "Sign-in becomes available without displaying credentials.",
+  "requires": "real-readonly"
+}

@@ -1,0 +1,29 @@
+fixture: a06-yahoo-reply
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body
+body:
+<div class="ydp4f2c3e9eyahoo-style-wrap" style="font-family:Helvetica Neue, Helvetica, Arial, sans-serif;font-size:13px"><div>Yes, the blue one. Thanks!</div></div>
+<details class="oh-quoted"><summary title="Show quoted text">•••</summary><div id="yahoo_quoted_1234" class="yahoo_quoted"><div style="font-family:&quot;Helvetica Neue&quot;, Helvetica, Arial, sans-serif;font-size:13px;color:var(--oh-text)">
+<div>On Thursday, October 9, 2026, 08:01:12 AM PDT, Sam Reyes &lt;sam@example.com&gt; wrote:</div><div><br></div>
+<div>Which one did you mean, the blue or the green folder?</div></div></div></details>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted true
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div class="ydp4f2c3e9eyahoo-style-wrap" style="font-family:Helvetica Neue, Helvetica, Arial, sans-serif;font-size:13px"><div>Yes, the blue one. Thanks!</div></div>
+<details class="oh-quoted"><summary title="Show quoted text">•••</summary><div id="yahoo_quoted_1234" class="yahoo_quoted"><div style="font-family:&quot;Helvetica Neue&quot;, Helvetica, Arial, sans-serif;font-size:13px;color:var(--oh-text)">
+<div>On Thursday, October 9, 2026, 08:01:12 AM PDT, Sam Reyes &lt;sam@example.com&gt; wrote:</div><div><br></div>
+<div>Which one did you mean, the blue or the green folder?</div></div></div></details>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div class="ydp4f2c3e9eyahoo-style-wrap" style="font-family:Helvetica Neue, Helvetica, Arial, sans-serif;font-size:13px"><div>Yes, the blue one. Thanks!</div></div>
+<details class="oh-quoted"><summary title="Show quoted text">•••</summary><div id="yahoo_quoted_1234" class="yahoo_quoted"><div style="font-family:&quot;Helvetica Neue&quot;, Helvetica, Arial, sans-serif;font-size:13px;color:var(--oh-text)">
+<div>On Thursday, October 9, 2026, 08:01:12 AM PDT, Sam Reyes &lt;sam@example.com&gt; wrote:</div><div><br></div>
+<div>Which one did you mean, the blue or the green folder?</div></div></div></details>
+

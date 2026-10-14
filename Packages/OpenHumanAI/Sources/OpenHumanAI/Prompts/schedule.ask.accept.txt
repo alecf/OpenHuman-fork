@@ -1,0 +1,5 @@
+---
+id: schedule.ask.accept
+version: 1
+---
+Write to {{name}}. Accept the time they proposed and confirm it.

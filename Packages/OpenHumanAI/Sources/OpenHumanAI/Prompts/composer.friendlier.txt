@@ -1,0 +1,5 @@
+---
+id: composer.friendlier
+version: 1
+---
+Make it warmer and friendlier.

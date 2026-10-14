@@ -1,0 +1,36 @@
+{
+  "format": "openhuman-accent",
+  "formatVersion": 1,
+  "id": "openhuman.accent.graphite",
+  "name": "Graphite",
+  "primitives": {
+    "color": {
+      "graphite.940": "#ECEEF1",
+      "graphite.923": "#E6E9EE",
+      "graphite.869": "#D6DAE1",
+      "graphite.771": "#B9BFC8",
+      "graphite.338": "#4A5059",
+      "graphite.219": "#30353C",
+      "graphite.197": "#2C3036",
+      "graphite.135": "#1F2328",
+      "graphite.82": "#16181B",
+      "gray.1000": "#FFFFFF"
+    }
+  },
+  "light": {
+    "accent.fill": "{graphite.219}",
+    "accent.fillHover": "{graphite.135}",
+    "accent.text": "{graphite.219}",
+    "accent.subtle": "{graphite.940}",
+    "accent.onFill": "{gray.1000}",
+    "accent.ring": "{graphite.338}"
+  },
+  "dark": {
+    "accent.fill": "{graphite.869}",
+    "accent.fillHover": "{graphite.923}",
+    "accent.text": "{graphite.869}",
+    "accent.subtle": "{graphite.197}",
+    "accent.onFill": "{graphite.82}",
+    "accent.ring": "{graphite.771}"
+  }
+}

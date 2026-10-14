@@ -1,0 +1,26 @@
+fixture: a07-rtl-hebrew
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body
+body:
+<div dir="rtl" style="text-align:right;font-family:Arial, sans-serif">
+<p>שלום דנה,</p><p>הפגישה של יום שלישי נדחתה לשבוע הבא. אעדכן כשיהיה מועד חדש.</p>
+<p>תודה,<br>נועה</p></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div dir="rtl" style="text-align:right;font-family:Arial, sans-serif">
+<p>שלום דנה,</p><p>הפגישה של יום שלישי נדחתה לשבוע הבא. אעדכן כשיהיה מועד חדש.</p>
+<p>תודה,<br>נועה</p></div>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div dir="rtl" style="text-align:right;font-family:Arial, sans-serif">
+<p>שלום דנה,</p><p>הפגישה של יום שלישי נדחתה לשבוע הבא. אעדכן כשיהיה מועד חדש.</p>
+<p>תודה,<br>נועה</p></div>
+

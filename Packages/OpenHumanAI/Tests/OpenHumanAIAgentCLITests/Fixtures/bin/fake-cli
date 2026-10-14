@@ -1,0 +1,25 @@
+#!/bin/bash
+dir="$(cd "$(dirname "$0")" && pwd)"
+name="$(basename "$0")"
+if [ "$1" = "--version" ]; then cat "$dir/$name.version"; exit 0; fi
+if [ "$1" = "auth" ]; then exit "$(cat "$dir/$name.auth" 2>/dev/null || echo 0)"; fi
+n=0
+for f in "$dir/$name.call."*.argv; do [ -e "$f" ] && n=$((n + 1)); done
+n=$((n + 1))
+printf '%s\0' "$@" > "$dir/$name.call.$n.argv"
+cat > "$dir/$name.call.$n.stdin"
+env > "$dir/$name.call.$n.env"
+pwd > "$dir/$name.call.$n.cwd"
+if [ -e "$dir/$name.hang" ]; then
+    echo $$ > "$dir/$name.pid"
+    [ -e "$dir/$name.ignoreterm" ] && trap '' TERM
+    exec sleep 300
+fi
+prev=""
+for arg in "$@"; do
+    if [ "$prev" = "--output-last-message" ] && [ -e "$dir/$name.last" ]; then cp "$dir/$name.last" "$arg"; fi
+    prev="$arg"
+done
+[ -e "$dir/$name.stdout" ] && cat "$dir/$name.stdout"
+[ -e "$dir/$name.stderr" ] && cat "$dir/$name.stderr" >&2
+exit "$(cat "$dir/$name.exit" 2>/dev/null || echo 0)"

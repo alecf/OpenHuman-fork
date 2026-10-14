@@ -1,0 +1,11 @@
+{
+  "id": "sync.resume",
+  "area": "Sync",
+  "title": "Resume fixture sync",
+  "steps": [
+    "Launch Mail with -UseFakeGmail",
+    "Quit and reopen with the same launch arguments"
+  ],
+  "expected": "The fixture inbox appears and sync resumes.",
+  "requires": "fake"
+}

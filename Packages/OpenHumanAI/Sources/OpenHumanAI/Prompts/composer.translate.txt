@@ -1,0 +1,5 @@
+---
+id: composer.translate
+version: 1
+---
+Translate into

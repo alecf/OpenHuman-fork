@@ -1,0 +1,9 @@
+{
+  "subject": "Your receipt from Cafe Example",
+  "messages": [
+    {
+      "from": "Cafe Example <receipts@cafe.example.com>",
+      "body": "Thank you for your order. Latte x2, croissant x1. Total $11.50 paid with card ending 0000. Receipt number 10442."
+    }
+  ]
+}

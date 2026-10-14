@@ -1,0 +1,61 @@
+# SwiftPM / Xcode build output
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserdata
+xcuserdata/
+*.xcuserstate
+# Anchored: an unanchored build/ also matches a source folder named Build/ on a case-insensitive filesystem.
+/build/
+/Apps/*/build/
+# Release output of Tools/release/make-dmg.sh (DMGs, archives, notarization answers). /build/ already covers it; it is
+# listed so that narrowing /build/ never lets a DMG into git.
+/build/release/
+# Release script settings: profile and identity names only (Tools/release/release.env.example).
+Tools/release/release.env
+
+# Generated Xcode project (XcodeGen) and pinned tools (Tools/bootstrap.sh)
+Apps/Mail/*.xcodeproj
+Tools/.bin/
+
+# Secrets, OAuth clients and per-developer config. Never commit these.
+Apps/Mail/Config/Local.xcconfig
+Apps/Mail/Config/Secrets.xcconfig
+oauth-client.json
+client_secret_*.json
+*.local.xcconfig
+
+# Downloaded reference material. Never committed.
+design-ref/
+
+# OS
+.DS_Store
+
+# XcodeGen-generated
+Info.generated.plist
+
+# Feedback bundles received from another device. Never committed.
+feedback-inbox/
+
+# Local build cache settings
+.devex.env
+
+# Python bytecode. Never committed.
+__pycache__/
+*.pyc
+
+# The bundled dev test checklist is generated from Apps/Mail/Resources/checklist/<id>.json by
+# Tools/ci/checklist.py build (Tools/bootstrap.sh runs it). Edit the fragments, never this file.
+/Apps/Mail/Resources/dev-test-checklist.json
+
+# Local editor and assistant settings
+/.claude/
+/.codex/
+/.agents/
+/.gstack/
+/AGENTS.md
+*.p12
+*.p8
+.env
+.env.*
+!.env.example

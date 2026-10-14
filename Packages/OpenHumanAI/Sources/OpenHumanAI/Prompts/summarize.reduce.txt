@@ -1,0 +1,5 @@
+---
+id: summarize.reduce
+version: 2
+---
+Task: the email_data blocks hold short summaries of the messages of one email thread, oldest first. Combine them into one summary of the whole thread. Say who wants what from whom and by when. Mention decisions made and questions still open.

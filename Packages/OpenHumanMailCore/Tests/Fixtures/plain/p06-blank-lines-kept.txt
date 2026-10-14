@@ -1,0 +1,15 @@
+# plain-fixture: format=fixed
+
+
+First paragraph.
+
+
+
+Second paragraph after three blank lines.
+
+> A quoted line after one blank line.
+
+
+Answer after two blank lines.
+
+

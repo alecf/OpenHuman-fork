@@ -1,0 +1,36 @@
+{
+  "format": "openhuman-accent",
+  "formatVersion": 1,
+  "id": "openhuman.accent.blue",
+  "name": "Blue",
+  "primitives": {
+    "color": {
+      "blue.947": "#EAF0FD",
+      "blue.724": "#8DB2F8",
+      "blue.668": "#76A2F6",
+      "blue.467": "#3369D9",
+      "blue.461": "#2563EB",
+      "blue.449": "#2E64D4",
+      "blue.418": "#2259D6",
+      "blue.392": "#1D4FD7",
+      "blue.170": "#1E2A40",
+      "gray.1000": "#FFFFFF"
+    }
+  },
+  "light": {
+    "accent.fill": "{blue.461}",
+    "accent.fillHover": "{blue.392}",
+    "accent.text": "{blue.418}",
+    "accent.subtle": "{blue.947}",
+    "accent.onFill": "{gray.1000}",
+    "accent.ring": "{blue.461}"
+  },
+  "dark": {
+    "accent.fill": "{blue.449}",
+    "accent.fillHover": "{blue.467}",
+    "accent.text": "{blue.724}",
+    "accent.subtle": "{blue.170}",
+    "accent.onFill": "{gray.1000}",
+    "accent.ring": "{blue.668}"
+  }
+}

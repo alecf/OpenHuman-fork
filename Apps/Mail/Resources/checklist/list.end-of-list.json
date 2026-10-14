@@ -1,0 +1,14 @@
+{
+  "id": "list.end-of-list",
+  "area": "Thread list",
+  "title": "Nothing is drawn after the last conversation",
+  "steps": [
+    "Launch Mail with -UseFakeData and open the Inbox",
+    "Press Cmd-Down (or drag the scroll bar to the bottom)",
+    "Scroll quickly up and down a few times, then stop"
+  ],
+  "deepLink": null,
+  "expected": "The last conversation is the last row: no grey bars or empty plates below it. Rows that load at once never flash a skeleton; a soft skeleton shows only for rows that take longer than a moment, and none after a failed read (the Retry bar shows instead).",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

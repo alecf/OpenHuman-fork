@@ -1,0 +1,15 @@
+{
+  "id": "ai.prompts-edit-reset",
+  "area": "AI",
+  "title": "Edit a prompt in Settings › AI › Prompts, see r1 and the changes, then reset",
+  "steps": [
+    "Launch with -UseFakeData, open Settings › AI and choose the Prompts tab",
+    "Edit One-line summary, change a sentence, press Save my version",
+    "Open the Changes and History tabs",
+    "Press Reset to default"
+  ],
+  "deepLink": null,
+  "expected": "Every prompt is listed with its id and version. After Save the row says Edited · r1 and the id line shows +r1 with a digest; Changes marks your lines with + and the old ones with −; History lists r1 with Revert. After Reset the row has no badge, the editor shows the default and History still lists r1.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

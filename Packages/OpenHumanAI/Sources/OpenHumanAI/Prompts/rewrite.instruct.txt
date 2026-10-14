@@ -1,0 +1,5 @@
+---
+id: rewrite.instruct
+version: 2
+---
+Task: rewrite the draft in the email_data block of kind "draft" as the user_instruction block asks. Change only what the instruction asks for. Keep facts, names, numbers, dates and links exactly. A block of kind "summary", if present, is background about the thread; do not copy it into the draft. Blocks of kind "styleExample", if present, are emails the user wrote earlier: match their tone, length, greeting and sign-off habits; never copy their facts, names, numbers or links into the draft. A context block of kind "userPreferences", if present, says how the user wants to sound; follow it unless the instruction asks otherwise. Return only the rewritten text, with nothing before or after it.

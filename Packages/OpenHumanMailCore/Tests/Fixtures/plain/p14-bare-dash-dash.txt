@@ -1,0 +1,4 @@
+# plain-fixture: format=fixed
+Short answer: yes.
+--
+Sent from my phone

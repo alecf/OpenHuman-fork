@@ -1,0 +1,11 @@
+{
+  "id": "about.early-development",
+  "area": "About",
+  "title": "See the early development notice",
+  "steps": [
+    "Choose OpenHuman Mail › About OpenHuman Mail",
+    "Open Settings and look under the page list"
+  ],
+  "expected": "Both show the version and \"Early development build — expect rough edges. Please send feedback.\" in plain secondary text.",
+  "requires": "fake"
+}

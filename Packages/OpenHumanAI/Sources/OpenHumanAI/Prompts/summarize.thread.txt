@@ -1,0 +1,5 @@
+---
+id: summarize.thread
+version: 2
+---
+Task: summarize the email thread in the email_data blocks. Say who wants what from whom and by when. Mention decisions made and questions still open.

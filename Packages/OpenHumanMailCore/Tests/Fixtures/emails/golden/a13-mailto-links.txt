@@ -1,0 +1,23 @@
+fixture: a13-mailto-links
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body
+body:
+<p>Questions about your order? Write to <a href="mailto:help@shop.example?subject=Order%201234" rel="noopener noreferrer">help@shop.example</a>.</p>
+<p>Press inquiries: <a href="mailto:press@shop.example" rel="noopener noreferrer">press@shop.example</a>. Returns: <a href="mailto:returns@shop.example?cc=desk@shop.example&amp;bcc=hidden@shop.example&amp;body=Order%201234" rel="noopener noreferrer">returns desk</a>.</p>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<p>Questions about your order? Write to <a href="mailto:help@shop.example?subject=Order%201234" rel="noopener noreferrer">help@shop.example</a>.</p>
+<p>Press inquiries: <a href="mailto:press@shop.example" rel="noopener noreferrer">press@shop.example</a>. Returns: <a href="mailto:returns@shop.example?cc=desk@shop.example&amp;bcc=hidden@shop.example&amp;body=Order%201234" rel="noopener noreferrer">returns desk</a>.</p>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<p>Questions about your order? Write to <a href="mailto:help@shop.example?subject=Order%201234" rel="noopener noreferrer">help@shop.example</a>.</p>
+<p>Press inquiries: <a href="mailto:press@shop.example" rel="noopener noreferrer">press@shop.example</a>. Returns: <a href="mailto:returns@shop.example?cc=desk@shop.example&amp;bcc=hidden@shop.example&amp;body=Order%201234" rel="noopener noreferrer">returns desk</a>.</p>
+

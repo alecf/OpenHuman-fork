@@ -1,0 +1,66 @@
+name: Unsigned release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release-unsigned-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  unsigned-dmg:
+    runs-on: ${{ vars.MACOS_RUNNER_LABEL || 'xcode-27' }}
+    timeout-minutes: 90
+    env:
+      # Why: a released Xcode, never the newest installed beta
+      XCODE_APP: ${{ vars.XCODE_APP || '/Applications/Xcode_27.0.app' }}
+      XCODE_VERSION: ${{ vars.XCODE_VERSION || '27.0' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode
+        run: |
+          if [ ! -d "$XCODE_APP" ]; then
+            echo "::error::$XCODE_APP is not installed on this runner; set the XCODE_APP and XCODE_VERSION repository variables"
+            ls -d /Applications/Xcode*.app || true
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          found="$(xcodebuild -version | sed -n 's/^Xcode //p')"
+          if [ "$found" != "$XCODE_VERSION" ]; then
+            echo "::error::$XCODE_APP is Xcode $found, expected $XCODE_VERSION"
+            exit 1
+          fi
+          xcodebuild -version
+
+      - name: Install the Metal toolchain
+        run: |
+          if ! xcrun metal --version >/dev/null 2>&1; then
+            xcodebuild -downloadComponent MetalToolchain
+          fi
+          xcrun metal --version
+
+      - name: Build the unsigned DMG and attach it to a draft pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(Tools/release/bump-version.sh)"
+          fi
+          Tools/release/publish-github.sh "$version"
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: unsigned-release-logs
+          path: build/release/*/logs
+          if-no-files-found: ignore

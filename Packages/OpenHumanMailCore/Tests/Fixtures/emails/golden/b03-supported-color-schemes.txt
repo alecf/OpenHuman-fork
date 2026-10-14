@@ -1,0 +1,20 @@
+fixture: b03-supported-color-schemes
+
+=== light: tier selfAdapting, treatment selfAdapting, scheme light dark
+wrapper: oh-body style="background:#fafafa"
+body:
+<table style="background:#ffffff;color:#202124" width="100%"><tbody><tr><td style="padding:20px"><p>Security alert: a new sign-in to your account from a Mac.</p><p style="color:#5f6368">If this was you, no action is needed.</p></td></tr></tbody></table>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier selfAdapting, treatment selfAdapting, scheme light dark
+wrapper: oh-body style="background:#fafafa"
+body:
+<table style="background:#ffffff;color:#202124" width="100%"><tbody><tr><td style="padding:20px"><p>Security alert: a new sign-in to your account from a Mac.</p><p style="color:#5f6368">If this was you, no action is needed.</p></td></tr></tbody></table>
+
+
+=== dark, Show in dark colors: tier selfAdapting, treatment selfAdapting, scheme light dark
+wrapper: oh-body style="background:#fafafa"
+body:
+<table style="background:#ffffff;color:#202124" width="100%"><tbody><tr><td style="padding:20px"><p>Security alert: a new sign-in to your account from a Mac.</p><p style="color:#5f6368">If this was you, no action is needed.</p></td></tr></tbody></table>
+

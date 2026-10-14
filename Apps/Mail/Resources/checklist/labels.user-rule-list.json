@@ -1,0 +1,14 @@
+{
+  "id": "labels.user-rule-list",
+  "area": "Auto labels",
+  "title": "A List-Id rule of your own labels a newsletter News (fake data)",
+  "steps": [
+    "Launch with -UseFakeData and open Settings › Importance & labels › Rules",
+    "Click Add rule…, name it, choose The List-Id contains and type a newsletter's list domain, choose Label News, Save",
+    "Open Settings › General › Auto labels and click Classify recent mail, then look at that newsletter's row"
+  ],
+  "deepLink": null,
+  "expected": "The rule shows under Your rules as “When the List-Id contains … → News” with a switch, Up, Down, Edit and Delete. The newsletter's chip says News. On real accounts the List-Id is not known yet in this build, so such a rule matches nothing there.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

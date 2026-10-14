@@ -1,0 +1,2 @@
+|Ein langes Wort wird ohne Leerzeichen getrennt, wenn DelSp gesetzt ist.
+|日本語の長い文章です。

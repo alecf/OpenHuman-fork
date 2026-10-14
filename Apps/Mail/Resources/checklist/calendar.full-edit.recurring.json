@@ -1,0 +1,15 @@
+{
+  "id": "calendar.full-edit.recurring",
+  "area": "Calendar",
+  "title": "Repeating events ask this event, this and following, or all events",
+  "steps": [
+    "With -UseFakeData -UseFakeCalendar open Calendar (2), click an Interview (a repeating event you organize) and change its title",
+    "Press Save and read the question",
+    "Choose This and following events (then repeat with All events on another Interview)",
+    "Open a one-off event of yours and change its title"
+  ],
+  "deepLink": null,
+  "expected": "A repeating event asks This event, This and following events or All events before anything is saved; a one-off event does not ask. Changing how the series repeats offers only the last two.",
+  "requires": "fake",
+  "addedIn": "2026-10-13"
+}

@@ -1,0 +1,6 @@
+---
+id: common.repair
+version: 1
+---
+Your previous answer was not valid. Return only valid JSON that matches this JSON Schema, with no other text:
+{{schema}}

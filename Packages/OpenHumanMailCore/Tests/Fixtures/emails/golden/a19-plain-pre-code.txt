@@ -1,0 +1,23 @@
+fixture: a19-plain-pre-code
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body
+body:
+<p>The failing command was:</p><pre>$ make test TARGET=reader
+error: missing fixture &lt;emails/a01&gt;</pre><p>Run it with <code>-v</code> for details.</p>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<p>The failing command was:</p><pre>$ make test TARGET=reader
+error: missing fixture &lt;emails/a01&gt;</pre><p>Run it with <code>-v</code> for details.</p>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<p>The failing command was:</p><pre>$ make test TARGET=reader
+error: missing fixture &lt;emails/a01&gt;</pre><p>Run it with <code>-v</code> for details.</p>
+

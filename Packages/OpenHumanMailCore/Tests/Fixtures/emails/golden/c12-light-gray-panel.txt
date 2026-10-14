@@ -1,0 +1,20 @@
+fixture: c12-light-gray-panel
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<div style="background-color:#f5f5f5;padding:16px;font-family:Arial"><p>Your weekly report is ready.</p><p>Open rate 41%, click rate 6%.</p></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<div style="background-color:#f5f5f5;padding:16px;font-family:Arial"><p>Your weekly report is ready.</p><p>Open rate 41%, click rate 6%.</p></div>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<div style="background-color:#000000;padding:16px;font-family:Arial"><p>Your weekly report is ready.</p><p>Open rate 41%, click rate 6%.</p></div>
+

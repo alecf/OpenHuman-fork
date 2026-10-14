@@ -1,0 +1,23 @@
+fixture: b01-meta-color-scheme
+
+=== light: tier selfAdapting, treatment selfAdapting, scheme light dark
+wrapper: oh-body
+css: .oh-body{color-scheme:light dark}.oh-body{background:#ffffff;color:#1a1a1a}.oh-body .note{background:#f2f4f7}@media (prefers-color-scheme: dark){.oh-body{background:#121212;color:#e8e8e8}.oh-body .note{background:#1f2328}}
+body:
+<div style="padding:16px"><h1 style="font-size:20px">Your weekly summary</h1><p class="note">You closed 12 tasks this week.</p></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier selfAdapting, treatment selfAdapting, scheme light dark
+wrapper: oh-body
+css: .oh-body{color-scheme:light dark}.oh-body{background:#ffffff;color:#1a1a1a}.oh-body .note{background:#f2f4f7}@media (prefers-color-scheme: dark){.oh-body{background:#121212;color:#e8e8e8}.oh-body .note{background:#1f2328}}
+body:
+<div style="padding:16px"><h1 style="font-size:20px">Your weekly summary</h1><p class="note">You closed 12 tasks this week.</p></div>
+
+
+=== dark, Show in dark colors: tier selfAdapting, treatment selfAdapting, scheme light dark
+wrapper: oh-body
+css: .oh-body{color-scheme:light dark}.oh-body{background:#ffffff;color:#1a1a1a}.oh-body .note{background:#f2f4f7}@media (prefers-color-scheme: dark){.oh-body{background:#121212;color:#e8e8e8}.oh-body .note{background:#1f2328}}
+body:
+<div style="padding:16px"><h1 style="font-size:20px">Your weekly summary</h1><p class="note">You closed 12 tasks this week.</p></div>
+

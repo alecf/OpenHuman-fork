@@ -1,0 +1,88 @@
+import Foundation
+import MailFakes
+import MailModel
+import Testing
+@testable import MailFeatures
+
+@MainActor
+@Suite(.serialized) struct CleanupRulesTests {
+    @Test func targetsAreNormalisedAndBadOnesRefused() {
+        #expect(CleanupRulesModel.normalizedTarget("  Dana@Example.COM ") == "dana@example.com")
+        #expect(CleanupRulesModel.normalizedTarget("Dana Q <dana@example.com>") == "dana@example.com")
+        #expect(CleanupRulesModel.normalizedTarget("@Shop.example") == "@shop.example")
+        #expect(CleanupRulesModel.normalizedTarget("shop.example") == "@shop.example")
+        for bad in ["", "   ", "dana", "dana@", "a@b@c.example", "dana@nodot", "two words@x.example", "a@-x.example",
+                    "a@x..example", "x.example,y.example"] {
+            #expect(CleanupRulesModel.normalizedTarget(bad) == nil, "\(bad)")
+        }
+    }
+
+    private func model(_ store: FakeMailStore) async -> CleanupRulesModel {
+        let model = CleanupRulesModel(settings: store)
+        model.start()
+        return model
+    }
+
+    @Test func addChangeAndRemoveWriteTheRowTheSuggestionReads() async throws {
+        let store = FakeMailStore(corpus: .make(threadCount: 1, now: fixedNow))
+        let model = await model(store)
+        #expect(model.entries.isEmpty)
+        #expect(await model.add("Shop.example", choice: .never))
+        #expect(await model.add("dana@shop.example", choice: .always))
+        #expect(try await store.get(AppSettings.archiveSuggestionOverrides)
+                == ["@shop.example": "never", "dana@shop.example": "always"])
+        await eventually { model.entries.count == 2 }
+        #expect(model.entries.map(\.target) == ["dana@shop.example", "@shop.example"], "senders before domains")
+        #expect(model.entries.map(\.isDomain) == [false, true])
+
+        await model.set("@shop.example", .always)
+        #expect(try await store.get(AppSettings.archiveSuggestionOverrides)["@shop.example"] == "always")
+        await model.remove("dana@shop.example")
+        #expect(try await store.get(AppSettings.archiveSuggestionOverrides) == ["@shop.example": "always"])
+    }
+
+    @Test func aBadTargetStoresNothingAndSaysWhy() async throws {
+        let store = FakeMailStore(corpus: .make(threadCount: 1, now: fixedNow))
+        let model = await model(store)
+        #expect(await model.add("not an address", choice: .never) == false)
+        #expect(model.addError?.contains("dana@example.com") == true)
+        #expect(try await store.get(AppSettings.archiveSuggestionOverrides).isEmpty)
+        #expect(await model.add("ok@shop.example", choice: .never))
+        #expect(model.addError == nil)
+    }
+
+    @Test func aValueThatIsNotAChoiceIsKeptButNotListed() async throws {
+        let store = FakeMailStore(corpus: .make(threadCount: 1, now: fixedNow))
+        try await store.set(AppSettings.archiveSuggestionOverrides, ["@odd.example": "maybe", "x@y.example": "never"])
+        let model = await model(store)
+        await eventually { model.overrides.value.count == 2 }
+        #expect(model.entries.map(\.target) == ["x@y.example"])
+        await model.remove("x@y.example")
+        #expect(try await store.get(AppSettings.archiveSuggestionOverrides) == ["@odd.example": "maybe"])
+    }
+
+    @Test func aRuleAddedHereIsAppliedByTheSuggestionRules() async throws {
+        let store = FakeMailStore(corpus: .make(threadCount: 1, now: fixedNow))
+        let model = await model(store)
+        _ = await model.add("friend@else.example", choice: .always)
+        _ = await model.add("@news.example", choice: .never)
+        let raw = try await store.get(AppSettings.archiveSuggestionOverrides)
+        let rules = ArchiveSuggestionRules(overrides: raw.compactMapValues(ArchiveSuggestionOverride.init(rawValue:)))
+        var written = ArchiveSuggestionFacts(sender: "friend@else.example")
+        written.authorWroteToSender = true
+        #expect(rules.decide(written) == .include, "Always beats \"the user wrote to them\"")
+        #expect(rules.decide(ArchiveSuggestionFacts(sender: "any@news.example")) == .exclude(.neverRule))
+        var spam = ArchiveSuggestionFacts(sender: "friend@else.example")
+        spam.isSpam = true
+        #expect(rules.decide(spam) == .exclude(.spam), "Gmail spam still wins")
+    }
+
+    @Test func theSettingsModelCarriesTheEditor() async {
+        let store = FakeMailStore(corpus: .make(threadCount: 1, now: fixedNow))
+        let env = AppEnvironment(data: store, commands: store, accounts: store, settings: store, isFake: true)
+        let settings = InboxAutomationSettingsModel(environment: env)
+        settings.start()
+        _ = await settings.cleanupRules.add("a@b.example", choice: .never)
+        #expect(settings.cleanupRules.entries.count == 1)
+    }
+}

@@ -1,0 +1,5 @@
+---
+id: composer.longer
+version: 1
+---
+Make it longer with more detail; do not invent facts, names, numbers or links.

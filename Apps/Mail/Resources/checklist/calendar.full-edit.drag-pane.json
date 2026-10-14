@@ -1,0 +1,15 @@
+{
+  "id": "calendar.full-edit.drag-pane",
+  "area": "Calendar",
+  "title": "Dragging or resizing opens the edit pane with Accept and Cancel",
+  "steps": [
+    "With -UseFakeData -UseFakeCalendar open Calendar (2) in Week view, drag one of your own morning events to another day and release",
+    "Read the From and To lines; lengthen the event in the pane and press Return",
+    "Drag again and press Esc; then turn off Settings › Calendar › Confirm calendar moves in the edit pane and drag once more",
+    "Press Cmd+Z"
+  ],
+  "deepLink": null,
+  "expected": "Releasing a drag or resize shows From, To and the length with Accept and Cancel; the event stays where you dropped it, and nothing is written and no guest is told until Accept (Return). Esc puts the event back. With the setting off the move applies at once and Cmd+Z undoes it.",
+  "requires": "fake",
+  "addedIn": "2026-10-13"
+}

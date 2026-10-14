@@ -1,0 +1,20 @@
+fixture: a16-forwarded-gmail
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body
+body:
+<div dir="ltr">Forwarding the venue details.<br><br><div class="gmail_quote"><div dir="ltr" class="gmail_attr">---------- Forwarded message ---------<br>From: <strong class="gmail_sendername" dir="auto">Venue Team</strong> <span dir="auto">&lt;venue@example.com&gt;</span><br>Date: Thu, Oct 9, 2026<br>Subject: Hall booking<br></div><br><div dir="ltr">The hall is booked for Saturday from 6 pm. Parking is behind the building.</div></div></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div dir="ltr">Forwarding the venue details.<br><br><div class="gmail_quote"><div dir="ltr" class="gmail_attr">---------- Forwarded message ---------<br>From: <strong class="gmail_sendername" dir="auto">Venue Team</strong> <span dir="auto">&lt;venue@example.com&gt;</span><br>Date: Thu, Oct 9, 2026<br>Subject: Hall booking<br></div><br><div dir="ltr">The hall is booked for Saturday from 6 pm. Parking is behind the building.</div></div></div>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div dir="ltr">Forwarding the venue details.<br><br><div class="gmail_quote"><div dir="ltr" class="gmail_attr">---------- Forwarded message ---------<br>From: <strong class="gmail_sendername" dir="auto">Venue Team</strong> <span dir="auto">&lt;venue@example.com&gt;</span><br>Date: Thu, Oct 9, 2026<br>Subject: Hall booking<br></div><br><div dir="ltr">The hall is booked for Saturday from 6 pm. Parking is behind the building.</div></div></div>
+

@@ -1,0 +1,11 @@
+{
+  "id": "signin.relaunch",
+  "area": "Sign-in",
+  "title": "Resume after relaunch",
+  "steps": [
+    "Sign in to a test account with OPENHUMAN_SAFE_MODE=read-only",
+    "Quit and reopen Mail"
+  ],
+  "expected": "The account resumes without a new sign-in.",
+  "requires": "real-readonly"
+}

@@ -1,0 +1,26 @@
+fixture: a11-white-backgrounds
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body
+body:
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color:transparent">
+<tbody><tr><td style="background:transparent;color:var(--oh-text);padding:12px"><font face="Georgia" style="color:var(--oh-text)">Your library card expires on November 30.</font>
+<p style="color:var(--oh-text)">Renew online or at any branch.</p><p style="color:var(--oh-text-secondary)">Questions? Reply to this message.</p></td></tr></tbody></table>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color:transparent">
+<tbody><tr><td style="background:transparent;color:var(--oh-text);padding:12px"><font face="Georgia" style="color:var(--oh-text)">Your library card expires on November 30.</font>
+<p style="color:var(--oh-text)">Renew online or at any branch.</p><p style="color:var(--oh-text-secondary)">Questions? Reply to this message.</p></td></tr></tbody></table>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color:transparent">
+<tbody><tr><td style="background:transparent;color:var(--oh-text);padding:12px"><font face="Georgia" style="color:var(--oh-text)">Your library card expires on November 30.</font>
+<p style="color:var(--oh-text)">Renew online or at any branch.</p><p style="color:var(--oh-text-secondary)">Questions? Reply to this message.</p></td></tr></tbody></table>
+

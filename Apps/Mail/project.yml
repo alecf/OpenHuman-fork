@@ -1,0 +1,102 @@
+name: Mail
+options:
+  bundleIdPrefix: dev.openhuman
+  deploymentTarget: { macOS: "27.0" }
+  createIntermediateGroups: true
+  preGenCommand: python3 ../../Tools/ci/checklist.py build
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Release: Config/Release.xcconfig
+packages:
+  OpenHumanMailUI: { path: ../../Packages/OpenHumanMailUI }
+  OpenHumanMailCore: { path: ../../Packages/OpenHumanMailCore }
+  OpenHumanStore: { path: ../../Packages/OpenHumanStore }
+  OpenHumanGmail: { path: ../../Packages/OpenHumanGmail }
+  OpenHumanSync: { path: ../../Packages/OpenHumanSync }
+  OpenHumanAI: { path: ../../Packages/OpenHumanAI }
+  OpenHumanAIMLX: { path: ../../Packages/OpenHumanAIMLX }
+  OpenHumanSemanticIndex: { path: ../../Packages/OpenHumanSemanticIndex }
+targets:
+  Mail:
+    type: application
+    platform: macOS
+    sources: [Sources, { path: Resources, excludes: ["checklist/**"] }]
+    entitlements: { path: Entitlements/Mail.entitlements }
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: Resources/Info.generated.plist
+      properties:
+        CFBundleDisplayName: "OpenHuman Mail"
+        CFBundleName: "OpenHuman Mail"
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.productivity
+        LSMinimumSystemVersion: "27.0"
+        LSFileQuarantineEnabled: true
+        CFBundleURLTypes: [{ CFBundleURLName: dev.openhuman.mail.link, CFBundleURLSchemes: [openhuman] }]
+        NSServices:
+          - NSMenuItem: { default: "New Message in OpenHuman Mail" }
+            NSMessage: newMessageWithSelection
+            NSPortName: OpenHumanMail
+            NSSendTypes: [public.utf8-plain-text]
+          - NSMenuItem: { default: "New Message with Files in OpenHuman Mail" }
+            NSMessage: newMessageWithFiles
+            NSPortName: OpenHumanMail
+            NSSendFileTypes: [public.item]
+          - NSMenuItem: { default: "Search in OpenHuman Mail" }
+            NSMessage: searchWithSelection
+            NSPortName: OpenHumanMail
+            NSSendTypes: [public.utf8-plain-text]
+        OHGitCommit: $(OH_GIT_COMMIT)
+        OHReleaseChannel: $(OH_RELEASE_CHANNEL)
+    postBuildScripts:
+      - name: Stamp git commit
+        basedOnDependencyAnalysis: false
+        script: |
+          [ "${OH_GIT_COMMIT}" = "unknown" ] || exit 0
+          commit="$(git -C "${SRCROOT}" rev-parse --short HEAD 2>/dev/null)" || exit 0
+          [ -n "$(git -C "${SRCROOT}" status --porcelain --untracked-files=no 2>/dev/null)" ] && commit="${commit}+dirty"
+          /usr/libexec/PlistBuddy -c "Set :OHGitCommit ${commit}" "${TARGET_BUILD_DIR}/${INFOPLIST_PATH}" 2>/dev/null || true
+    dependencies:
+      - package: OpenHumanMailUI
+        product: MailUIMac
+      - { package: OpenHumanMailUI, product: MailUI }
+      - { package: OpenHumanMailCore, product: MailFeatures }
+      - { package: OpenHumanMailCore, product: MailModel }
+      - { package: OpenHumanMailCore, product: MailFakes }
+      - { package: OpenHumanStore, product: OpenHumanStore }
+      - { package: OpenHumanGmail, product: OpenHumanGmail }
+      - { package: OpenHumanGmail, product: OpenHumanGmailApple }
+      # Linked on purpose: -UseFakeGmail runs against it with no network and no Keychain
+      - { package: OpenHumanGmail, product: OpenHumanGmailTesting }
+      - { package: OpenHumanSync, product: OpenHumanSync }
+      - { package: OpenHumanAI, product: OpenHumanAI }
+      - { package: OpenHumanAI, product: OpenHumanAIApple }
+      - { package: OpenHumanAI, product: OpenHumanAIAgentCLI }
+      - { package: OpenHumanAI, product: OpenHumanAITesting }
+      - { package: OpenHumanAIMLX, product: OpenHumanAIMLX }
+      - { package: OpenHumanAIMLX, product: OpenHumanAIMLXRuntime }
+      - { package: OpenHumanSemanticIndex, product: OpenHumanSemanticIndex }
+  MailAppTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [Tests/MailAppTests]
+    dependencies: [{ target: Mail }]
+    settings:
+      PRODUCT_NAME: MailAppTests
+      PRODUCT_BUNDLE_IDENTIFIER: $(OH_BUNDLE_ID_PREFIX).mail.tests
+      TEST_HOST: $(BUILT_PRODUCTS_DIR)/OpenHumanMail.app/Contents/MacOS/OpenHumanMail
+      BUNDLE_LOADER: $(TEST_HOST)
+      GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Mail:
+    build: { targets: { Mail: all } }
+    run:
+      # Set explicitly so real-account runs stay read-only whatever the saved write-mode switch says
+      environmentVariables: { OPENHUMAN_SAFE_MODE: read-only }
+      commandLineArguments: { "-UseFakeGmail": false }
+    test:
+      targets: [MailAppTests]
+      commandLineArguments: { "-UseFakeData": true, "-UseFakeCalendar": true }

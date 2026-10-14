@@ -1,0 +1,14 @@
+{
+  "id": "labels.correction-always",
+  "area": "Auto labels",
+  "title": "Label as News, then “Always” makes a rule (fake data)",
+  "steps": [
+    "Launch with -UseFakeData, focus a conversation with an auto label and run Label as News from ⌘K",
+    "In the toast “Always label News for:” click This list (or This sender when there is no list)",
+    "Open Settings › Importance & labels › Rules, then press ⌘Z twice in the mail window"
+  ],
+  "deepLink": null,
+  "expected": "The chip becomes News at once. Nothing is saved until the toast's button is clicked; then a rule appears under Your rules. The first ⌘Z removes the rule, the second takes the label back.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

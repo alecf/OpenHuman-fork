@@ -1,0 +1,12 @@
+{
+  "id": "inbox.open",
+  "area": "Inbox",
+  "title": "Open and return to a thread",
+  "steps": [
+    "Select a fixture thread",
+    "Press Return",
+    "Press Escape"
+  ],
+  "expected": "The thread opens and Escape returns to the inbox.",
+  "requires": "fake"
+}

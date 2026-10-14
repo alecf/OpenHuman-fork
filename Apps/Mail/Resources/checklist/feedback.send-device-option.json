@@ -1,0 +1,12 @@
+{
+  "id": "feedback.send-device-option",
+  "area": "Feedback",
+  "title": "Sending feedback to another device is a developer option",
+  "steps": [
+    "Launch a Debug build with -UseFakeData and open the Help menu",
+    "In Settings › Advanced › Developer options, turn on Send to another device via Tailscale",
+    "Open the Help menu and Settings › Advanced again"
+  ],
+  "expected": "Send Feedback to Another Device… is missing until the option is on, then shows in the Help menu and on the Advanced page. No wording names a particular device.",
+  "requires": "fake"
+}

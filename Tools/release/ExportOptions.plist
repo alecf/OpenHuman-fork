@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Export options for Tools/release/make-dmg.sh (xcodebuild -exportArchive). Key names and values checked against
+     `xcodebuild -help` ("Available keys for -exportOptionsPlist") on Xcode 27.0, 2026-10-12. make-dmg.sh copies this
+     file and sets signingCertificate to the SHA-1 hash of the chosen identity. teamID is left out on purpose: it
+     defaults to the team that signed the archive. No secret belongs here. -->
+<plist version="1.0">
+<dict>
+	<key>destination</key>
+	<string>export</string>
+	<key>method</key>
+	<string>developer-id</string>
+	<key>signingStyle</key>
+	<string>manual</string>
+	<key>signingCertificate</key>
+	<string>Developer ID Application</string>
+</dict>
+</plist>

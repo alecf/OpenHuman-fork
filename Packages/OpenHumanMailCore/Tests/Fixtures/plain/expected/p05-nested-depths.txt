@@ -1,0 +1,8 @@
+|Replying inline below.
+>|Level one
+>>|Level two, spaced markers
+>>|Level two, packed markers
+>>>|Level three
+>>|Back to two
+>|Back to one
+|Done.

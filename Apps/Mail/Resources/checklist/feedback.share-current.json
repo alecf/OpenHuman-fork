@@ -1,0 +1,13 @@
+{
+  "id": "feedback.share-current",
+  "area": "Feedback",
+  "title": "Share uses the current choices",
+  "steps": [
+    "Launch a Debug build with -UseFakeData and turn on Settings › Advanced › Developer options › Send to another device via Tailscale",
+    "Open Send Feedback to Another Device… from the Help menu, tick the screenshot, type a note, choose Share… and save the file",
+    "Untick the screenshot, change the note and choose Share… again",
+    "Open both zip files"
+  ],
+  "expected": "The second file has the new note and no screenshot.",
+  "requires": "fake"
+}

@@ -1,0 +1,1 @@
+{"type":"result","subtype":"success","is_error":false,"duration_ms":900,"num_turns":1,"result":"","structured_output":{"category":"receipt","priority":1,"reason":"Payment confirmation."},"total_cost_usd":0.0008,"usage":{"input_tokens":300,"output_tokens":22,"cache_read_input_tokens":0}}

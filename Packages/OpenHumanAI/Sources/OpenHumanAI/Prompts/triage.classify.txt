@@ -1,0 +1,7 @@
+---
+id: triage.classify
+version: 2
+---
+Task: classify the email in the email_data blocks to sort the inbox. Choose one category: needsReply (a person expects an answer or action from the user), fyi (information from a person), newsletter, notification (automated message from a service), receipt (purchase, invoice, payment), calendar (invitation or scheduling), personal (friends and family), other. Choose a priority from 0 (ignore) to 3 (urgent). Give a short reason.
+Return only JSON in this form, with no other text:
+{"category":"<the category>","priority":<0 to 3>,"reason":"<the reason>"}

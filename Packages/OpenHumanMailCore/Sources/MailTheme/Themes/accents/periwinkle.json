@@ -1,0 +1,36 @@
+{
+  "format": "openhuman-accent",
+  "formatVersion": 1,
+  "id": "openhuman.accent.periwinkle",
+  "name": "Periwinkle",
+  "primitives": {
+    "color": {
+      "gray.1000": "#FFFFFF",
+      "periwinkle.940": "#ECEDF8",
+      "periwinkle.759": "#B4B8E6",
+      "periwinkle.733": "#AEB1DD",
+      "periwinkle.508": "#6D72C0",
+      "periwinkle.457": "#5E64BA",
+      "periwinkle.434": "#575EB7",
+      "periwinkle.421": "#545AB6",
+      "periwinkle.395": "#4D53B2",
+      "periwinkle.199": "#2B2E4A"
+    }
+  },
+  "light": {
+    "accent.fill": "{periwinkle.457}",
+    "accent.fillHover": "{periwinkle.395}",
+    "accent.text": "{periwinkle.421}",
+    "accent.subtle": "{periwinkle.940}",
+    "accent.onFill": "{gray.1000}",
+    "accent.ring": "{periwinkle.508}"
+  },
+  "dark": {
+    "accent.fill": "{periwinkle.434}",
+    "accent.fillHover": "{periwinkle.457}",
+    "accent.text": "{periwinkle.759}",
+    "accent.subtle": "{periwinkle.199}",
+    "accent.onFill": "{gray.1000}",
+    "accent.ring": "{periwinkle.733}"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "labels.decision-log",
+  "area": "Auto labels",
+  "title": "The decision log shows who sorted each conversation and no text (fake data)",
+  "steps": [
+    "Launch with -UseFakeData, open Settings › General › Auto labels and click Classify recent mail",
+    "Open Settings › Importance & labels › Tracking",
+    "Switch Show between All, Rules and Model, then click Clear decision log… and confirm"
+  ],
+  "deepLink": null,
+  "expected": "Rows show the conversation's subject (read from this Mac's mail), the label and who decided (rule: <name>, model, or model said X), and whether it is in Gmail or on this Mac. “Keep subject and preview text” is off. Clearing empties the log and changes no mail.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

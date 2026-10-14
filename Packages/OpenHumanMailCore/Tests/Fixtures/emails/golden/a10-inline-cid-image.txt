@@ -1,0 +1,29 @@
+fixture: a10-inline-cid-image
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body
+body:
+<div dir="ltr"><p>Here are the two charts from the quarterly review:</p>
+<p><img src="ohcid:ii_chart1@example.com" width="480" height="240" alt="Revenue chart"></p>
+<p><img src="ohcid:ii_chart2%40example.com" width="480" height="240" alt="Cost chart"></p>
+<p>The dip in week 3 is the holiday.</p></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline ["ii_chart1@example.com", "ii_chart2@example.com"], quoted false
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div dir="ltr"><p>Here are the two charts from the quarterly review:</p>
+<p><img src="ohcid:ii_chart1@example.com" width="480" height="240" alt="Revenue chart"></p>
+<p><img src="ohcid:ii_chart2%40example.com" width="480" height="240" alt="Cost chart"></p>
+<p>The dip in week 3 is the holiday.</p></div>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div dir="ltr"><p>Here are the two charts from the quarterly review:</p>
+<p><img src="ohcid:ii_chart1@example.com" width="480" height="240" alt="Revenue chart"></p>
+<p><img src="ohcid:ii_chart2%40example.com" width="480" height="240" alt="Cost chart"></p>
+<p>The dip in week 3 is the holiday.</p></div>
+

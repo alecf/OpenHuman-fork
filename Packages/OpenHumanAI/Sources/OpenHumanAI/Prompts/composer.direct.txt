@@ -1,0 +1,5 @@
+---
+id: composer.direct
+version: 1
+---
+Make it more direct and to the point.

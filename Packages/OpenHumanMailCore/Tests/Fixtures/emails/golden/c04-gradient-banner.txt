@@ -1,0 +1,23 @@
+fixture: c04-gradient-banner
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<div style="background-image:linear-gradient(135deg,#6a11cb 0%,#2575fc 100%);color:#fff;padding:32px;text-align:center"><h1 style="margin:0">Spring sale</h1><p>20% off all plants this weekend.</p></div>
+<p style="padding:0 32px">Visit any store or shop online.</p>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<div style="background-image:linear-gradient(135deg,#6a11cb 0%,#2575fc 100%);color:#fff;padding:32px;text-align:center"><h1 style="margin:0">Spring sale</h1><p>20% off all plants this weekend.</p></div>
+<p style="padding:0 32px">Visit any store or shop online.</p>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<div style="background-image:linear-gradient(135deg,#6a11cb 0%,#2575fc 100%);color:#ffffff;padding:32px;text-align:center"><h1 style="margin:0">Spring sale</h1><p>20% off all plants this weekend.</p></div>
+<p style="padding:0 32px">Visit any store or shop online.</p>
+

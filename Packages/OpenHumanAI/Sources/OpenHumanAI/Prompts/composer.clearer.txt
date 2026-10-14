@@ -1,0 +1,5 @@
+---
+id: composer.clearer
+version: 1
+---
+Make it clearer and easier to read.

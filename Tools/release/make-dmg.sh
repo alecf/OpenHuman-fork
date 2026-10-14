@@ -1,0 +1,364 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: Tools/release/make-dmg.sh [options]
+
+Makes a signed, notarized, stapled DMG of OpenHuman Mail that other people can open on their
+Macs (docs/release/RELEASE-HOWTO.md), or with --unsigned an ad-hoc signed DMG that needs no
+Apple Developer account. Every release is an early development build: the app, release-info.txt
+and the release notes say so, and the GitHub release is a pre-release. For a signed build, run
+it in Terminal.app on the Mac that holds your Developer ID certificate (a shell without access
+to the login keychain, such as an SSH session, cannot sign). A signed build sends two files to
+Apple's notary service (the app, then the dmg). Nothing else is sent anywhere: no push, no tag.
+
+  --dry-run            print each command instead of running it: builds, signs and sends
+                       nothing; needs no certificate
+  --build-number <n>   CFBundleVersion (default: the number of commits in HEAD)
+  --allow-dirty        build with uncommitted changes; the app then says "+dirty" (rehearsals
+                       only)
+  --unsigned           no Developer ID and no notarization: the app is ad-hoc signed and the
+                       dmg is not signed. macOS blocks it at first open until the person allows
+                       it in System Settings
+  --sign-only          sign and package, skip notarization and stapling (rehearsals only; never
+                       hand it out)
+  --from-archive       skip "xcodebuild -exportArchive" and use the app as signed in the
+                       archive (fallback)
+  -h, --help           show this help
+
+Settings (environment, or Tools/release/release.env, which git ignores; copy
+release.env.example):
+  OH_NOTARY_PROFILE    the notarytool keychain profile you saved once with "xcrun notarytool
+                       store-credentials"
+  OH_SIGN_IDENTITY     your "Developer ID Application" identity, by full name or SHA-1 hash
+                       (default: the only one in your keychain)
+  OH_BUNDLE_ID_PREFIX  default dev.openhuman, giving the bundle id dev.openhuman.mail
+
+Output (ignored by git): build/release/OpenHuman-Mail-<version>-<build>/ (with -unsigned or
+-signed-only appended for those builds) with the .dmg, its .sha256, release-info.txt, a
+release-notes.md to finish, Apple's notarization answers, logs/, and the .xcarchive (keep it:
+its dSYMs read crash reports).
+EOF
+}
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+HERE="$ROOT/Tools/release"
+DRY=0; BUILD_NUMBER=""; ALLOW_DIRTY=0; SIGN_ONLY=0; FROM_ARCHIVE=0; UNSIGNED=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run) DRY=1; shift ;;
+        --build-number) [[ $# -ge 2 ]] || { echo "make-dmg: --build-number needs a number" >&2; exit 2; }
+                        BUILD_NUMBER="$2"; shift 2 ;;
+        --allow-dirty) ALLOW_DIRTY=1; shift ;;
+        --unsigned) UNSIGNED=1; shift ;;
+        --sign-only) SIGN_ONLY=1; shift ;;
+        --from-archive) FROM_ARCHIVE=1; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "make-dmg: unknown argument $1 (see --help)" >&2; exit 2 ;;
+    esac
+done
+[[ "$UNSIGNED" == 0 || "$SIGN_ONLY" == 0 ]] || { echo "make-dmg: --unsigned and --sign-only do not go together" >&2; exit 2; }
+
+say()  { printf 'make-dmg: %s\n' "$*"; }
+die()  { printf 'make-dmg: %s\n' "$*" >&2; exit 1; }
+step() { printf '\nmake-dmg: == %s\n' "$*"; }
+run() {
+    if [[ "$DRY" == 1 ]]; then printf '  $'; printf ' %q' "$@"; printf '\n'; return 0; fi
+    "$@"
+}
+run_logged() {
+    local log="$1"; shift
+    if [[ "$DRY" == 1 ]]; then printf '  $'; printf ' %q' "$@"; printf ' > %q 2>&1\n' "$log"; return 0; fi
+    say "log: $log"
+    if ! "$@" >"$log" 2>&1; then
+        echo "---- last lines of $log ----" >&2; tail -40 "$log" >&2
+        die "this step failed (full log above)."
+    fi
+}
+need_dir() { [[ "$DRY" == 1 || -d "$1" ]] || die "expected $1 after the previous step, but it is not there."; }
+
+OUT=""; DD="$ROOT/build/release/dd"
+on_exit() {
+    local rc=$?
+    if [[ "$rc" != 0 && "$DRY" == 0 && -n "$OUT" && -d "$OUT" ]]; then
+        printf 'make-dmg: stopped. Partial output: %s (logs/ has the details). Delete it, and %s, before the next run.\n' "$OUT" "$DD" >&2
+    fi
+}
+trap on_exit EXIT
+
+if [[ -f "$HERE/release.env" ]]; then
+    # shellcheck disable=SC1091
+    source "$HERE/release.env"
+fi
+
+step "Checks before building"
+[[ "$(uname -s)" == Darwin ]] || die "run this on a Mac."
+for tool in xcodebuild xcrun codesign hdiutil ditto shasum security plutil git; do
+    command -v "$tool" >/dev/null 2>&1 || die "'$tool' is missing. Install Xcode 27 and open it once."
+done
+[[ "$DRY" == 0 ]] || say "dry run: commands are printed, not run."
+
+COMMIT="$(git -C "$ROOT" rev-parse --short HEAD)"
+BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)"
+STAMP="$COMMIT"
+if [[ -n "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ]]; then
+    if [[ "$ALLOW_DIRTY" == 1 ]]; then
+        STAMP="$COMMIT+dirty"; say "warning: uncommitted changes. This build says $STAMP and is for rehearsal only."
+    else
+        die "you have uncommitted changes in tracked files. Commit them first (a release names its exact commit), or pass --allow-dirty for a rehearsal you will not hand out."
+    fi
+fi
+say "commit $STAMP on branch $BRANCH"
+
+VERSION="$("$HERE/bump-version.sh")" || die "could not read the version (above). Set it with Tools/release/bump-version.sh."
+CHANNEL="$("$HERE/bump-version.sh" --channel)"
+LABEL="$("$HERE/bump-version.sh" --label)"
+[[ "$CHANNEL" == early-development ]] \
+    || die "OH_RELEASE_CHANNEL in Apps/Mail/Config/Version.xcconfig is '$CHANNEL'. Every release is an early development build (early-development), and check-release.sh refuses anything else."
+NOTICE="Early development build — expect rough edges. Please send feedback."
+[[ -n "$BUILD_NUMBER" ]] || BUILD_NUMBER="$(git -C "$ROOT" rev-list --count HEAD)"
+[[ "$BUILD_NUMBER" =~ ^[0-9]+$ ]] || die "--build-number must be a whole number (got '$BUILD_NUMBER')."
+LAST=0
+for info in "$ROOT"/build/release/*/release-info.txt; do
+    [[ -f "$info" ]] || continue
+    n="$(sed -n 's/^build=//p' "$info" | head -1)"
+    if [[ "$n" =~ ^[0-9]+$ ]] && (( n > LAST )); then LAST="$n"; fi
+done
+if (( BUILD_NUMBER <= LAST )); then
+    say "warning: build number $BUILD_NUMBER is not above the last one built here ($LAST). Pass a higher --build-number if this build replaces that one."
+fi
+say "version $LABEL, build $BUILD_NUMBER"
+
+PREFIX="${OH_BUNDLE_ID_PREFIX:-dev.openhuman}"
+if [[ -f "$ROOT/Apps/Mail/Config/Local.xcconfig" ]]; then
+    say "note: Apps/Mail/Config/Local.xcconfig exists. Its signing settings are overridden here; the bundle id is $PREFIX.mail."
+fi
+
+if [[ "$UNSIGNED" == 1 ]]; then
+    step "Signing"
+    say "--unsigned: ad-hoc signature, no Developer ID, no notarization. macOS blocks the app at first open until the person allows it in System Settings."
+    SIGN_HASH=""; TEAM=""
+else
+    step "Signing identity"
+    IDS="$(security find-identity -v -p codesigning 2>/dev/null \
+        | sed -n 's/^[[:space:]]*[0-9][0-9]*)[[:space:]]*\([0-9A-Fa-f]\{40\}\)[[:space:]]*"\(Developer ID Application: .*\)"[[:space:]]*$/\1 \2/p' || true)"
+    if [[ -n "${OH_SIGN_IDENTITY:-}" ]]; then
+        MATCH="$(printf '%s\n' "$IDS" | awk -v want="$OH_SIGN_IDENTITY" 'NF { if (toupper($1) == toupper(want) || substr($0, 42) == want) print }')"
+        if [[ -z "$MATCH" && "$DRY" == 0 ]]; then
+            die "OH_SIGN_IDENTITY does not name a valid 'Developer ID Application' identity in your keychain. List yours with: security find-identity -v -p codesigning. (An 'Apple Development' identity cannot be notarized.)"
+        fi
+    else
+        MATCH="$IDS"
+    fi
+    COUNT="$(printf '%s\n' "$MATCH" | grep -c . || true)"
+    if [[ "$COUNT" == 0 ]]; then
+        [[ "$DRY" == 1 ]] || die "no 'Developer ID Application' certificate in your keychain. One-time setup: docs/release/RELEASE-HOWTO.md, 'Signing setup'. An 'Apple Development' certificate is not enough: Apple only notarizes apps signed with Developer ID. Without one, --unsigned makes an ad-hoc signed build."
+        say "no 'Developer ID Application' identity in your keychain; the dry run uses placeholders. A real run stops here."
+        SIGN_HASH="<SHA-1-of-your-Developer-ID-Application-certificate>"
+        SIGN_NAME="Developer ID Application: <Your Name> (<TEAMID>)"; TEAM="<TEAMID>"
+    elif [[ "$COUNT" != 1 ]]; then
+        printf '%s\n' "$MATCH" | awk '{ printf "  %s  %s\n", $1, substr($0, 42) }' >&2
+        die "more than one 'Developer ID Application' identity fits (listed above). Set OH_SIGN_IDENTITY to the hash of the one to use."
+    else
+        SIGN_HASH="${MATCH%% *}"; SIGN_NAME="${MATCH#* }"
+        TEAM="$(printf '%s\n' "$SIGN_NAME" | sed -n 's/.*(\([A-Z0-9]\{10\}\))$/\1/p')"
+        [[ -n "$TEAM" ]] || die "could not read the team id from the identity name (expected it to end in '(TEAMID)')."
+    fi
+    XCODE_IDENTITY="$SIGN_NAME"
+    if [[ "$(printf '%s\n' "$IDS" | awk -v n="$SIGN_NAME" 'substr($0, 42) == n' | grep -c . || true)" -gt 1 ]]; then XCODE_IDENTITY="$SIGN_HASH"; fi
+    say "signing with Developer ID Application, team $TEAM (certificate $SIGN_HASH)"
+fi
+
+if [[ "$SIGN_ONLY" == 1 ]]; then
+    say "--sign-only: no notarization. The result will NOT open cleanly on other Macs; never hand it out."
+elif [[ "$UNSIGNED" == 0 ]]; then
+    step "Notarization profile"
+    if [[ -z "${OH_NOTARY_PROFILE:-}" ]]; then
+        [[ "$DRY" == 1 ]] || die "set OH_NOTARY_PROFILE to the profile name you saved with 'xcrun notarytool store-credentials' (RELEASE-HOWTO, 'Signing setup'), or put it in Tools/release/release.env."
+        OH_NOTARY_PROFILE="<your-notary-profile>"; say "OH_NOTARY_PROFILE is not set; the dry run uses a placeholder. A real run stops here."
+    elif [[ "$DRY" == 0 ]]; then
+        xcrun notarytool history --keychain-profile "$OH_NOTARY_PROFILE" >/dev/null 2>&1 \
+            || die "notarytool cannot use the keychain profile '$OH_NOTARY_PROFILE'. Redo the notarytool step in RELEASE-HOWTO, 'Signing setup', and run this in Terminal.app (not over SSH) so the keychain can be unlocked."
+        say "notary profile '$OH_NOTARY_PROFILE' works"
+    fi
+fi
+
+NAME="OpenHuman-Mail-$VERSION"
+OUT="$ROOT/build/release/$NAME-$BUILD_NUMBER"
+[[ "$SIGN_ONLY" == 0 ]] || OUT="$OUT-signed-only"
+[[ "$UNSIGNED" == 0 ]] || OUT="$OUT-unsigned"
+LOGS="$OUT/logs"; WORK="$OUT/work"
+ARCHIVE="$OUT/OpenHumanMail.xcarchive"
+APP="$WORK/OpenHuman Mail.app"
+DMG="$OUT/$NAME.dmg"
+if [[ -e "$OUT" ]]; then
+    if [[ "$DRY" == 1 ]]; then say "warning: $OUT already exists; a real run stops here."
+    else OUT_EXISTS="$OUT"; OUT=""; die "$OUT_EXISTS already exists. Delete it, or build with a higher --build-number."; fi
+fi
+if [[ "$UNSIGNED" == 1 ]]; then
+    CHECK=("$HERE/check-release.sh" --unsigned --expect-commit "$STAMP")
+else
+    CHECK=("$HERE/check-release.sh" --team "$TEAM" --expect-commit "$STAMP")
+fi
+[[ "$ALLOW_DIRTY" == 0 ]] || CHECK+=(--allow-dirty)
+
+FREE_GB="$(df -g "$ROOT" | awk 'NR == 2 { print $4 }')"
+if [[ "$FREE_GB" =~ ^[0-9]+$ ]] && (( FREE_GB < 6 )); then
+    if [[ "$DRY" == 1 ]]; then say "warning: only $FREE_GB GB free; a real run needs at least 6 GB."
+    else die "only $FREE_GB GB free on this disk; the build needs at least 6 GB. Free some space and run again."; fi
+fi
+
+SUBMISSION=""
+notarize() {
+    local file="$1" label="$2" result="$OUT/notary-$2.json" rc=0 status=""
+    say "sending the $label to Apple's notary service and waiting for the answer (often minutes; Apple publishes no maximum)"
+    if [[ "$DRY" == 1 ]]; then
+        printf '  $'; printf ' %q' xcrun notarytool submit "$file" --keychain-profile "$OH_NOTARY_PROFILE" --wait --output-format json
+        printf ' > %q\n' "$result"
+        SUBMISSION="<submission-id>"; return 0
+    fi
+    xcrun notarytool submit "$file" --keychain-profile "$OH_NOTARY_PROFILE" --wait --output-format json >"$result" || rc=$?
+    SUBMISSION="$(plutil -extract id raw -o - "$result" 2>/dev/null \
+        || grep -Eo '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$result" | head -1 || true)"
+    status="$(plutil -extract status raw -o - "$result" 2>/dev/null || true)"
+    if [[ "$rc" == 0 && "$status" == Accepted ]]; then say "Apple accepted the $label (submission $SUBMISSION)"; return 0; fi
+    if [[ -n "$SUBMISSION" ]]; then
+        xcrun notarytool log "$SUBMISSION" --keychain-profile "$OH_NOTARY_PROFILE" "$OUT/notary-log-$label.json" >/dev/null 2>&1 || true
+    fi
+    die "Apple did not accept the $label (status: ${status:-unknown}; answer saved in $result). Read $OUT/notary-log-$label.json first: its \"issues\" list names each problem. To fetch it again: xcrun notarytool log ${SUBMISSION:-<submission-id>} --keychain-profile $OH_NOTARY_PROFILE notary-log.json."
+}
+
+step "Generate the Xcode project (pinned XcodeGen)"
+run mkdir -p "$LOGS" "$WORK"
+run "$ROOT/Tools/bootstrap.sh"
+
+step "Archive the Release build (several minutes)"
+if [[ "$UNSIGNED" == 1 ]]; then
+    SIGNING=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER=
+             CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO)
+else
+    SIGNING=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=$XCODE_IDENTITY" "DEVELOPMENT_TEAM=$TEAM" PROVISIONING_PROFILE_SPECIFIER=
+             ENABLE_HARDENED_RUNTIME=YES OTHER_CODE_SIGN_FLAGS=--timestamp CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO)
+fi
+run_logged "$LOGS/archive.log" xcodebuild archive \
+    -project "$ROOT/Apps/Mail/Mail.xcodeproj" -scheme Mail -configuration Release \
+    -destination 'generic/platform=macOS' -derivedDataPath "$DD" -archivePath "$ARCHIVE" \
+    "${SIGNING[@]}" "OH_BUNDLE_ID_PREFIX=$PREFIX" \
+    "OH_GIT_COMMIT=$STAMP" "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" "OH_RELEASE_CHANNEL=$CHANNEL"
+need_dir "$ARCHIVE/Products/Applications/OpenHumanMail.app"
+
+step "Export the app"
+if [[ "$FROM_ARCHIVE" == 1 || "$UNSIGNED" == 1 ]]; then
+    run ditto "$ARCHIVE/Products/Applications/OpenHumanMail.app" "$APP"
+else
+    run cp "$HERE/ExportOptions.plist" "$WORK/ExportOptions.plist"
+    run /usr/libexec/PlistBuddy -c "Set :signingCertificate $SIGN_HASH" "$WORK/ExportOptions.plist"
+    run_logged "$LOGS/export.log" xcodebuild -exportArchive -archivePath "$ARCHIVE" \
+        -exportPath "$WORK/export" -exportOptionsPlist "$WORK/ExportOptions.plist"
+    need_dir "$WORK/export/OpenHumanMail.app"
+    run ditto "$WORK/export/OpenHumanMail.app" "$APP"
+    run rm -rf "$WORK/export"
+fi
+run rm -rf "$DD"
+
+step "Check the app before anything goes out"
+run "${CHECK[@]}" --pre-notarization "$APP" || die "the app failed the checks above. Nothing was sent to Apple."
+
+APP_SUBMISSION=""; DMG_SUBMISSION=""
+if [[ "$SIGN_ONLY" == 0 && "$UNSIGNED" == 0 ]]; then
+    step "Notarize the app"
+    run ditto -c -k --sequesterRsrc --keepParent "$APP" "$WORK/app.zip"
+    notarize "$WORK/app.zip" app; APP_SUBMISSION="$SUBMISSION"
+    run rm -f "$WORK/app.zip"
+    step "Staple the ticket to the app and check it as Gatekeeper would"
+    run xcrun stapler staple "$APP"
+    run "${CHECK[@]}" "$APP" || die "the notarized app failed the checks above."
+fi
+
+step "Build the disk image"
+STAGE="$WORK/dmg"
+run mkdir -p "$STAGE"
+run ditto "$APP" "$STAGE/OpenHuman Mail.app"
+run ln -s /Applications "$STAGE/Applications"
+run hdiutil create -volname "OpenHuman Mail" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+if [[ "$UNSIGNED" == 1 ]]; then
+    step "Final checks: the disk image and the app inside it"
+    run "${CHECK[@]}" "$DMG" || die "the disk image failed the checks above."
+else
+    run codesign --sign "$SIGN_HASH" --timestamp --verbose=2 "$DMG"
+    if [[ "$SIGN_ONLY" == 0 ]]; then
+        step "Notarize and staple the disk image"
+        notarize "$DMG" dmg; DMG_SUBMISSION="$SUBMISSION"
+        run xcrun stapler staple "$DMG"
+        step "Final checks: the disk image and the app inside it"
+        run "${CHECK[@]}" "$DMG" || die "the disk image failed the checks above."
+    else
+        run "${CHECK[@]}" --pre-notarization "$DMG" || die "the disk image failed the checks above."
+    fi
+fi
+
+step "Checksum and record"
+if [[ "$DRY" == 1 ]]; then
+    printf '  $ (cd %q && shasum -a 256 %q > %q)\n' "$OUT" "$NAME.dmg" "$NAME.dmg.sha256"
+    printf '  (writes %s/release-info.txt and release-notes.md, then removes %s)\n' "$OUT" "$WORK"
+    run "$HERE/check-release.sh" "$OUT/release-info.txt"
+    step "Dry run finished"
+    say "nothing was built, signed or sent. Not tested by a dry run: whether the Release archive builds and signs (that needs Xcode 27, at least 6 GB of disk and, for a signed build, your Developer ID certificate)."
+    exit 0
+fi
+(cd "$OUT" && shasum -a 256 "$NAME.dmg" >"$NAME.dmg.sha256")
+SHA="$(cut -d' ' -f1 "$OUT/$NAME.dmg.sha256")"
+DR="$({ codesign -d -r- "$APP" 2>&1 || true; } | sed -n 's/^designated => //p')"
+{
+    echo "version=$VERSION"
+    echo "channel=$CHANNEL"
+    echo "label=$LABEL"
+    echo "prerelease=yes"
+    echo "build=$BUILD_NUMBER"
+    echo "commit=$STAMP"
+    echo "bundle_id=$PREFIX.mail"
+    if [[ "$UNSIGNED" == 1 ]]; then echo "signing=ad-hoc"; else echo "signing=developer-id"; fi
+    echo "team=${TEAM:-none}"
+    if [[ "$SIGN_ONLY" == 0 && "$UNSIGNED" == 0 ]]; then echo "notarized=yes"; else echo "notarized=no"; fi
+    echo "notary_app=$APP_SUBMISSION"
+    echo "notary_dmg=$DMG_SUBMISSION"
+    echo "dmg=$NAME.dmg"
+    echo "sha256=$SHA"
+    echo "designated_requirement=$DR"
+    echo "xcode=$(xcodebuild -version 2>/dev/null | head -1)"
+    echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} >"$OUT/release-info.txt"
+{
+    echo "$NOTICE"
+    echo
+    echo "Requires Apple silicon and macOS 27. During onboarding you import your own Google Desktop OAuth client."
+    if [[ "$UNSIGNED" == 1 ]]; then
+        echo
+        echo "## Opening an unsigned build"
+        echo
+        echo "macOS may block unsigned builds because they are not notarized by Apple. To open one, try to open the app once. Then open System Settings, click Privacy & Security, and scroll to Security. Click Open Anyway, enter your login password, and click OK. The Open Anyway button stays available for about an hour after you first try to open the app."
+    fi
+    echo
+    echo "## Changes"
+    echo
+    echo "## Known limitations"
+} >"$OUT/release-notes.md"
+rm -rf "$WORK"
+"$HERE/check-release.sh" "$OUT/release-info.txt" || die "release-info.txt or release-notes.md failed the checks above."
+
+step "Done"
+say "disk image: $DMG"
+say "SHA-256:    $SHA"
+say "folder:     $OUT"
+say "notes:      finish $OUT/release-notes.md (changes, known limitations), keeping its first lines."
+if [[ "$SIGN_ONLY" == 1 ]]; then
+    say "NOT notarized: for your own tests only."
+    exit 0
+fi
+if [[ "$UNSIGNED" == 1 ]]; then
+    say "NOT signed with a Developer ID and NOT notarized: macOS blocks it at first open until the person allows it."
+else
+    say "next (yours): open it on another Mac first (RELEASE-HOWTO, 'Signed build')."
+fi
+say "To put it on a draft GitHub pre-release (every release is an early development build):"
+say "  Tools/release/publish-github.sh --dmg '$DMG' $VERSION"

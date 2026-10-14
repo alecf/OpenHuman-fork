@@ -1,0 +1,26 @@
+fixture: c06-brand-text
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<p style="font-family:Arial;color:#d0021b;font-weight:bold">Action required: confirm your email address</p>
+<p style="font-family:Arial">Please confirm within 48 hours to keep your account active.</p>
+<p><a href="https://accounts.example.com/confirm?t=abc" style="color:#d0021b" rel="noopener noreferrer">Confirm email</a></p>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<p style="font-family:Arial;color:#d0021b;font-weight:bold">Action required: confirm your email address</p>
+<p style="font-family:Arial">Please confirm within 48 hours to keep your account active.</p>
+<p><a href="https://accounts.example.com/confirm?t=abc" style="color:#d0021b" rel="noopener noreferrer">Confirm email</a></p>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<p style="font-family:Arial;font-weight:bold;color:#ff776d !important">Action required: confirm your email address</p>
+<p style="font-family:Arial">Please confirm within 48 hours to keep your account active.</p>
+<p><a href="https://accounts.example.com/confirm?t=abc" style="color:#ff776d !important" rel="noopener noreferrer">Confirm email</a></p>
+

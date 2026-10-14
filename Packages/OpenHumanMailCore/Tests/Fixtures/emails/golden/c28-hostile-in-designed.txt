@@ -1,0 +1,32 @@
+fixture: c28-hostile-in-designed
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+css: .oh-body .banner{top:0;background:#c00;color:#fff}
+body:
+<div class="banner">Verify your account</div>
+
+<p>Ordinary text <a>click</a> and <a href="https://example.com/help" rel="noopener noreferrer">help</a>.</p>
+<img>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+css: .oh-body .banner{top:0;background:#c00;color:#fff}
+body:
+<div class="banner">Verify your account</div>
+
+<p>Ordinary text <a>click</a> and <a href="https://example.com/help" rel="noopener noreferrer">help</a>.</p>
+<img>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+css: .oh-body .banner{top:0;background:#cc0000;color:#ffffff}
+body:
+<div class="banner">Verify your account</div>
+
+<p>Ordinary text <a>click</a> and <a href="https://example.com/help" rel="noopener noreferrer">help</a>.</p>
+<img>
+

@@ -1,0 +1,157 @@
+{
+  "format": "openhuman-theme",
+  "formatVersion": 1,
+  "id": "openhuman.system.light",
+  "name": "System Light",
+  "author": "OpenHuman contributors",
+  "appearance": "light",
+  "extends": "openhuman.light",
+  "defaultAccent": "system",
+  "primitives": {
+    "color": {
+      "white": "#FFFFFF",
+      "win.925": "#ECECEC",
+      "sel.863": "#DCDCDC",
+      "hov.949": "#F2F2F2",
+      "sunk.906": "#E4E4E4",
+      "chip.82": "#D1D1D1",
+      "label": "#262626",
+      "label2": "#595959",
+      "label3": "#666666",
+      "label4": "#A6A6A6",
+      "sep": "#D9D9D9",
+      "ctl": "#8A8A8A",
+      "red": "#D70015",
+      "green": "#17692B",
+      "orange": "#8F4A00",
+      "purple": "#8944AB",
+      "amber.hl": "#FCEFC0",
+      "amber.sub": "#FFF4DB",
+      "red.sub": "#FDECEC",
+      "purple.sub": "#F3EAF7",
+      "toast": "#323232",
+      "toast.t": "#F5F5F5",
+      "key.bg": "#737373",
+      "key.t": "#FFFFFF"
+    }
+  },
+  "typography": {
+    "family": {
+      "ui": "system",
+      "reader": "system",
+      "mono": "system-mono"
+    },
+    "styles": {
+      "subject": {
+        "size": 20,
+        "lineHeight": 26,
+        "weight": 500,
+        "trackingEm": -0.01
+      },
+      "headline": {
+        "size": 13,
+        "lineHeight": 16,
+        "weight": 600,
+        "trackingEm": 0
+      },
+      "tab": {
+        "size": 13,
+        "lineHeight": 18,
+        "weight": 400,
+        "trackingEm": 0
+      },
+      "tab.active": {
+        "size": 13,
+        "lineHeight": 18,
+        "weight": 400,
+        "trackingEm": 0
+      },
+      "reader": {
+        "size": 13,
+        "lineHeight": 20,
+        "weight": 400,
+        "trackingEm": 0
+      },
+      "meta": {
+        "size": 11,
+        "lineHeight": 14,
+        "weight": 400,
+        "trackingEm": 0,
+        "numerals": "tabular"
+      },
+      "label": {
+        "size": 11,
+        "lineHeight": 14,
+        "weight": 500,
+        "trackingEm": 0
+      },
+      "caption": {
+        "size": 10,
+        "lineHeight": 12,
+        "weight": 500,
+        "trackingEm": 0,
+        "numerals": "tabular"
+      },
+      "keycap": {
+        "size": 10,
+        "lineHeight": 12,
+        "weight": 500,
+        "trackingEm": 0
+      },
+      "mono": {
+        "size": 11,
+        "lineHeight": 16,
+        "weight": 400,
+        "trackingEm": 0,
+        "family": "mono"
+      },
+      "tabCount": {
+        "size": 10,
+        "lineHeight": 12,
+        "weight": 400,
+        "trackingEm": 0,
+        "numerals": "tabular"
+      }
+    }
+  },
+  "radius": {
+    "md": 5,
+    "xl": 10
+  },
+  "semantic": {
+    "color": {
+      "bg.window": "{white}",
+      "bg.sidebar": "{win.925}",
+      "bg.elevated": "{white}",
+      "bg.sunken": "{sunk.906}",
+      "bg.canvas": "{win.925}",
+      "bg.card": "{white}",
+      "bg.row.hover": "{hov.949}",
+      "bg.row.selected": "{sel.863}",
+      "bg.toast": "{toast}",
+      "bg.searchHighlight": "{amber.hl}",
+      "bg.warningSubtle": "{amber.sub}",
+      "bg.dangerSubtle": "{red.sub}",
+      "bg.aiSubtle": "{purple.sub}",
+      "text.primary": "{label}",
+      "text.secondary": "{label2}",
+      "text.tertiary": "{label3}",
+      "text.disabled": "{label4}",
+      "text.onToast": "{toast.t}",
+      "text.onToastSecondary": "rgba(245,245,245,0.72)",
+      "text.onToastDanger": "#FF6961",
+      "border.onToast": "rgba(245,245,245,0.55)",
+      "text.danger": "{red}",
+      "text.success": "{green}",
+      "text.warning": "{orange}",
+      "text.ai": "{purple}",
+      "border.hairline": "{sep}",
+      "border.control": "{ctl}",
+      "keycap.bg": "{key.bg}",
+      "keycap.text": "{key.t}"
+    }
+  },
+  "components": {
+    "row": { "chipBg": "{chip.82}" }
+  }
+}

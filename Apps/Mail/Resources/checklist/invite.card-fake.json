@@ -1,0 +1,14 @@
+{
+  "id": "invite.card-fake",
+  "area": "Calendar",
+  "title": "An invitation email shows as a native card (fake data)",
+  "steps": [
+    "Launch Mail with -UseFakeData; open the 'Invitation: … review' conversation in Work's Inbox",
+    "Read the card, then click Show original, then Show invitation",
+    "Press ⇧A (or click YES)"
+  ],
+  "deepLink": null,
+  "expected": "A card replaces the sender's email: YES MAYBE NO, the title, When in your time zone, Where (a link), Who (organizer first, you as Me), About and Join with Google Meet; no invite.ics tile. Show original brings the email and its tile back. Without a connected calendar YES says 'Connect calendar to respond' and the conversation stays in the Inbox.",
+  "requires": "fake",
+  "addedIn": "2026-10-13"
+}

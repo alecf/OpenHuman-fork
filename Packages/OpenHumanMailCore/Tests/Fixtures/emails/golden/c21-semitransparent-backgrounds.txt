@@ -1,0 +1,23 @@
+fixture: c21-semitransparent-backgrounds
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<div style="background:#ffffff"><div style="background:rgba(16,185,129,0.12);color:#065f46;padding:12px">Payment received.</div>
+<div style="background:rgba(239,68,68,0.1);color:#991b1b;padding:12px">One invoice is overdue.</div></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<div style="background:#ffffff"><div style="background:rgba(16,185,129,0.12);color:#065f46;padding:12px">Payment received.</div>
+<div style="background:rgba(239,68,68,0.1);color:#991b1b;padding:12px">One invoice is overdue.</div></div>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<div style="background:#000000"><div style="background:rgba(0,57,37,0.120);padding:12px;color:#3a866a !important">Payment received.</div>
+<div style="background:rgba(121,0,14,0.100);padding:12px;color:#cb4d45 !important">One invoice is overdue.</div></div>
+

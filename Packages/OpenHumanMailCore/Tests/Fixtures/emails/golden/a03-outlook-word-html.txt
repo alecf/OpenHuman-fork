@@ -1,0 +1,41 @@
+fixture: a03-outlook-word-html
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body lang="EN-US" style="word-wrap:break-word"
+css: .oh-body p.MsoNormal,.oh-body li.MsoNormal,.oh-body div.MsoNormal{margin:0in;font-size:11.0pt;font-family:"Calibri",sans-serif}.oh-body a:link,.oh-body span.MsoHyperlink{mso-style-priority:99;color:var(--oh-link);text-decoration:underline}.oh-body a:visited,.oh-body span.MsoHyperlinkFollowed{color:var(--oh-link)}.oh-body span.EmailStyle17{mso-style-type:personal-compose;font-family:"Calibri",sans-serif;color:var(--oh-text)}.oh-body div.WordSection1{page:WordSection1}
+body:
+
+<div class="WordSection1"><p class="MsoNormal">Hi Jun,</p><p class="MsoNormal"> </p>
+<p class="MsoNormal">The minutes are on the <a href="https://intranet.example.com/minutes/42" rel="noopener noreferrer">team page</a>. Let me know if anything is missing.</p>
+<p class="MsoNormal"> </p><p class="MsoNormal">Regards,<br>Ines</p>
+<details class="oh-quoted"><summary title="Show quoted text">•••</summary><div><div style="border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0in 0in 0in"><p class="MsoNormal"><b>From:</b> Jun Park &lt;jun@example.com&gt;<br><b>Sent:</b> Thursday, October 9, 2026 2:15 PM<br><b>Subject:</b> Minutes</p></div></div>
+<p class="MsoNormal"> </p><p class="MsoNormal">Where did the minutes from Tuesday end up?</p></details></div>
+
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted true
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body lang="EN-US" style="word-wrap:break-word"
+css: .oh-body p.MsoNormal,.oh-body li.MsoNormal,.oh-body div.MsoNormal{margin:0in;font-size:11.0pt;font-family:"Calibri",sans-serif}.oh-body a:link,.oh-body span.MsoHyperlink{mso-style-priority:99;color:var(--oh-link);text-decoration:underline}.oh-body a:visited,.oh-body span.MsoHyperlinkFollowed{color:var(--oh-link)}.oh-body span.EmailStyle17{mso-style-type:personal-compose;font-family:"Calibri",sans-serif;color:var(--oh-text)}.oh-body div.WordSection1{page:WordSection1}
+body:
+
+<div class="WordSection1"><p class="MsoNormal">Hi Jun,</p><p class="MsoNormal"> </p>
+<p class="MsoNormal">The minutes are on the <a href="https://intranet.example.com/minutes/42" rel="noopener noreferrer">team page</a>. Let me know if anything is missing.</p>
+<p class="MsoNormal"> </p><p class="MsoNormal">Regards,<br>Ines</p>
+<details class="oh-quoted"><summary title="Show quoted text">•••</summary><div><div style="border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0in 0in 0in"><p class="MsoNormal"><b>From:</b> Jun Park &lt;jun@example.com&gt;<br><b>Sent:</b> Thursday, October 9, 2026 2:15 PM<br><b>Subject:</b> Minutes</p></div></div>
+<p class="MsoNormal"> </p><p class="MsoNormal">Where did the minutes from Tuesday end up?</p></details></div>
+
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body lang="EN-US" style="word-wrap:break-word"
+css: .oh-body p.MsoNormal,.oh-body li.MsoNormal,.oh-body div.MsoNormal{margin:0in;font-size:11.0pt;font-family:"Calibri",sans-serif}.oh-body a:link,.oh-body span.MsoHyperlink{mso-style-priority:99;color:var(--oh-link);text-decoration:underline}.oh-body a:visited,.oh-body span.MsoHyperlinkFollowed{color:var(--oh-link)}.oh-body span.EmailStyle17{mso-style-type:personal-compose;font-family:"Calibri",sans-serif;color:var(--oh-text)}.oh-body div.WordSection1{page:WordSection1}
+body:
+
+<div class="WordSection1"><p class="MsoNormal">Hi Jun,</p><p class="MsoNormal"> </p>
+<p class="MsoNormal">The minutes are on the <a href="https://intranet.example.com/minutes/42" rel="noopener noreferrer">team page</a>. Let me know if anything is missing.</p>
+<p class="MsoNormal"> </p><p class="MsoNormal">Regards,<br>Ines</p>
+<details class="oh-quoted"><summary title="Show quoted text">•••</summary><div><div style="border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0in 0in 0in"><p class="MsoNormal"><b>From:</b> Jun Park &lt;jun@example.com&gt;<br><b>Sent:</b> Thursday, October 9, 2026 2:15 PM<br><b>Subject:</b> Minutes</p></div></div>
+<p class="MsoNormal"> </p><p class="MsoNormal">Where did the minutes from Tuesday end up?</p></details></div>
+
+

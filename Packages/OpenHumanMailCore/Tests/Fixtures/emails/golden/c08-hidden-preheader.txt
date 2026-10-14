@@ -1,0 +1,23 @@
+fixture: c08-hidden-preheader
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+
+<div style="font-family:Arial;padding:16px"><h2>New arrivals</h2><p>Linen shirts are back in four colors.</p></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+
+<div style="font-family:Arial;padding:16px"><h2>New arrivals</h2><p>Linen shirts are back in four colors.</p></div>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+
+<div style="font-family:Arial;padding:16px"><h2>New arrivals</h2><p>Linen shirts are back in four colors.</p></div>
+

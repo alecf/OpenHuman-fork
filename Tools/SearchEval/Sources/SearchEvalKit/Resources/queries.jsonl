@@ -1,0 +1,84 @@
+{"id":"Q01","class":"exact","query":"invoice 4471","relevant":{"inv-02":2,"inv-04":1}}
+{"id":"Q02","class":"exact","query":"\"Larkspur Office Supply\"","relevant":{"inv-01":2,"inv-02":2,"inv-03":2,"inv-04":2,"inv-06":2,"inv-07":2,"fac-01":1,"fac-02":1,"fac-03":1}}
+{"id":"Q03","class":"exact","query":"from:dana.ruiz@example.com offsite","relevant":{"off-01":2,"off-03":2,"off-04":2,"off-05":2,"off-07":2,"off-09":2}}
+{"id":"Q23","class":"exact","query":"from:priya interview schedule","relevant":{"hire-02":2}}
+{"id":"Q24","class":"exact","query":"offsite before:2025/06/01","relevant":{"off-01":2,"off-03":2}}
+{"id":"Q26","class":"exact","query":"in:trash newsletter about invoicing","relevant":{"nl-05":2}}
+{"id":"Q27","class":"exact","query":"subject:\"Offsite dates\"","relevant":{"off-05":2,"off-11":1}}
+{"id":"Q28","class":"exact","query":"TW-58213","relevant":{"desk-01":2,"desk-02":2,"desk-03":2,"desk-05":2}}
+{"id":"Q29","class":"exact","query":"claim 55-2093","relevant":{"car-01":2,"car-04":2}}
+{"id":"Q30","class":"exact","query":"ER-2291","relevant":{"exp-03":2}}
+{"id":"Q31","class":"exact","query":"HX4KQ","relevant":{"fly-01":2}}
+{"id":"Q32","class":"exact","query":"from:grace.liu@meridianfoods.example.com","relevant":{"esc-01":2,"esc-06":2}}
+{"id":"Q33","class":"exact","query":"has:attachment filename:pdf invoice","relevant":{"inv-01":2,"inv-02":2,"inv-03":2,"inv-07":2}}
+{"id":"Q34","class":"exact","query":"Atlas 2.0 launch","relevant":{"lau-01":2,"lau-02":2,"lau-08":2,"lau-04":1,"lau-05":1,"ger-01":1}}
+{"id":"Q35","class":"exact","query":"Cedar Lodge","relevant":{"off-04":2,"off-05":2,"off-07":2}}
+{"id":"Q36","class":"exact","query":"label:Receipts desk","relevant":{"desk-01":2}}
+{"id":"Q37","class":"exact","query":"postmortem","relevant":{"out-03":2,"out-05":1,"wk-05":1}}
+{"id":"Q38","class":"exact","query":"Brightwater MSA","relevant":{"con-01":2,"con-03":2}}
+{"id":"Q39","class":"exact","query":"verification code","relevant":{"sec-04":2}}
+{"id":"Q40","class":"exact","query":"is:starred","relevant":{"esc-01":2,"lease-01":2}}
+{"id":"Q83","class":"exact","query":"GH-88412","relevant":{"hot-01":2,"hot-02":2,"hot-04":2}}
+{"id":"Q04","class":"paraphrase","query":"moving our team retreat to another weekend","relevant":{"off-05":2,"off-11":1,"off-04":1}}
+{"id":"Q05","class":"paraphrase","query":"receipt for the standing desk","relevant":{"desk-01":2,"desk-02":1}}
+{"id":"Q06","class":"paraphrase","query":"the outage write-up","relevant":{"out-03":2,"out-05":1}}
+{"id":"Q07","class":"paraphrase","query":"permission form for the museum trip","relevant":{"trip-01":2,"trip-04":1,"trip-06":1}}
+{"id":"Q25","class":"paraphrase","query":"the signed contract pdf","relevant":{"con-05":2,"con-04":1}}
+{"id":"Q41","class":"paraphrase","query":"rescheduling the dentist visit","relevant":{"den-06":2,"den-04":1}}
+{"id":"Q42","class":"paraphrase","query":"agreement with the analytics vendor","relevant":{"con-01":2,"con-03":2,"con-04":1,"con-05":1}}
+{"id":"Q43","class":"paraphrase","query":"car repair after the accident","relevant":{"car-04":2,"car-05":2,"car-01":1,"car-03":1}}
+{"id":"Q44","class":"paraphrase","query":"candidate feedback before the debrief","relevant":{"hire-04":2,"cal-03":1}}
+{"id":"Q45","class":"paraphrase","query":"money back from the IRS","relevant":{"tax-05":2,"tax-04":2,"bank-07":1}}
+{"id":"Q46","class":"paraphrase","query":"client complaint about broken exports","relevant":{"esc-01":2,"esc-05":1,"code-10":1}}
+{"id":"Q47","class":"paraphrase","query":"parking spot for the apartment","relevant":{"lease-02":2,"lease-07":1}}
+{"id":"Q48","class":"paraphrase","query":"new hire accepted our offer","relevant":{"hire-06":2,"hire-05":1}}
+{"id":"Q49","class":"paraphrase","query":"speaker slides deadline","relevant":{"talk-02":2,"talk-03":1}}
+{"id":"Q50","class":"paraphrase","query":"approving Sam's lunch expenses","relevant":{"exp-03":2}}
+{"id":"Q81","class":"paraphrase","query":"who is driving to the lodge","relevant":{"off-08":2}}
+{"id":"Q08","class":"vague","query":"that thing Dana sent about venue costs","relevant":{"off-07":2,"off-01":1}}
+{"id":"Q09","class":"vague","query":"numbers we shared with investors","relevant":{"invu-01":2,"invu-02":2,"invu-05":2,"invu-04":1,"invu-06":1}}
+{"id":"Q10","class":"vague","query":"the lease thing","relevant":{"lease-01":2,"lease-04":2,"lease-05":1,"lease-07":1}}
+{"id":"Q51","class":"vague","query":"stuff from the school","relevant":{"trip-01":2,"trip-04":2,"trip-06":2,"trip-05":1,"pta-01":1,"pta-03":1,"pta-05":1,"pta-06":1,"cal-19":1}}
+{"id":"Q52","class":"vague","query":"that customer fire drill last month","relevant":{"esc-01":2,"esc-05":1,"esc-06":1,"wk-02":1}}
+{"id":"Q53","class":"vague","query":"my flight home in November","relevant":{"fly-05":2,"ger-03":1}}
+{"id":"Q54","class":"vague","query":"the database thing","relevant":{"out-03":2,"out-01":2,"out-05":1}}
+{"id":"Q55","class":"vague","query":"insurance stuff about the car","relevant":{"car-01":2,"car-04":2,"car-03":1,"car-05":1,"car-06":1,"car-07":1}}
+{"id":"Q56","class":"vague","query":"when is the conference talk","relevant":{"talk-04":2,"talk-01":1,"talk-05":1}}
+{"id":"Q57","class":"vague","query":"what the designers decided","relevant":{"des-03":2,"des-04":1,"des-06":1}}
+{"id":"Q82","class":"vague","query":"that thing about Biscuit's paw","relevant":{"vet-04":2,"vet-05":1}}
+{"id":"Q11","class":"natural","query":"invoices from Larkspur last month","planned":"invoice from:billing@larkspur.example.com after:2026/09/01 before:2026/10/01","relevant":{"inv-02":2,"inv-03":2,"inv-04":1}}
+{"id":"Q12","class":"natural","query":"unread messages from the recruiter","planned":"is:unread from:morgan.blake@example.com","relevant":{"hire-04":2,"hire-05":2}}
+{"id":"Q13","class":"natural","query":"flights in November with attachments","planned":"flight has:attachment after:2025/11/01 before:2025/12/01","relevant":{"fly-07":2,"fly-03":1,"fly-05":1}}
+{"id":"Q14","class":"natural","query":"what Sam sent me this week","planned":"from:sam.lee@example.com after:2026/10/05","relevant":{"off-10":2,"lau-06":2}}
+{"id":"Q58","class":"natural","query":"attachments from Riley about the contract","planned":"from:riley.chen@example.com has:attachment contract","relevant":{"con-01":2}}
+{"id":"Q59","class":"natural","query":"unread invoices","planned":"invoice is:unread","relevant":{"inv-02":2}}
+{"id":"Q60","class":"natural","query":"emails from Dana in October","planned":"from:dana.ruiz@example.com after:2026/10/01 before:2026/11/01","relevant":{"off-09":2,"okr-04":2}}
+{"id":"Q61","class":"natural","query":"starred mail about exports","planned":"is:starred exports","relevant":{"esc-01":2}}
+{"id":"Q62","class":"natural","query":"pdfs from Harbor Air this year","planned":"from:no-reply@harborair.example.com filename:pdf after:2026/01/01","relevant":{"fly-01":2,"fly-03":2,"fly-05":2}}
+{"id":"Q63","class":"natural","query":"messages I sent to the landlord","planned":"in:sent to:leasing@maplestreet.example.org","relevant":{"lease-02":2}}
+{"id":"Q64","class":"natural","query":"dentist reminders from last year","planned":"from:reminders@blueheron.example.net after:2025/01/01 before:2026/01/01","relevant":{"den-07":2}}
+{"id":"Q65","class":"natural","query":"spreadsheets Lena shared","planned":"from:lena.ortiz@example.com {filename:xls filename:xlsx filename:csv}","relevant":{"lau-01":2}}
+{"id":"Q66","class":"natural","query":"anything from the bank this month","planned":"from:alerts@northshorebank.example.com after:2026/10/01","relevant":{"bank-17":2,"bank-18":2,"bank-19":2,"bank-20":2}}
+{"id":"Q67","class":"natural","query":"the hotel booking for my trip in November","planned":"hotel booking","relevant":{"hot-01":2,"hot-02":1,"hot-03":1}}
+{"id":"Q68","class":"natural","query":"unread mail from Grace","planned":"is:unread from:grace.liu@meridianfoods.example.com","relevant":{"esc-04":2}}
+{"id":"Q15","class":"distractor","query":"invoices I still need to pay","relevant":{"inv-03":2,"inv-02":1,"inv-04":1,"fac-03":1}}
+{"id":"Q16","class":"distractor","query":"launch","relevant":{"lau-01":2,"lau-02":2,"lau-04":2,"lau-05":2,"lau-08":2,"lau-07":1,"cal-02":1}}
+{"id":"Q69","class":"distractor","query":"offsite venue","relevant":{"off-07":2,"off-01":2,"off-04":1}}
+{"id":"Q70","class":"distractor","query":"outage in my area","relevant":{"fib-03":2,"fib-02":1}}
+{"id":"Q71","class":"distractor","query":"receipt for my donation","relevant":{"food-03":2,"food-01":2}}
+{"id":"Q17","class":"misspelling","query":"reciept standing desk","relevant":{"desk-01":2,"desk-02":1}}
+{"id":"Q72","class":"misspelling","query":"brightwatter contract","relevant":{"con-01":2,"con-03":2,"con-05":2,"con-04":1}}
+{"id":"Q73","class":"misspelling","query":"postmortm","relevant":{"out-03":2}}
+{"id":"Q18","class":"short","query":"PO","relevant":{"inv-03":2}}
+{"id":"Q74","class":"short","query":"W-2","relevant":{"tax-02":2,"tax-03":2}}
+{"id":"Q19","class":"negative","query":"cabin wifi password","relevant":{}}
+{"id":"Q20","class":"negative","query":"my passport renewal","relevant":{}}
+{"id":"Q75","class":"negative","query":"yoga class schedule","relevant":{}}
+{"id":"Q76","class":"negative","query":"piano lessons for the kids","relevant":{}}
+{"id":"Q77","class":"negative","query":"kitchen renovation estimate","relevant":{}}
+{"id":"Q84","class":"negative","query":"boat rental in the summer","relevant":{}}
+{"id":"Q21","class":"crossLanguage","query":"factura de Larkspur","relevant":{"fac-01":2,"fac-02":2,"fac-03":2,"inv-02":1,"inv-03":1}}
+{"id":"Q78","class":"crossLanguage","query":"Flugplan November","relevant":{"ger-03":2,"ger-04":1,"fly-03":1,"fly-05":1}}
+{"id":"Q79","class":"crossLanguage","query":"Startcheckliste","relevant":{"ger-01":2,"lau-01":1}}
+{"id":"Q22","class":"poisoning","query":"quarterly metrics","relevant":{"invu-02":2,"invu-01":2,"invu-05":1,"invu-04":1,"invu-06":1}}
+{"id":"Q80","class":"poisoning","query":"invoice payment","relevant":{"inv-04":2,"inv-02":1,"inv-03":1,"inv-01":1}}

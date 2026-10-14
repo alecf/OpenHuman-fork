@@ -1,0 +1,15 @@
+{
+  "id": "block.sender-cleanup-undo",
+  "area": "Block",
+  "title": "Block sender, clean up what is there, one Cmd-Z takes it all back",
+  "steps": [
+    "Launch with -UseFakeGmail and OPENHUMAN_SAFE_MODE=normal (fake mail only), open the Inbox and put the cursor on a conversation from a sender with two or more conversations",
+    "Press Option-Command-B (or Cmd-K, Block sender); when the toast offers cleanup, press Archive all",
+    "Press Cmd-Z once, then Shift-Cmd-Z once",
+    "Open Settings > Blocked"
+  ],
+  "deepLink": null,
+  "expected": "Option-Command-B shows 'Blocked <address>' with Undo, then 'Clean up N conversations from them?' with Archive all and Move to Trash (ignoring it keeps them). Archive all takes the sender's inbox conversations out in one batch. One Cmd-Z brings them all back and removes the rule; Shift-Cmd-Z blocks and archives again. Settings > Blocked lists the address while it is blocked.",
+  "requires": "fake",
+  "addedIn": "2026-10-13"
+}

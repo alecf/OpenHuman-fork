@@ -1,0 +1,20 @@
+fixture: a18-nested-quotes
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body
+body:
+<div>Final answer: yes.</div><details class="oh-quoted"><summary title="Show quoted text">•••</summary><blockquote type="cite"><div>Are we sure?</div><blockquote type="cite"><div>Let's do it.</div><blockquote type="cite"><div>Should we move the date?</div></blockquote></blockquote></blockquote></details>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted true
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div>Final answer: yes.</div><details class="oh-quoted"><summary title="Show quoted text">•••</summary><blockquote type="cite"><div>Are we sure?</div><blockquote type="cite"><div>Let's do it.</div><blockquote type="cite"><div>Should we move the date?</div></blockquote></blockquote></blockquote></details>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div>Final answer: yes.</div><details class="oh-quoted"><summary title="Show quoted text">•••</summary><blockquote type="cite"><div>Are we sure?</div><blockquote type="cite"><div>Let's do it.</div><blockquote type="cite"><div>Should we move the date?</div></blockquote></blockquote></blockquote></details>
+

@@ -1,0 +1,29 @@
+fixture: c22-mso-conditional
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<div style="max-width:600px;margin:0 auto;background:#fdf6e3;color:#586e75;padding:16px;font-family:Georgia">
+<p>Seen by every client except Outlook.</p>
+<p>Monthly letter from the co-op board.</p></div>
+
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<div style="max-width:600px;margin:0 auto;background:#fdf6e3;color:#586e75;padding:16px;font-family:Georgia">
+<p>Seen by every client except Outlook.</p>
+<p>Monthly letter from the co-op board.</p></div>
+
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<div style="max-width:600px;margin:0 auto;background:#000000;color:#586e75;padding:16px;font-family:Georgia">
+<p style="color:#637a81 !important">Seen by every client except Outlook.</p>
+<p style="color:#637a81 !important">Monthly letter from the co-op board.</p></div>
+
+

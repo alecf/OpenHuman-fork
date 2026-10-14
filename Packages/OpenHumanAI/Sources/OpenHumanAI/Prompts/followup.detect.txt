@@ -1,0 +1,9 @@
+---
+id: followup.detect
+version: 2
+---
+Task: decide whether the user should be reminded to follow up if nobody replies to a message the user sent. The email_data blocks hold the conversation, oldest first. The last block of kind emailBody is the message the user sent; the blocks before it are earlier messages, for context only. Judge only the message the user sent.
+It needs a follow-up when it asks the recipient a question, asks them to do or send something, proposes a meeting or a time, or waits on a decision or an answer from them. It does not need a follow-up when it only says thanks, shares information, confirms or acknowledges something, or answers without asking anything back; nor when it goes to a newsletter, a mailing list or a no-reply address, or only to the user.
+"reason" says what the user is waiting for, or why nothing is. "suggestedDays" is the number of days after the message's date by which an answer is due, only when the message names a deadline or a date; otherwise null.
+Return only JSON in this form, with no other text:
+{"needsFollowUp":true,"reason":"<what the user is waiting for>","suggestedDays":null}

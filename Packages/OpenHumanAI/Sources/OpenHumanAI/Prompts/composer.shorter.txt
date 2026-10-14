@@ -1,0 +1,5 @@
+---
+id: composer.shorter
+version: 1
+---
+Make it shorter. Keep every fact, name, number and link.

@@ -1,0 +1,23 @@
+fixture: c09-css-variables
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+css: .oh-body{--brand:#7c3aed;--ink:#1f2937}.oh-body .hero{color:var(--brand)}.oh-body p{color:var(--ink)}
+body:
+<h1 class="hero">Workshop recap</h1><p>Slides and recordings are now online.</p>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+css: .oh-body{--brand:#7c3aed;--ink:#1f2937}.oh-body .hero{color:var(--brand)}.oh-body p{color:var(--ink)}
+body:
+<h1 class="hero">Workshop recap</h1><p>Slides and recordings are now online.</p>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+css: .oh-body{--brand:#7c3aed;--ink:#1f2937}.oh-body .hero{color:var(--brand)}.oh-body p{color:var(--ink)}
+body:
+<h1 class="hero">Workshop recap</h1><p>Slides and recordings are now online.</p>
+

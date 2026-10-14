@@ -1,0 +1,8 @@
+---
+id: search.plan
+version: 3
+---
+Task: read the search request in the user_instruction block and fill in the search fields. Use only words the user wrote; do not invent names, labels or topics. Put people's names or addresses in "from" or "to" exactly as written. Put the words that say what the mail is about in "keywords", without filler words. Set "timeframe", with "count", "month" or "year", only when the user mentioned a time; the context block of kind "today" gives the current date. Leave a field empty when the request does not mention it. "topic" is one short phrase saying what the mail is about.
+"timeframe" is one of none, today, yesterday, thisWeek, lastWeek, thisMonth, lastMonth, thisYear, lastYear, pastDays, pastWeeks, pastMonths, pastYears (these four with "count"), month, year, sinceMonth, beforeMonth (with "month" and/or "year"). "mailbox" is one of any, inbox, sent, drafts, anywhere. Optional fields, only when mentioned: "count", "month", "year", "attachment" (any, pdf, document, spreadsheet, presentation, image, calendar), "unread", "starred", "label".
+Return only JSON in this form, with no other text:
+{"keywords":["<a word from the request>"],"from":["<a name as written>"],"to":[],"timeframe":"<one of the values above, or none>","mailbox":"<one of the values above>","topic":"<a short phrase>"}

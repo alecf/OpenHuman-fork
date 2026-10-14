@@ -1,0 +1,182 @@
+import Foundation
+import OpenHumanCore
+import OpenHumanGmail
+import Security
+
+public struct KeychainTokenStore: TokenStore {
+    public let service: String
+    public let label: String
+    public let items: KeychainItems
+    let isAppProcess: @Sendable () -> Bool
+
+    static let maxItemBytes = 16 * 1024
+    public static let defaultLabel = "OpenHuman Mail (Gmail OAuth)"
+
+    public init(service: String = OHIdentifiers.keychainService, label: String = KeychainTokenStore.defaultLabel) {
+        self.init(service: service, items: .shared, isAppProcess: { KeychainTokenStore.runningInAppBundle() },
+                  label: label)
+    }
+
+    init(service: String, items: KeychainItems, isAppProcess: @escaping @Sendable () -> Bool,
+         label: String = KeychainTokenStore.defaultLabel) {
+        self.service = service
+        self.label = label
+        self.items = items
+        self.isAppProcess = isAppProcess
+    }
+
+    public func load(account email: String) throws -> StoredToken? {
+        try requireAppProcess()
+        let key = KeychainItems.Item(service: service, account: try Self.account(email))
+        return try tokenErrors {
+            guard let entry = try items.read(key) else { return nil }
+            guard entry.data.count <= Self.maxItemBytes,
+                  let payload = try? JSONDecoder().decode(TokenItemPayload.self, from: entry.data),
+                  !payload.refreshToken.isEmpty, !payload.clientID.isEmpty else { throw TokenStoreError.corrupt }
+            var token = payload.token
+            if let memory = items.memory(key, as: TokenAccessMemory.self),
+               memory.refreshToken == token.refreshToken, memory.clientID == token.clientID {
+                token.accessToken = memory.accessToken
+                token.accessTokenExpiry = memory.accessTokenExpiry
+            }
+            return token
+        }
+    }
+
+    public func save(_ token: StoredToken, account email: String) throws {
+        try requireAppProcess()
+        let key = KeychainItems.Item(service: service, account: try Self.account(email))
+        guard !token.refreshToken.isEmpty, !token.clientID.isEmpty,
+              let validation = try? JSONEncoder().encode(token), validation.count <= Self.maxItemBytes else {
+            throw TokenStoreError.corrupt
+        }
+        try tokenErrors {
+            try items.exclusively {
+                let entry = try? items.read(key)
+                let previous = entry.flatMap { try? JSONDecoder().decode(TokenItemPayload.self, from: $0.data) }
+                var payload = TokenItemPayload(token, device: previous?.device)
+                payload.accessToken = nil
+                payload.accessTokenExpiry = nil
+                var comparable = previous
+                comparable?.accessToken = nil
+                comparable?.accessTokenExpiry = nil
+                if comparable != payload {
+                    let data = try payload.encoded()
+                    guard data.count <= Self.maxItemBytes else { throw TokenStoreError.corrupt }
+                    try items.write(key, data: data, label: label)
+                }
+                items.setMemory(key, TokenAccessMemory(token))
+            }
+        }
+    }
+
+    public func delete(account email: String) throws {
+        try requireAppProcess()
+        let key = KeychainItems.Item(service: service, account: try Self.account(email))
+        try tokenErrors { try items.delete(key) }
+    }
+
+    public func allAccounts() throws -> [String] {
+        try requireAppProcess()
+        return try tokenErrors { try items.accounts(service: service).filter { (try? Self.account($0)) == $0 } }
+    }
+
+    func baseQuery(account: String?) -> [String: Any] {
+        return items.query(service: service, account: account)
+    }
+
+    func addAttributes(account: String, data: Data) -> [String: Any] {
+        return items.addAttributes(.init(service: service, account: account), data: data, label: label)
+    }
+
+    static func account(_ email: String) throws -> String {
+        let account = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !account.isEmpty, !account.contains("\0") else { throw TokenStoreError.invalidAccount }
+        return account
+    }
+
+    private func requireAppProcess() throws {
+        guard isAppProcess() else { throw TokenStoreError.notAppProcess }
+    }
+
+    static func runningInAppBundle() -> Bool {
+        Bundle.main.bundleURL.pathExtension.lowercased() == "app"
+    }
+}
+
+protocol KeychainBackend: Sendable {
+    func add(_ attributes: [String: Any]) -> OSStatus
+    func copyMatching(_ query: [String: Any]) -> (OSStatus, CFTypeRef?)
+    func delete(_ query: [String: Any]) -> OSStatus
+    // Why: a delete then add would reach other devices as a removal first, so synchronizable items update in place
+    func update(_ query: [String: Any], _ attributes: [String: Any]) -> OSStatus
+}
+
+extension KeychainBackend {
+    func update(_ query: [String: Any], _ attributes: [String: Any]) -> OSStatus { errSecUnimplemented }
+}
+
+struct SecItemBackend: KeychainBackend {
+    func update(_ query: [String: Any], _ attributes: [String: Any]) -> OSStatus {
+        SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+    }
+
+    func add(_ attributes: [String: Any]) -> OSStatus {
+        SecItemAdd(attributes as CFDictionary, nil)
+    }
+
+    func copyMatching(_ query: [String: Any]) -> (OSStatus, CFTypeRef?) {
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        return (status, result)
+    }
+
+    func delete(_ query: [String: Any]) -> OSStatus {
+        SecItemDelete(query as CFDictionary)
+    }
+}
+
+struct TokenItemPayload: Codable, Equatable {
+    var refreshToken: String
+    var accessToken: String?
+    var accessTokenExpiry: Date?
+    var grantedScopes: [String]
+    var clientID: String
+    var device: TokenDeviceRecord?
+    init(_ token: StoredToken, device: TokenDeviceRecord? = nil) {
+        refreshToken = token.refreshToken
+        accessToken = token.accessToken
+        accessTokenExpiry = token.accessTokenExpiry
+        grantedScopes = token.grantedScopes
+        clientID = token.clientID
+        self.device = device
+    }
+    var token: StoredToken {
+        StoredToken(refreshToken: refreshToken, accessToken: accessToken, accessTokenExpiry: accessTokenExpiry,
+                    grantedScopes: grantedScopes, clientID: clientID)
+    }
+    func encoded() throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return try encoder.encode(self)
+    }
+}
+
+private struct TokenAccessMemory: Sendable {
+    var refreshToken: String
+    var clientID: String
+    var accessToken: String?
+    var accessTokenExpiry: Date?
+    init(_ token: StoredToken) {
+        refreshToken = token.refreshToken
+        clientID = token.clientID
+        accessToken = token.accessToken
+        accessTokenExpiry = token.accessTokenExpiry
+    }
+}
+
+func tokenErrors<R>(_ body: () throws -> R) throws -> R {
+    do { return try body() }
+    catch KeychainItemsError.notOurs { throw TokenStoreError.corrupt }
+    catch KeychainItemsError.status(let status) { throw TokenStoreError.keychain(status) }
+}

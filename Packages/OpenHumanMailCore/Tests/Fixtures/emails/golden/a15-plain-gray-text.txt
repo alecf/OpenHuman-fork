@@ -1,0 +1,29 @@
+fixture: a15-plain-gray-text
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body
+body:
+<div style="color:var(--oh-text)">
+<p>Reminder: the reading group meets Thursday at 7 pm in room 12.</p>
+<p style="color:var(--oh-text-secondary)">This week: chapters 4 and 5.</p>
+<p style="color:var(--oh-text-secondary);font-size:12px">Unsubscribe by replying "stop".</p></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div style="color:var(--oh-text)">
+<p>Reminder: the reading group meets Thursday at 7 pm in room 12.</p>
+<p style="color:var(--oh-text-secondary)">This week: chapters 4 and 5.</p>
+<p style="color:var(--oh-text-secondary);font-size:12px">Unsubscribe by replying "stop".</p></div>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+<div style="color:var(--oh-text)">
+<p>Reminder: the reading group meets Thursday at 7 pm in room 12.</p>
+<p style="color:var(--oh-text-secondary)">This week: chapters 4 and 5.</p>
+<p style="color:var(--oh-text-secondary);font-size:12px">Unsubscribe by replying "stop".</p></div>
+

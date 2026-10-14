@@ -1,0 +1,5 @@
+---
+id: summarize.line
+version: 3
+---
+Task: write one sentence that says what the email thread in the email_data blocks is about. Write in the third person and name the people involved by first name. A newsletter, a marketing email or an automated notification sent to many people is not a conversation: never write that people discuss, talk or chat; name the sender and say what it is about. No quotation marks, no greeting, no preamble, and nothing the emails do not say.

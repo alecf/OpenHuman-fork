@@ -1,0 +1,20 @@
+fixture: a02-apple-mail-reply
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body style="overflow-wrap:break-word;-webkit-nbsp-mode:space;line-break:after-white-space"
+body:
+Sounds good. See you at the station.<br><div><br><details class="oh-quoted"><summary title="Show quoted text">•••</summary><blockquote type="cite"><div>On Oct 9, 2026, at 18:02, Mara Olsen &lt;mara@example.net&gt; wrote:</div><br><div><div>Train leaves at 9:40, platform 4. Want to meet at the café first?</div></div></blockquote></details></div><br>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted true
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body style="overflow-wrap:break-word;-webkit-nbsp-mode:space;line-break:after-white-space"
+body:
+Sounds good. See you at the station.<br><div><br><details class="oh-quoted"><summary title="Show quoted text">•••</summary><blockquote type="cite"><div>On Oct 9, 2026, at 18:02, Mara Olsen &lt;mara@example.net&gt; wrote:</div><br><div><div>Train leaves at 9:40, platform 4. Want to meet at the café first?</div></div></blockquote></details></div><br>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body style="overflow-wrap:break-word;-webkit-nbsp-mode:space;line-break:after-white-space"
+body:
+Sounds good. See you at the station.<br><div><br><details class="oh-quoted"><summary title="Show quoted text">•••</summary><blockquote type="cite"><div>On Oct 9, 2026, at 18:02, Mara Olsen &lt;mara@example.net&gt; wrote:</div><br><div><div>Train leaves at 9:40, platform 4. Want to meet at the café first?</div></div></blockquote></details></div><br>
+

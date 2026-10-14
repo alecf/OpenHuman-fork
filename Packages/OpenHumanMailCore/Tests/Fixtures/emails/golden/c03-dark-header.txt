@@ -1,0 +1,23 @@
+fixture: c03-dark-header
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<div style="background:#111827;color:#f9fafb;padding:20px;font-family:system-ui"><h2 style="margin:0">Incident report</h2><p style="color:#9ca3af;margin:4px 0 0">Status: resolved</p></div>
+<div style="padding:20px;font-family:system-ui;color:#111827"><p>Between 09:10 and 09:42 UTC some uploads failed. No data was lost.</p><p><a href="https://status.example.com/incidents/77" style="color:#2563eb" rel="noopener noreferrer">Full timeline</a></p></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<div style="background:#111827;color:#f9fafb;padding:20px;font-family:system-ui"><h2 style="margin:0">Incident report</h2><p style="color:#9ca3af;margin:4px 0 0">Status: resolved</p></div>
+<div style="padding:20px;font-family:system-ui;color:#111827"><p>Between 09:10 and 09:42 UTC some uploads failed. No data was lost.</p><p><a href="https://status.example.com/incidents/77" style="color:#2563eb" rel="noopener noreferrer">Full timeline</a></p></div>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<div style="background:#111827;color:#f9fafb;padding:20px;font-family:system-ui"><h2 style="margin:0">Incident report</h2><p style="color:#9ca3af;margin:4px 0 0">Status: resolved</p></div>
+<div style="padding:20px;font-family:system-ui;color:#b1bbce"><p>Between 09:10 and 09:42 UTC some uploads failed. No data was lost.</p><p><a href="https://status.example.com/incidents/77" style="color:#6fa0ff !important" rel="noopener noreferrer">Full timeline</a></p></div>
+

@@ -1,0 +1,5 @@
+---
+id: common.language.match
+version: 1
+---
+Write in the language of the emails (for a rewrite: the language of the draft).

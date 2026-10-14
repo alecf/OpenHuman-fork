@@ -1,0 +1,15 @@
+{
+  "id": "calendar.full-edit.real-series",
+  "area": "Calendar",
+  "title": "Real account: this-and-following split and removing a Meet link (unverified on Google)",
+  "steps": [
+    "On a real connected calendar in write mode, make a weekly test series with no guests and a Meet link in Google Calendar",
+    "In Mail open its third occurrence, change the title, press Save and choose This and following events",
+    "In Google Calendar check the first two occurrences keep the old title and the series from the third on has the new one",
+    "In Mail open another occurrence, untick Google Meet, Save with This event; check Google Calendar shows no Meet link on it"
+  ],
+  "deepLink": null,
+  "expected": "The old series ends before the third occurrence and a new series with the new title starts there; if the second step fails Mail says to check the calendar and retries nothing. The Meet link is gone from that occurrence. Google documents neither behaviour: report any difference.",
+  "requires": "real-write",
+  "addedIn": "2026-10-13"
+}

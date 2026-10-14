@@ -1,0 +1,15 @@
+{
+  "id": "ai.prompts-test-thread",
+  "area": "AI",
+  "title": "Test on this thread runs an unsaved prompt and stores nothing",
+  "steps": [
+    "Launch with -UseFakeData and open any conversation",
+    "In Settings › AI › Prompts edit One-line summary without saving",
+    "Press Test under Test on this thread",
+    "Close the editor and look at the conversation's one-line summary"
+  ],
+  "deepLink": null,
+  "expected": "The answer, the conversation's subject and the prompt id with +draft appear under the button. The prompt is not saved (no Edited badge) and the conversation's own summary line is unchanged.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

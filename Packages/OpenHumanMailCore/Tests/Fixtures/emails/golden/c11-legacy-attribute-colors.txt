@@ -1,0 +1,23 @@
+fixture: c11-legacy-attribute-colors
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<table bgcolor="chucknorris" width="100%"><tbody><tr><td><font color="ffffff" face="Verdana">Legacy colors are parsed like a browser does.</font></td></tr>
+<tr><td bgcolor="#eee"><font color="navy">Second row.</font></td></tr></tbody></table>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<table bgcolor="chucknorris" width="100%"><tbody><tr><td><font color="ffffff" face="Verdana">Legacy colors are parsed like a browser does.</font></td></tr>
+<tr><td bgcolor="#eee"><font color="navy">Second row.</font></td></tr></tbody></table>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<table bgcolor="#c00000" width="100%"><tbody><tr><td><font color="#ffffff" face="Verdana">Legacy colors are parsed like a browser does.</font></td></tr>
+<tr><td bgcolor="#000000"><font color="#7aa5ff">Second row.</font></td></tr></tbody></table>
+

@@ -1,0 +1,14 @@
+{
+  "id": "move-to.split-label",
+  "area": "Overlays",
+  "title": "Move to (V) a split that is one label",
+  "steps": [
+    "On the fake data, open Settings > Split inbox, click Add split..., name it Client tab, type label:\"Clients\" and Save",
+    "In the Inbox press V on a conversation and type client tab",
+    "Press Return, then press Cmd-Z"
+  ],
+  "deepLink": null,
+  "expected": "Step 2: V shows Places, Splits and Labels headers; Client tab is under Splits with a small split tag and the cursor on it, and Clients is not listed again under Labels. Step 3: the toast says Moved to Client tab and the conversation leaves the Inbox with the Clients label (find it in that label, not the tab, since it left the Inbox); Cmd-Z puts it back in the Inbox without the label.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

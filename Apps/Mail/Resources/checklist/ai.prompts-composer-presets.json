@@ -1,0 +1,14 @@
+{
+  "id": "ai.prompts-composer-presets",
+  "area": "AI",
+  "title": "An edited ⌘J preset is what the chip sends",
+  "steps": [
+    "Launch with -UseFakeData; in Settings › AI › Prompts edit Preset: Shorten to 'Make it much shorter.' and save",
+    "Write a two-line draft, select it and press Cmd-J",
+    "Choose Shorten, then reset the preset in Settings"
+  ],
+  "deepLink": null,
+  "expected": "The version's instruction reads 'Make it much shorter.' After Reset to default, Shorten sends the shipped words again.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

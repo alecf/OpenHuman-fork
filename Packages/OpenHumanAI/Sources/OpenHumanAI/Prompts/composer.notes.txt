@@ -1,0 +1,5 @@
+---
+id: composer.notes
+version: 1
+---
+Write the email from these notes: {{notes}}

@@ -1,0 +1,14 @@
+{
+  "id": "ai.prompts-deeplink",
+  "area": "AI",
+  "title": "A settings link opens the prompt editor without changing anything",
+  "steps": [
+    "Launch with -UseFakeData so the mail window is open",
+    "In Terminal run: open 'openhuman://settings/ai/prompts/autolabel.classify'",
+    "Then run: open 'openhuman://settings/ai/prompts/no.such.prompt'"
+  ],
+  "deepLink": "openhuman://settings/ai/prompts/autolabel.classify",
+  "expected": "Settings opens on AI › Prompts with the Auto labels editor showing the text in use, and nothing is saved. The second link shows the prompt list with the note No prompt “no.such.prompt”.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "inbox.jk",
+  "area": "Inbox",
+  "title": "Navigate with the keyboard",
+  "steps": [
+    "Launch Mail with -UseFakeData",
+    "Press j and k to move through the inbox"
+  ],
+  "expected": "The selected row follows the keyboard without scrolling jumps.",
+  "requires": "fake"
+}

@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"s-0001","model":"claude-fixture-model","tools":[],"mcp_servers":[]}
+{"type":"stream_event","event":{"type":"message_start","message":{"role":"assistant"}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"The team agreed to move the launch review "}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"to Friday.\nDana will send the updated "}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"agenda tomorrow."}}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The team agreed to move the launch review to Friday.\nDana will send the updated agenda tomorrow."}]}}
+{"type":"result","subtype":"success","is_error":false,"duration_ms":1200,"num_turns":1,"result":"The team agreed to move the launch review to Friday.\nDana will send the updated agenda tomorrow.","total_cost_usd":0.0012,"usage":{"input_tokens":412,"output_tokens":31,"cache_read_input_tokens":0}}

@@ -1,0 +1,20 @@
+---
+id: autolabel.classify
+version: 3
+---
+Task: sort the email in the email_data blocks into at most one auto label. The blocks hold the subject, the sender of the newest message and the start of the newest message, which can include quoted earlier messages. Choose exactly one category:
+- respond: a real person writes to the user and directly asks them a question, asks them to decide something or asks them to do something, and is waiting for the user's answer.
+- meeting: an invitation, or arranging a time to meet or call.
+- invoice: an invoice, bill, receipt or payment.
+- travel: a booking, ticket, itinerary or travel change.
+- pitch: an unsolicited message that tries to sell something to the user, recruit the user, or start a partnership or sponsorship, sent by someone the user has not been writing with (cold sales outreach and its follow-ups).
+- social: a notification from a social network.
+- news: a newsletter or news digest.
+- marketing: promotions, offers and announcements a company sends to many people.
+- other: none of these fits, or you are unsure.
+These are never respond: cold sales or partnership outreach (pitch); automated mail, notifications, receipts, newsletters and marketing; mail sent to many people; a thank-you, an acknowledgement or information that asks nothing of the user.
+These are never pitch: a reply to a message the user sent; an email that quotes the user's own message; a vendor or partner answering a question the user asked; a colleague, customer, friend or family member; an automated notification; a newsletter (news) or a company promotion (marketing).
+When you are unsure, choose other. Never choose respond or pitch when unsure.
+Judge only from the subject, the sender and the email text.
+Return only JSON in this form, with no other text:
+{"category":"<the chosen category>"}

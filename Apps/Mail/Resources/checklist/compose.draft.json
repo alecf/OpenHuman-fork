@@ -1,0 +1,13 @@
+{
+  "id": "compose.draft",
+  "area": "Composer",
+  "title": "Create a fixture draft",
+  "steps": [
+    "Launch Mail with -UseFakeGmail",
+    "Open a composer",
+    "Enter a synthetic recipient, subject, and body",
+    "Close and reopen the draft"
+  ],
+  "expected": "The draft retains the entered text.",
+  "requires": "fake"
+}

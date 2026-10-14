@@ -1,0 +1,5 @@
+---
+id: schedule.ask.offer
+version: 1
+---
+Write to {{name}}. Say the time they proposed ({{proposed}}) does not suit the user and offer these times instead.

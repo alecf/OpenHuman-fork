@@ -1,0 +1,43 @@
+fixture: c20-phishing-links
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<div style="background:#f3f6fb;padding:20px;font-family:Arial"><p style="color:#0b2e59;font-weight:bold">Your account is on hold</p>
+<p>Sign in at <a href="https://secure-login.example-verify.net/session" rel="noopener noreferrer">https://www.bank.example/login</a> to restore access.</p>
+<p>Or visit <a href="https://bank.example.attacker.example/" rel="noopener noreferrer">www.bank.example</a>.</p>
+<p>Questions: <a href="mailto:help@attacker.example" rel="noopener noreferrer">support@bank.example</a></p>
+<p><a href="https://www.bank.example@attacker.example/x" rel="noopener noreferrer">Open secure message</a></p>
+<p><a href="http://198.51.100.7/verify" rel="noopener noreferrer">Verify identity</a></p>
+<p>Real help center: <a href="https://help.bank.example/faq" rel="noopener noreferrer">help.bank.example</a></p></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+link: ["domainMismatch"] shows bank.example goes example-verify.net
+link: ["domainMismatch"] shows bank.example goes attacker.example
+link: ["addressMismatch"] shows support@bank.example goes help@attacker.example
+link: ["credentialsInURL"] shows - goes attacker.example
+link: ["ipAddressHost"] shows - goes 198.51.100.7
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<div style="background:#f3f6fb;padding:20px;font-family:Arial"><p style="color:#0b2e59;font-weight:bold">Your account is on hold</p>
+<p>Sign in at <a href="https://secure-login.example-verify.net/session" rel="noopener noreferrer">https://www.bank.example/login</a> to restore access.</p>
+<p>Or visit <a href="https://bank.example.attacker.example/" rel="noopener noreferrer">www.bank.example</a>.</p>
+<p>Questions: <a href="mailto:help@attacker.example" rel="noopener noreferrer">support@bank.example</a></p>
+<p><a href="https://www.bank.example@attacker.example/x" rel="noopener noreferrer">Open secure message</a></p>
+<p><a href="http://198.51.100.7/verify" rel="noopener noreferrer">Verify identity</a></p>
+<p>Real help center: <a href="https://help.bank.example/faq" rel="noopener noreferrer">help.bank.example</a></p></div>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<div style="background:#000000;padding:20px;font-family:Arial"><p style="color:#7da0ce;font-weight:bold">Your account is on hold</p>
+<p>Sign in at <a href="https://secure-login.example-verify.net/session" rel="noopener noreferrer">https://www.bank.example/login</a> to restore access.</p>
+<p>Or visit <a href="https://bank.example.attacker.example/" rel="noopener noreferrer">www.bank.example</a>.</p>
+<p>Questions: <a href="mailto:help@attacker.example" rel="noopener noreferrer">support@bank.example</a></p>
+<p><a href="https://www.bank.example@attacker.example/x" rel="noopener noreferrer">Open secure message</a></p>
+<p><a href="http://198.51.100.7/verify" rel="noopener noreferrer">Verify identity</a></p>
+<p>Real help center: <a href="https://help.bank.example/faq" rel="noopener noreferrer">help.bank.example</a></p></div>
+

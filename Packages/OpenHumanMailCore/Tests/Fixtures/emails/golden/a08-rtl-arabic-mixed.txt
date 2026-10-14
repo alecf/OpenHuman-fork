@@ -1,0 +1,26 @@
+fixture: a08-rtl-arabic-mixed
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body dir="rtl" lang="ar"
+body:
+<div>
+<p>مرحبا سامي،</p><p>الاجتماع يوم الثلاثاء الساعة 10:00 في الغرفة B-204. الرابط: <a href="https://meet.example.com/abc-def" rel="noopener noreferrer">meet.example.com/abc-def</a></p>
+<p>مع التحية،<br>ليلى</p></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body dir="rtl" lang="ar"
+body:
+<div>
+<p>مرحبا سامي،</p><p>الاجتماع يوم الثلاثاء الساعة 10:00 في الغرفة B-204. الرابط: <a href="https://meet.example.com/abc-def" rel="noopener noreferrer">meet.example.com/abc-def</a></p>
+<p>مع التحية،<br>ليلى</p></div>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body dir="rtl" lang="ar"
+body:
+<div>
+<p>مرحبا سامي،</p><p>الاجتماع يوم الثلاثاء الساعة 10:00 في الغرفة B-204. الرابط: <a href="https://meet.example.com/abc-def" rel="noopener noreferrer">meet.example.com/abc-def</a></p>
+<p>مع التحية،<br>ليلى</p></div>
+

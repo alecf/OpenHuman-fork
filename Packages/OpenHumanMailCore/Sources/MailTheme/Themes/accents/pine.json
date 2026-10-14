@@ -1,0 +1,36 @@
+{
+  "format": "openhuman-accent",
+  "formatVersion": 1,
+  "id": "openhuman.accent.pine",
+  "name": "Pine",
+  "primitives": {
+    "color": {
+      "gray.1000": "#FFFFFF",
+      "pine.947": "#E4F3EF",
+      "pine.758": "#5FCDBA",
+      "pine.725": "#52C4B0",
+      "pine.439": "#0D7565",
+      "pine.433": "#127365",
+      "pine.414": "#0F6E60",
+      "pine.413": "#0B6E5F",
+      "pine.368": "#0A6255",
+      "pine.179": "#18302C"
+    }
+  },
+  "light": {
+    "accent.fill": "{pine.439}",
+    "accent.fillHover": "{pine.368}",
+    "accent.text": "{pine.413}",
+    "accent.subtle": "{pine.947}",
+    "accent.onFill": "{gray.1000}",
+    "accent.ring": "{pine.439}"
+  },
+  "dark": {
+    "accent.fill": "{pine.414}",
+    "accent.fillHover": "{pine.433}",
+    "accent.text": "{pine.758}",
+    "accent.subtle": "{pine.179}",
+    "accent.onFill": "{gray.1000}",
+    "accent.ring": "{pine.725}"
+  }
+}

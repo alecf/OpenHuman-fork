@@ -1,0 +1,23 @@
+fixture: b02-media-query-only
+
+=== light: tier selfAdapting, treatment selfAdapting, scheme light dark
+wrapper: oh-body
+css: .oh-body .card{background:#fff8e1;color:#3e2723;border:1px solid #ffe0b2;padding:16px}.oh-body .btn{background:#ef6c00;color:#ffffff;padding:8px 16px;text-decoration:none}@media screen and (prefers-color-scheme: dark){.oh-body .card{background:#2b1d0e;color:#ffe0b2;border-color:#5d4037}.oh-body .btn{background:#ffb74d;color:#1b1b1b}}
+body:
+<div class="card"><p>Your package is out for delivery.</p><a class="btn" href="https://parcel.example.com/track/123" rel="noopener noreferrer">Track package</a></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier selfAdapting, treatment selfAdapting, scheme light dark
+wrapper: oh-body
+css: .oh-body .card{background:#fff8e1;color:#3e2723;border:1px solid #ffe0b2;padding:16px}.oh-body .btn{background:#ef6c00;color:#ffffff;padding:8px 16px;text-decoration:none}@media screen and (prefers-color-scheme: dark){.oh-body .card{background:#2b1d0e;color:#ffe0b2;border-color:#5d4037}.oh-body .btn{background:#ffb74d;color:#1b1b1b}}
+body:
+<div class="card"><p>Your package is out for delivery.</p><a class="btn" href="https://parcel.example.com/track/123" rel="noopener noreferrer">Track package</a></div>
+
+
+=== dark, Show in dark colors: tier selfAdapting, treatment selfAdapting, scheme light dark
+wrapper: oh-body
+css: .oh-body .card{background:#fff8e1;color:#3e2723;border:1px solid #ffe0b2;padding:16px}.oh-body .btn{background:#ef6c00;color:#ffffff;padding:8px 16px;text-decoration:none}@media screen and (prefers-color-scheme: dark){.oh-body .card{background:#2b1d0e;color:#ffe0b2;border-color:#5d4037}.oh-body .btn{background:#ffb74d;color:#1b1b1b}}
+body:
+<div class="card"><p>Your package is out for delivery.</p><a class="btn" href="https://parcel.example.com/track/123" rel="noopener noreferrer">Track package</a></div>
+

@@ -1,0 +1,3 @@
+# plain-fixture: format=fixed
+> Forwarded note from the team:
+> The office is closed on Friday.

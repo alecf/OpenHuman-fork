@@ -1,0 +1,15 @@
+{
+  "id": "move-to.places",
+  "area": "Overlays",
+  "title": "Move to (V) Inbox, Important and Other",
+  "steps": [
+    "On the fake data, in the Inbox press V on a conversation and choose Other under Places, then press Cmd-Z",
+    "Press V again and choose Important, then press Cmd-Z",
+    "Open Done (G then E), press V on a conversation and choose Inbox",
+    "Check two conversations with X and press V"
+  ],
+  "deepLink": null,
+  "expected": "Step 1 and 2: the toasts say Moved to Other and Moved to Important, the conversation changes tab, and each Cmd-Z puts it back. The Inbox row is not offered while the conversation is in the Inbox. Step 3: the Inbox row is listed first and the toast says Moved to Inbox. Step 4: Important and Other are dimmed with Works on one conversation at a time.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

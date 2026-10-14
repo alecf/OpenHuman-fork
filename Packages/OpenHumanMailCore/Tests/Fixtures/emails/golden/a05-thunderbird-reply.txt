@@ -1,0 +1,38 @@
+fixture: a05-thunderbird-reply
+
+=== light: tier plain, treatment themeText, scheme light
+wrapper: oh-body
+body:
+
+<p>Agreed, let's ship it on the 14th.</p>
+<div class="moz-cite-prefix">On 10/9/26 11:20, Lena Ortiz wrote:<br></div>
+<details class="oh-quoted"><summary title="Show quoted text">•••</summary><blockquote type="cite"><p>Release candidate looks stable. Ship on the 14th?</p></blockquote></details>
+<details class="oh-quoted oh-signature"><summary title="Show signature">•••</summary><pre class="moz-signature">-- 
+Karl Weber
+Release engineering</pre></details>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted true
+
+=== dark: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+
+<p>Agreed, let's ship it on the 14th.</p>
+<div class="moz-cite-prefix">On 10/9/26 11:20, Lena Ortiz wrote:<br></div>
+<details class="oh-quoted"><summary title="Show quoted text">•••</summary><blockquote type="cite"><p>Release candidate looks stable. Ship on the 14th?</p></blockquote></details>
+<details class="oh-quoted oh-signature"><summary title="Show signature">•••</summary><pre class="moz-signature">-- 
+Karl Weber
+Release engineering</pre></details>
+
+
+=== dark, Show in dark colors: tier plain, treatment themeText, scheme dark
+wrapper: oh-body
+body:
+
+<p>Agreed, let's ship it on the 14th.</p>
+<div class="moz-cite-prefix">On 10/9/26 11:20, Lena Ortiz wrote:<br></div>
+<details class="oh-quoted"><summary title="Show quoted text">•••</summary><blockquote type="cite"><p>Release candidate looks stable. Ship on the 14th?</p></blockquote></details>
+<details class="oh-quoted oh-signature"><summary title="Show signature">•••</summary><pre class="moz-signature">-- 
+Karl Weber
+Release engineering</pre></details>
+

@@ -1,0 +1,2 @@
+# Preserve independent additions to the action registry during merges.
+Packages/OpenHumanMailCore/Sources/MailActions/ActionCatalog+All.swift merge=union

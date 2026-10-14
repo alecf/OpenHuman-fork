@@ -1,0 +1,23 @@
+fixture: c10-hsl-rgba-colors
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<div style="background:hsl(210 40% 96%);color:hsl(222deg 47% 11%);padding:16px"><p>Plan renewal on December 1.</p>
+<p style="background:rgba(59,130,246,0.15);color:rgb(30 64 175 / 100%);padding:8px">You are on the Team plan, 12 seats.</p></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<div style="background:hsl(210 40% 96%);color:hsl(222deg 47% 11%);padding:16px"><p>Plan renewal on December 1.</p>
+<p style="background:rgba(59,130,246,0.15);color:rgb(30 64 175 / 100%);padding:8px">You are on the Team plan, 12 seats.</p></div>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<div style="background:#000000;color:#b1bcd3;padding:16px"><p>Plan renewal on December 1.</p>
+<p style="background:rgba(0,58,144,0.150);padding:8px;color:#4773e5 !important">You are on the Team plan, 12 seats.</p></div>
+

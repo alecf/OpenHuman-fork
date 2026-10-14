@@ -1,0 +1,5 @@
+---
+id: schedule.ask.other-times
+version: 1
+---
+Write to {{name}}. Say the time they proposed ({{proposed}}) does not work and ask them for a few other times.

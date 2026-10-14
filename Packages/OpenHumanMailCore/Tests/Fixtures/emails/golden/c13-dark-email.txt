@@ -1,0 +1,20 @@
+fixture: c13-dark-email
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper style="background:#000000;color:#ffffff;margin:0"
+body:
+<div style="padding:24px;font-family:Helvetica"><h1 style="color:#ffd60a">Night run</h1><p>Meet at the bridge at 21:00. Bring a light.</p><p style="color:#8e8e93">Club newsletter</p></div>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card style="background:#000000;color:#ffffff;margin:0"
+body:
+<div style="padding:24px;font-family:Helvetica"><h1 style="color:#ffd60a">Night run</h1><p>Meet at the bridge at 21:00. Bring a light.</p><p style="color:#8e8e93">Club newsletter</p></div>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body style="background:#000000;color:#ffffff;margin:0"
+body:
+<div style="padding:24px;font-family:Helvetica"><h1 style="color:#ffd60a">Night run</h1><p>Meet at the bridge at 21:00. Bring a light.</p><p style="color:#8e8e93">Club newsletter</p></div>
+

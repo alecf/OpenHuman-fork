@@ -1,0 +1,319 @@
+import Foundation
+import MailFakes
+import MailFeatures
+import MailModel
+import MailUI
+import MailUIMac
+import OpenHumanCore
+import OpenHumanGmail
+import OpenHumanGmailApple
+import OpenHumanStore
+import OpenHumanAI
+
+@MainActor
+enum CompositionRoot {
+    enum DataMode: Equatable { case fake, fixtureStore, fakeGmail, live }
+
+    static func dataMode(arguments: [String], environment: [String: String]) -> DataMode {
+        if arguments.contains("-UseFixtureStore") { return .fixtureStore }
+        if arguments.contains("-UseFakeGmail") { return .fakeGmail }
+        if arguments.contains("-UseFakeData") { return .fake }
+        if environment["XCTestConfigurationFilePath"] != nil { return .fake }
+        return .live
+    }
+
+    static var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+    }
+
+    static func makeApp(arguments: [String] = ProcessInfo.processInfo.arguments,
+                        environment: [String: String] = ProcessInfo.processInfo.environment) -> AppModel {
+        switch dataMode(arguments: arguments, environment: environment) {
+        case .fake:
+            return AppModel(screen: .mail(.fake(corpus: .small,
+                                                options: FakeMailStore.Options(
+                                                    relatedSearchMatches: arguments.contains("-UseFakeData")),
+                                                navigationStore: navigationStore("fake", environment),
+                                                ai: AIServices.aiCenter(model: .fake, persistent: false, environment: environment),
+                                                calendar: fakeCalendar(arguments: arguments))))
+        case .fixtureStore:
+            do {
+                let (store, _) = try FixtureStoreSeeder.makeStore(corpus: .make())
+                return AppModel(screen: .mail(AppEnvironment(data: MailStoreAdapter(store: store),
+                                                             settings: MailStoreSettings(store: store), isFake: true,
+                                                             navigationStore: navigationStore("fixtureStore", environment),
+                                                             importance: MailStoreImportance(store: store, safeMode: .normal),
+                                                             ai: AIServices.aiCenter(model: .fake, persistent: false,
+                                                                                     environment: environment))))
+            } catch {
+                return AppModel(screen: .notice(StartupProblem(title: "Couldn't build the fixture store",
+                                                               message: "The test data couldn't be written. Quit Mail and open it again.",
+                                                               details: String(describing: error))))
+            }
+        case .fakeGmail:
+            do {
+                let mode = LaunchSafeMode.forFakeGmail(environment: environment)
+                let running = try FakeGmailLaunch.launch(safeMode: mode)
+                return AppModel(screen: .mail(running.session.environment), session: running.session,
+                                platform: fakeGmailPlatform(arguments: arguments, environment: environment))
+            } catch {
+                return AppModel(screen: .notice(StartupProblem(title: "Couldn't start FakeGmail",
+                                                               message: "The test server didn't start. Quit Mail and open it again.",
+                                                               details: String(describing: error))))
+            }
+        case .live:
+            return live(environment: environment, arguments: arguments)
+        }
+    }
+
+    static func fakeCalendar(arguments: [String]) -> FakeCalendar? {
+        arguments.contains("-UseFakeCalendar") ? FakeCalendar.sample() : nil
+    }
+
+    static func liveCalendarTokenStore(arguments: [String]) -> (any TokenStore)? {
+        guard !arguments.contains("-UseFakeCalendar") else { return nil }
+        return KeychainTokenStore(service: GoogleCalendarAuth.keychainService, label: GoogleCalendarAuth.keychainLabel)
+    }
+
+    static func systemPlatform(_ environment: [String: String]) -> (@MainActor () -> SystemPlatform)? {
+        guard environment["XCTestConfigurationFilePath"] == nil,
+              ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return nil }
+        return {
+            var platform = SystemPlatform.mac(notifier: SystemNotificationCenter(), spotlight: CoreSpotlightIndex(),
+                                              showMainWindow: { MainWindowPresenter.show() })
+            platform.isAuthorTyping = { AuthorActivity.isTyping() }
+            platform.currentFocusFilter = { await MailFocusFilter.currentState() }
+            return platform
+        }
+    }
+
+    static let fakeGmailNotificationsArgument = "-FakeGmailNotifications"
+
+    static func fakeGmailPlatform(arguments: [String], environment: [String: String]) -> (@MainActor () -> SystemPlatform)? {
+        guard let real = systemPlatform(environment) else { return nil }
+        let notifies = arguments.contains(fakeGmailNotificationsArgument)
+        return { syntheticMailOnly(real(), notifications: notifies) }
+    }
+
+    static func syntheticMailOnly(_ platform: SystemPlatform, notifications: Bool) -> SystemPlatform {
+        var platform = platform
+        if !notifications { platform.notifier = FakeSystemNotifier(authorization: .authorized) }
+        platform.dock = FakeDockBadge()
+        platform.spotlight = FakeSpotlightIndex()
+        return platform
+    }
+
+    static func live(environment: [String: String], arguments: [String] = ProcessInfo.processInfo.arguments) -> AppModel {
+        let choice: WriteModeLaunchSource
+        do { choice = try LaunchSafeMode.environmentChoice(environment) } catch {
+            let given = "\(LaunchSafeMode.key)=\(environment[LaunchSafeMode.key] ?? "")"
+            return AppModel(screen: .notice(StartupProblem(title: LaunchSafeMode.refusalTitle, message: error.message,
+                                                           details: given)))
+        }
+        do {
+            let location = try StoreLocation.resolve(environment: environment)
+            if showsStoreRebuildNotice(location) {
+                return AppModel(screen: .notice(StartupProblem(title: storeRebuildTitle, message: storeRebuildMessage)))
+            }
+            AIServices.cacheDirectory = location.directory
+            let store = try MailStore.open(StoreOptions(location: location, processKind: .app, observeExternalChanges: true,
+                                                        appVersion: appVersion))
+            let mode = LaunchSafeMode.forRealAccounts(
+                choice, allowsChanges: LiveWriteModeSwitch.atLaunch(store: store, environment: environment))
+            let writeModeSwitch = LiveWriteModeSwitch(store: store, launchSource: choice, reopen: { AppRelaunch.relaunch() })
+            let userAgent = "OpenHumanMail/\(appVersion)"
+            let tokenTransport = URLSessionTransport(userAgent: userAgent)
+            let signInBroker = SignInBroker(memory: UserDefaultsSignInBrowserMemory(defaults: .standard))
+            SignInPanelController.install(signInBroker)
+            let backend = LiveBackend(
+                safeMode: mode, store: store, writeModeSwitch: writeModeSwitch,
+                accountDependencies: LiveAccountManager.Dependencies(
+                    environment: environment, storeDirectory: location.directory,
+                    clientStore: KeychainClientStore(service: clientKeychainService(environment: environment,
+                                                                                     directory: location.directory)),
+                    tokenStore: syncedTokenStore(service: keychainService(environment: environment,
+                                                                          directory: location.directory)),
+                    transport: tokenTransport, makeReceiver: { signInBroker.wrap(NWLoopbackReceiver()) },
+                    browser: signInBroker,
+                    clock: SystemClock(), calendarTokenStore: liveCalendarTokenStore(arguments: arguments)),
+                transports: LiveBackend.Transports(api: URLSessionTransport(userAgent: userAgent), token: tokenTransport,
+                                                   unsubscribe: OneClickTransport(userAgent: userAgent)),
+                userAgent: userAgent)
+            return AppModel(live: backend, platform: systemPlatform(environment))
+        } catch {
+            return AppModel(screen: .notice(storeProblem(error)))
+        }
+    }
+
+    static let storeNoticeTitle = "Mail couldn't open the mail on this Mac"
+
+    static func storeNoticeMessage(_ error: any Error) -> String {
+        if case StoreError.schemaTooNew = error {
+            return "A newer version of Mail last used the mail on this Mac. Install the newest version of Mail."
+        }
+        return "Quit and open Mail again. Your Gmail is unchanged."
+    }
+
+    static func storeProblem(_ error: any Error) -> StartupProblem {
+        if case StoreError.schemaTooNew = error {
+            return StartupProblem(title: storeNoticeTitle, message: storeNoticeMessage(error))
+        }
+        return StartupProblem(title: storeNoticeTitle, message: storeNoticeMessage(error), details: detailCode(error))
+    }
+
+    static func syncStartMessage(_ error: any Error) -> String {
+        if case GmailError.reauthRequired = error {
+            return "Google needs you to sign in again."
+        }
+        return "Sign in again, or quit and open Mail again."
+    }
+
+    static func detailCode(_ error: any Error) -> String {
+        if let gmail = error as? GmailError { return gmail.code }
+        if error is StoreError {
+            let text = String(describing: error)
+            return String(text.prefix { $0 != "(" })
+        }
+        return String(describing: type(of: error))
+    }
+
+    // Why: a test home gets its own service so its sign-in can never replace or sign out the real install's token
+    static func keychainService(environment: [String: String], directory: URL) -> String {
+        guard let home = environment["OPENHUMAN_HOME"], !home.isEmpty else { return OHIdentifiers.keychainService }
+        return OHIdentifiers.keychainService + ".home." + stableID(directory.standardizedFileURL.path)
+    }
+
+    static func syncedTokenStore(service: String) -> SyncedTokenStore {
+        SyncedTokenStore(local: KeychainTokenStore(service: service), shared: KeychainSharedGrantStore(service: service),
+                         device: KeychainTokenDeviceStore(tokenService: service))
+    }
+
+    static func clientKeychainService(environment: [String: String], directory: URL) -> String {
+        guard let home = environment["OPENHUMAN_HOME"], !home.isEmpty else { return KeychainClientStore.service }
+        return KeychainClientStore.service + ".home." + stableID(directory.standardizedFileURL.path)
+    }
+
+    static func stableID(_ text: String) -> String {
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01b3
+        }
+        let hex = String(hash, radix: 16)
+        return String(repeating: "0", count: 16 - hex.count) + hex
+    }
+
+    static let storeRebuildTitle = "Mail needs to rebuild the mail on this Mac"
+    static let storeRebuildMessage = "This development build keeps mail in a new format, so the next time Mail opens it "
+        + "starts over with an empty copy: you sign in again and your mail downloads again. The current copy is kept as a "
+        + "backup (mail.sqlite.pre-erase-… in Mail's folder); splits, snippets, reminders and changes not yet sent to "
+        + "Gmail stay only in that backup. Your Gmail is unchanged. Quit Mail and open it again to continue."
+
+    static func storeRebuildMarker(_ location: StoreLocation) -> URL {
+        location.directory.appendingPathComponent("mail.sqlite.rebuild-notice-shown")
+    }
+
+    static func showsStoreRebuildNotice(_ location: StoreLocation,
+                                        wouldErase: (StoreLocation) -> Bool = MailStore.schemaChangeWouldErase) -> Bool {
+        let marker = storeRebuildMarker(location)
+        let shown = FileManager.default.fileExists(atPath: marker.path)
+        guard wouldErase(location) else {
+            if shown { try? FileManager.default.removeItem(at: marker) }
+            return false
+        }
+        if shown {
+            try? FileManager.default.removeItem(at: marker)
+            Log(.app).notice("debug store rebuild: the notice was shown at the last launch; the store backs up and erases now")
+            return false
+        }
+        FileManager.default.createFile(atPath: marker.path, contents: Data(), attributes: [.posixPermissions: 0o600])
+        Log(.app).notice("debug store rebuild: schema v1 changed; the notice shows before anything is erased")
+        return true
+    }
+
+    static func environment(store: any MailStoreAdapter.Store & MailStoreSettings.Store & ImportanceRulesStoring,
+                            ensureBody: (@Sendable (MessageKey) async throws -> Void)? = nil,
+                            attachmentFile: (@Sendable (MessageKey, AttachmentInfo) async throws -> URL)? = nil,
+                            safeMode: SafeModeInfo = .normal,
+                            connectivity: (@Sendable () -> AsyncStream<[AccountID: ConnectivityState]>)? = nil,
+                            syncProgress: (@Sendable () -> AsyncStream<[AccountID: String]>)? = nil,
+                            commands: (any MailCommanding)? = nil, accounts: (any AccountManaging)? = nil,
+                            draftsDirectory: URL? = nil,
+                            isFake: Bool = false, writeMode: WriteModeSession? = nil,
+                            writeModeSwitch: (any WriteModeSwitching)? = nil,
+                            onDemand: MailStoreAdapter.OnDemand? = nil,
+                            calendar: (any CalendarProviding)? = nil,
+                            calendarConnection: (any CalendarConnecting)? = nil,
+                            calendarConnections: (any CalendarConnectionsProviding)? = nil) -> AppEnvironment {
+        let ai = AIServices.aiCenter(model: .onDevice, persistent: !isFake)
+        let semanticStorage: SemanticServices.Storage = isFake ? .inMemory
+            : AIServices.cacheDirectory.map { .directory(SemanticServices.folder(storeDirectory: $0)) } ?? .inMemory
+        let semantic = SemanticServices(store: store, storage: semanticStorage, ai: ai,
+                                        makeProvider: { SemanticServices.appleProvider(ai.settings.smartSearch) })
+        SemanticServices.current = semantic
+        let autoLabelStore: any AutoLabelStoring = isFake ? InMemoryAutoLabelStore()
+            : AIServices.cacheDirectory.flatMap {
+                try? SQLiteAutoLabelStore(url: $0.appendingPathComponent(SQLiteAutoLabelStore.fileName))
+            } ?? InMemoryAutoLabelStore()
+        let calendarCache: (any CalendarCachePersisting)? = isFake ? nil : AIServices.cacheDirectory.flatMap {
+            try? SQLiteCalendarCache(url: $0.appendingPathComponent(SQLiteCalendarCache.fileName))
+        }
+        let environment = AppEnvironment(data: MailStoreAdapter(store: store, ensureBody: ensureBody, attachmentFile: attachmentFile,
+                                                     safeMode: safeMode, connectivity: connectivity, syncProgress: syncProgress,
+                                                     onDemand: onDemand, semantic: semantic?.arm),
+                              commands: commands, accounts: accounts, settings: MailStoreSettings(store: store),
+                              isFake: isFake, navigationStore: navigationStore(isFake ? "fakeGmail" : "live"),
+                              importance: MailStoreImportance(store: store, safeMode: safeMode),
+                              draftsDirectory: draftsDirectory,
+                              aiOnboarding: aiOnboarding(isFake: isFake, center: ai), secrets: secretStore(isFake: isFake),
+                              ai: ai, writeMode: writeMode, calendar: calendar, writeModeSwitch: writeModeSwitch,
+                              calendarConnection: calendarConnection, calendarConnections: calendarConnections,
+                              autoLabelStore: autoLabelStore, calendarCache: calendarCache,
+                              learnedBehaviourStore: isFake ? nil
+                                  : AIServices.cacheDirectory.map { LearnedBehaviourFile(directory: $0) },
+                              waiting: (store as? any WaitingOverrideStoring).map { MailStoreWaiting(store: $0, safeMode: safeMode) })
+        attachClassification(environment, isFake: isFake)
+        CategoryImportanceMatcher.install(on: environment.autoLabels, store: store)
+        if let searching = store as? any MailSearching {
+            environment.overlays.search.interpretation.resolver = SearchPlanResolver(isValidQuery: { text in
+                (try? searching.parseSearch(text)) != nil
+            })
+        }
+        if let semantic, environment.smartSearchEnabled {
+            Task { await semantic.apply() }
+            if let syncProgress {
+                Task { for await _ in syncProgress() { semantic.nudge() } }
+            }
+        }
+        return environment
+    }
+
+    static func aiOnboarding(isFake: Bool, center: AICenter? = nil,
+                             underTest: Bool = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil)
+        -> (any AIOnboardingPort)? {
+        if isFake { return FakeAIOnboarding() }
+        if underTest { return nil }
+        return center.map { AICenterOnboarding(center: $0) } ?? AISettingsOnboarding()
+    }
+
+    static func secretStore(isFake: Bool, underTest: Bool = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil)
+        -> (any SecretStoring)? {
+        if isFake { return InMemorySecretStore() }
+        return underTest ? nil : KeychainSecretStore()
+    }
+
+    static func navigationStore(_ scope: String,
+                                _ environment: [String: String] = ProcessInfo.processInfo.environment) -> any NavigationStateStoring {
+        guard environment["XCTestConfigurationFilePath"] == nil else { return InMemoryNavigationStore() }
+        let base: URL
+        if let home = environment["OPENHUMAN_HOME"], !home.isEmpty {
+            base = URL(fileURLWithPath: (home as NSString).expandingTildeInPath, isDirectory: true)
+        } else {
+            let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
+            base = support.appendingPathComponent("OpenHuman", isDirectory: true).appendingPathComponent("Mail", isDirectory: true)
+        }
+        return FileNavigationStore(directory: base.appendingPathComponent("State", isDirectory: true), scope: scope,
+                                   legacy: UserDefaultsNavigationStore(scope: scope))
+    }
+}

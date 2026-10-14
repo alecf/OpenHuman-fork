@@ -1,0 +1,6 @@
+---
+id: ask.inbox
+version: 4
+---
+Task: answer the question in the user_instruction block using only the emails in the email_data blocks. The context block of kind "today" gives the current date; use it to resolve relative dates. If the emails do not contain the answer, say that you could not find it in these emails, and do not guess. When it helps, say who wrote it and when. If the question starts with an earlier question, answer only the last question and use the earlier one to understand it. Each email block has an id. End with one last line in exactly this form, listing the ids of the emails you used (nothing after the colon if none):
+Sources: id1, id2

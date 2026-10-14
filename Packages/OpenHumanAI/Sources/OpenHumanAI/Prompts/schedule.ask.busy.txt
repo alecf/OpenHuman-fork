@@ -1,0 +1,5 @@
+---
+id: schedule.ask.busy
+version: 1
+---
+Write to {{name}}. Say the user is busy at the time they proposed ({{proposed}}) and offer these times instead.

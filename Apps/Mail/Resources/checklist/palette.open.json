@@ -1,0 +1,12 @@
+{
+  "id": "palette.open",
+  "area": "Navigation",
+  "title": "Search the command palette",
+  "steps": [
+    "Press Command-K",
+    "Type the name of a navigation action",
+    "Dismiss with Escape"
+  ],
+  "expected": "Matching actions appear and focus returns to the previous surface.",
+  "requires": "fake"
+}

@@ -1,0 +1,35 @@
+{
+  "format": "openhuman-accent",
+  "formatVersion": 1,
+  "id": "openhuman.accent.system",
+  "name": "System",
+  "primitives": {
+    "color": {
+      "blue.949": "#E5EFFD",
+      "blue.800": "#9CC4FF",
+      "blue.700": "#5CA3FF",
+      "blue.616": "#0A6AE8",
+      "blue.500": "#0060DF",
+      "blue.430": "#0050C0",
+      "blue.410": "#0A4FB8",
+      "blue.200": "#14284A",
+      "gray.1000": "#FFFFFF"
+    }
+  },
+  "light": {
+    "accent.fill": "{blue.500}",
+    "accent.fillHover": "{blue.430}",
+    "accent.text": "{blue.410}",
+    "accent.subtle": "{blue.949}",
+    "accent.onFill": "{gray.1000}",
+    "accent.ring": "{blue.500}"
+  },
+  "dark": {
+    "accent.fill": "{blue.616}",
+    "accent.fillHover": "{blue.500}",
+    "accent.text": "{blue.800}",
+    "accent.subtle": "{blue.200}",
+    "accent.onFill": "{gray.1000}",
+    "accent.ring": "{blue.700}"
+  }
+}

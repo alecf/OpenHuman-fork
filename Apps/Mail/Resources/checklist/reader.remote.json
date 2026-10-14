@@ -1,0 +1,11 @@
+{
+  "id": "reader.remote",
+  "area": "Reader",
+  "title": "Keep remote images blocked",
+  "steps": [
+    "Open a fixture message with remote images",
+    "Inspect the reader before allowing remote content"
+  ],
+  "expected": "Remote content stays blocked until explicitly allowed.",
+  "requires": "fake"
+}

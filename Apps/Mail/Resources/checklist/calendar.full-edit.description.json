@@ -1,0 +1,15 @@
+{
+  "id": "calendar.full-edit.description",
+  "area": "Calendar",
+  "title": "Event descriptions show as rich text and survive an edit",
+  "steps": [
+    "With -UseFakeData -UseFakeCalendar open Calendar (2) and click tomorrow's 9:30 AM event (its notes are HTML with a link, a list and an ampersand)",
+    "Read the notes: the link is clickable and no tags or &amp; show; click it",
+    "Press Edit, change one word and Save; reopen the event",
+    "Open the 9:30 AM event the day after tomorrow (plain text notes with backslash escapes)"
+  ],
+  "deepLink": null,
+  "expected": "The description shows as formatted text with a clickable link (opens in your browser); tags and entities are not shown. An unedited description is written back unchanged; an edited one keeps its links and lists. Backslash-n shows as a new line and backslash-comma as a comma.",
+  "requires": "fake",
+  "addedIn": "2026-10-13"
+}

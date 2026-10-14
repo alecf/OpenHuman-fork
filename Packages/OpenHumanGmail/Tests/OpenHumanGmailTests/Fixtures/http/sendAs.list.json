@@ -1,0 +1,1 @@
+{"sendAs":[{"sendAsEmail":"me@example.com","displayName":"Me Example","signature":"<div>Me Example<br>Example Co.</div>","isPrimary":true,"isDefault":true,"verificationStatus":"accepted"},{"sendAsEmail":"alias@example.com","replyToAddress":"me@example.com","isDefault":false,"verificationStatus":"pending"}]}

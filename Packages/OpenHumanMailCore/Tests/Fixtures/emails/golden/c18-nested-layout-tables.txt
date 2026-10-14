@@ -1,0 +1,29 @@
+fixture: c18-nested-layout-tables
+
+=== light: tier designed, treatment original, scheme light
+wrapper: oh-body oh-original oh-paper
+body:
+<table width="100%" bgcolor="#dfe6ee"><tbody><tr><td><table width="600" align="center" bgcolor="#ffffff"><tbody><tr><td><table width="100%"><tbody><tr>
+<td width="50%" valign="top" style="padding:12px"><table><tbody><tr><td style="color:#0f172a;font:bold 16px Arial">Left column</td></tr><tr><td style="font:14px Arial;color:#334155">Short story about the new bike lanes.</td></tr></tbody></table></td>
+<td width="50%" valign="top" style="padding:12px"><table><tbody><tr><td style="color:#0f172a;font:bold 16px Arial">Right column</td></tr><tr><td style="font:14px Arial;color:#334155">Market hours change in winter.</td></tr></tbody></table></td>
+</tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table>
+
+counts: remote 0, blocked 0, trackers 0 [], inline [], quoted false
+
+=== dark: tier designed, treatment original, scheme dark
+wrapper: oh-body oh-original oh-card
+body:
+<table width="100%" bgcolor="#dfe6ee"><tbody><tr><td><table width="600" align="center" bgcolor="#ffffff"><tbody><tr><td><table width="100%"><tbody><tr>
+<td width="50%" valign="top" style="padding:12px"><table><tbody><tr><td style="color:#0f172a;font:bold 16px Arial">Left column</td></tr><tr><td style="font:14px Arial;color:#334155">Short story about the new bike lanes.</td></tr></tbody></table></td>
+<td width="50%" valign="top" style="padding:12px"><table><tbody><tr><td style="color:#0f172a;font:bold 16px Arial">Right column</td></tr><tr><td style="font:14px Arial;color:#334155">Market hours change in winter.</td></tr></tbody></table></td>
+</tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table>
+
+
+=== dark, Show in dark colors: tier designed, treatment remapped, scheme dark
+wrapper: oh-body
+body:
+<table width="100%" bgcolor="#010203"><tbody><tr><td><table width="600" align="center" bgcolor="#000000"><tbody><tr><td><table width="100%"><tbody><tr>
+<td width="50%" valign="top" style="padding:12px"><table><tbody><tr><td style="color:#b0bbd3;font:bold 16px Arial">Left column</td></tr><tr><td style="font:14px Arial;color:#7b8a9e">Short story about the new bike lanes.</td></tr></tbody></table></td>
+<td width="50%" valign="top" style="padding:12px"><table><tbody><tr><td style="color:#b0bbd3;font:bold 16px Arial">Right column</td></tr><tr><td style="font:14px Arial;color:#7b8a9e">Market hours change in winter.</td></tr></tbody></table></td>
+</tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table>
+
