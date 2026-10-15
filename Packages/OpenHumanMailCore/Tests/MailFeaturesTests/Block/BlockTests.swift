@@ -191,6 +191,17 @@ actor Box {
         #expect(await log.steps == ["x:mail/trash", "x:rule/block", "x:rule/block+", "x:mail/trash+"])
     }
 
+    @Test func theBlockedConversationsMoveIsUndoneBetweenTheCleanupAndTheRule() async throws {
+        let log = UndoLog("x")
+        let undoer = BlockUndoer(rules: Tagged(inner: log, tag: "rule"), mail: Tagged(inner: log, tag: "mail"))
+        let token = undoer.begin(rule: UndoToken(payload: Data("block".utf8)), moved: UndoToken(payload: Data("archive".utf8)))
+        _ = undoer.attach(cleanup: UndoToken(payload: Data("trash".utf8)), to: token)
+        let redo = try #require(try await undoer.undo(token))
+        _ = try await undoer.undo(redo)
+        #expect(await log.steps == ["x:mail/trash", "x:mail/archive", "x:rule/block",
+                                    "x:rule/block+", "x:mail/archive+", "x:mail/trash+"])
+    }
+
     @Test func aBlockWithNoCleanupUndoesJustTheRule() async throws {
         let (undoer, rules, mail) = make()
         let token = undoer.begin(rule: UndoToken(payload: Data("block".utf8)))

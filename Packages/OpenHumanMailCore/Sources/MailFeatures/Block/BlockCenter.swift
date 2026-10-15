@@ -132,6 +132,7 @@ public final class BlockCenter {
 final class BlockUndoer: MailUndoing {
     private struct State {
         var rule: UndoToken
+        var moved: UndoToken?
         var cleanup: UndoToken?
         var applied: Bool
     }
@@ -145,9 +146,9 @@ final class BlockUndoer: MailUndoing {
         self.mail = mail
     }
 
-    func begin(rule: UndoToken) -> UndoToken {
+    func begin(rule: UndoToken, moved: UndoToken? = nil) -> UndoToken {
         let id = UUID()
-        states[id] = State(rule: rule, cleanup: nil, applied: true)
+        states[id] = State(rule: rule, moved: moved, cleanup: nil, applied: true)
         return Self.token(id)
     }
 
@@ -169,10 +170,12 @@ final class BlockUndoer: MailUndoing {
         do {
             if state.applied {
                 if let cleanup = state.cleanup, !cleanup.changesNothing { state.cleanup = try await mail.undo(cleanup) }
+                if let moved = state.moved, !moved.changesNothing { state.moved = try await mail.undo(moved) }
                 if !state.rule.changesNothing { state.rule = try await rules.undo(state.rule) ?? state.rule }
                 state.applied = false
             } else {
                 if !state.rule.changesNothing { state.rule = try await rules.undo(state.rule) ?? state.rule }
+                if let moved = state.moved, !moved.changesNothing { state.moved = try await mail.undo(moved) }
                 if let cleanup = state.cleanup, !cleanup.changesNothing { state.cleanup = try await mail.undo(cleanup) }
                 state.applied = true
             }

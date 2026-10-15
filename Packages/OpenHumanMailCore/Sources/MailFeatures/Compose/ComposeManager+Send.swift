@@ -305,8 +305,10 @@ extension ComposeManager {
             pendingSendConditions[session.id] = condition
             return
         }
+        hide(session)
+        returnToList(after: session)
         guard await session.save(force: true), let key = session.draftKey else {
-            session.notice = ComposeSession.Notice(.error, String(localized: "Couldn't save the draft, so it wasn't scheduled."))
+            bringBack(session, String(localized: "Couldn't save the draft, so it wasn't scheduled."))
             return
         }
         let previous = session.sendAt
@@ -318,13 +320,11 @@ extension ComposeManager {
             }
         } catch {
             let detail = (error as? MailPortError)?.description ?? String(localized: "Try again.")
-            session.notice = ComposeSession.Notice(.error, String(localized: "Couldn't schedule. \(detail)"))
+            bringBack(session, String(localized: "Couldn't schedule. \(detail)"))
             return
         }
-        hide(session)
         session.stopObserving()
         scheduled[session.id] = session
-        returnToList(after: session)
         addSending(session, draft: key, state: .scheduled(at: date))
         let when = formatSendAt(date) + (condition == .ifNoReply ? Self.ifNoReplySuffix : "")
         if let previous {
@@ -333,6 +333,12 @@ extension ComposeManager {
             push("Scheduled for \(when)", .schedule(session: session.id, draft: key.rawValue), view: session.id)
         }
         setPendingReminderOnSchedule(session)
+    }
+
+    private func bringBack(_ session: ComposeSession, _ text: String) {
+        showPlace(of: session)
+        reopen(session)
+        session.notice = ComposeSession.Notice(.error, text)
     }
 
     func cancelSendLater(_ session: ComposeSession) -> ActionPerformance {
