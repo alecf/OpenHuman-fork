@@ -167,6 +167,7 @@ import Testing
                 "after the conversation's messages")
         let top = card.convert(NSPoint(x: card.bounds.midX, y: card.bounds.maxY - 2), to: w.reader.focusView)
         try await until { w.reader.visibleDocumentRect.contains(top) }
+        await awaitObserved("the reply toast") { w.environment.notices.toasts.contains { $0.message == "Reply sent." } }
         let toast = try #require(w.environment.notices.toasts.first { $0.message == "Reply sent." })
         #expect(toast.actionTitle == "Undo" && toast.shortcut == "⌘Z" && toast.secondaryActionTitle == "View")
         let sending = try #require(w.environment.compose.sending.first)

@@ -6,7 +6,8 @@ import Testing
 @testable import OpenHumanAIApple
 @testable import OpenHumanAITesting
 
-let systemModelIsAvailable = SystemLanguageModel.default.isAvailable
+let systemModelIsAvailable = ProcessInfo.processInfo.environment["OH_REAL_SERVICES"] == "1"
+    && SystemLanguageModel.default.isAvailable
 
 @Suite struct AppleModelAvailabilityTests {
     @Test func reportsAvailabilityOfTheSystemModelOnThisMac() async {

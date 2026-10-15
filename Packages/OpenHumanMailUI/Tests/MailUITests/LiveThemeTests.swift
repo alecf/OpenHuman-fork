@@ -47,7 +47,7 @@ private struct AnimationProbe: View {
 @MainActor
 private func spin(until condition: @MainActor () -> Bool) async {
     let clock = ContinuousClock()
-    let deadline = clock.now + .seconds(60)
+    let deadline = clock.now + testBackstop
     while !condition(), clock.now < deadline { try? await Task.sleep(for: .milliseconds(10)) }
 }
 

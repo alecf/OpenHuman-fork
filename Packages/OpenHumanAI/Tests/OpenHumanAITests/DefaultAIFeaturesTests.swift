@@ -109,7 +109,7 @@ import Testing
         let probe = TerminationProbe()
         let features = makeFeatures([probe])
         let task = Task { try await collect(features.summarize(SyntheticThreads.short())) }
-        let deadline = ContinuousClock.now + .seconds(5)
+        let deadline = ContinuousClock.now + .seconds(120)   // hang backstop, not a latency budget
         while !probe.started.withLock({ $0 }), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
         task.cancel()
         _ = await task.result

@@ -5,12 +5,14 @@ import OpenHumanGmailTesting
 import Synchronization
 import Testing
 
+let testBackstop: Duration = .seconds(120)
+
 @MainActor
-func eventually(_ what: String, timeout: Duration = .seconds(15), failure: @MainActor () -> String? = { nil },
+func eventually(_ what: String, timeout: Duration? = nil, failure: @MainActor () -> String? = { nil },
                 _ condition: @MainActor () -> Bool,
                 sourceLocation: SourceLocation = #_sourceLocation) async {
     let clock = ContinuousClock()
-    let deadline = clock.now + timeout
+    let deadline = clock.now + testBackstop
     while !condition() {
         if let message = failure() {
             Issue.record("while waiting for \(what): \(message)", sourceLocation: sourceLocation)

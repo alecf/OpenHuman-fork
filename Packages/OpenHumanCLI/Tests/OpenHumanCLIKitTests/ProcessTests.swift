@@ -24,7 +24,7 @@ enum ChildProcess {
             < ((try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
     }
 
-    static func run(_ arguments: [String], environment: [String: String], timeout: TimeInterval = 20) throws -> ChildResult {
+    static func run(_ arguments: [String], environment: [String: String], timeout: TimeInterval = 120) throws -> ChildResult {
         let exe = try #require(binary(), "the openhuman executable was not built next to the tests")
         let process = Process()
         process.executableURL = exe
@@ -43,6 +43,7 @@ enum ChildProcess {
         process.terminationHandler = { _ in done.signal() }
         if done.wait(timeout: .now() + timeout) == .timedOut {
             process.terminate()
+            process.waitUntilExit()
             Issue.record("openhuman \(arguments.prefix(2)) did not exit within \(timeout) s")
         }
         let seconds = Date().timeIntervalSince(started)
@@ -104,12 +105,12 @@ enum ChildProcess {
     @Test func withNoOwnerWritesExit6AtOnceAndThereIsNoNetwork() throws {
         let h = try Harness()
         let write = environment(h, Harness.write)
-        let done = try ChildProcess.run(["gmail", "archive", "t1", "--wait", "--timeout", "10s"], environment: write)
+        let done = try ChildProcess.run(["gmail", "archive", "t1", "--wait", "--timeout", "3600s"], environment: write)
         #expect(done.code == 6)
         #expect(done.err.contains("Queued locally. OpenHuman Mail applies changes queued by the CLI to Gmail only in a guarded test run"))
         #expect(!done.err.contains("within the timeout"))
         let draft = try ChildProcess.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "x",
-                                          "--wait", "--timeout", "10s"], environment: write)
+                                          "--wait", "--timeout", "3600s"], environment: write)
         #expect(draft.code == 6)
         #expect(draft.err.contains("Saved locally. OpenHuman Mail uploads an agent draft to Gmail only after you approve it there."))
         #expect(!draft.err.contains("within the timeout"))

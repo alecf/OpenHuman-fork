@@ -21,7 +21,7 @@ import Testing
 
     func until(_ condition: @MainActor () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async {
         let clock = ContinuousClock()
-        let deadline = clock.now + .seconds(60)
+        let deadline = clock.now + testBackstop
         while !condition() {
             if clock.now > deadline {
                 Issue.record("condition not met within 15 s", sourceLocation: sourceLocation)

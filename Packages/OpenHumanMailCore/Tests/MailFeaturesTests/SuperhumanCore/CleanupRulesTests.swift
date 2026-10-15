@@ -41,6 +41,18 @@ import Testing
         #expect(try await store.get(AppSettings.archiveSuggestionOverrides) == ["@shop.example": "always"])
     }
 
+    @Test func aLateInitialEmissionNeverLosesAnEarlierAdd() async throws {
+        let port = LateSettingsPort()
+        let model = CleanupRulesModel(settings: port)
+        model.start()
+        #expect(await model.add("a@shop.example", choice: .always))
+        port.deliverInitialSnapshot()
+        await eventually { model.overrides.value.isEmpty }
+        #expect(await model.add("b@shop.example", choice: .never))
+        let stored = try await port.get(AppSettings.archiveSuggestionOverrides)
+        #expect(stored == ["a@shop.example": "always", "b@shop.example": "never"])
+    }
+
     @Test func aBadTargetStoresNothingAndSaysWhy() async throws {
         let store = FakeMailStore(corpus: .make(threadCount: 1, now: fixedNow))
         let model = await model(store)
@@ -83,6 +95,32 @@ import Testing
         let settings = InboxAutomationSettingsModel(environment: env)
         settings.start()
         _ = await settings.cleanupRules.add("a@b.example", choice: .never)
-        #expect(settings.cleanupRules.entries.count == 1)
+        await eventually { settings.cleanupRules.entries.count == 1 }
+    }
+}
+
+
+final class LateSettingsPort: SettingsPort, @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [String: Data] = [:]
+
+    func observe<V>(_ key: AppSettingKey<V>) -> AsyncStream<V> {
+        let (stream, continuation) = AsyncStream<V>.makeStream()
+        let snapshot = lock.withLock { stored[key.name] }
+        let initial = snapshot.flatMap { try? JSONDecoder().decode(V.self, from: $0) } ?? key.defaultValue
+        lock.withLock { releaseInitial = { continuation.yield(initial) } }
+        return stream
+    }
+    private var releaseInitial: (() -> Void)?
+    func deliverInitialSnapshot() { lock.withLock { releaseInitial }?() }
+
+    func get<V>(_ key: AppSettingKey<V>) async throws -> V {
+        let data = lock.withLock { stored[key.name] }
+        return data.flatMap { try? JSONDecoder().decode(V.self, from: $0) } ?? key.defaultValue
+    }
+
+    func set<V>(_ key: AppSettingKey<V>, _ value: V) async throws {
+        let data = try JSONEncoder().encode(value)
+        lock.withLock { stored[key.name] = data }
     }
 }

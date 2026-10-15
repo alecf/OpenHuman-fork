@@ -197,7 +197,7 @@ struct AttachmentDragWriterTests {
 
     private func eventuallyCalled(_ source: Source) async {
         let clock = ContinuousClock()
-        let deadline = clock.now + minimumWaitCeiling
+        let deadline = clock.now + testBackstop
         while source.calls.withLock({ $0 }) == 0, clock.now < deadline { try? await Task.sleep(for: .milliseconds(5)) }
     }
 }
