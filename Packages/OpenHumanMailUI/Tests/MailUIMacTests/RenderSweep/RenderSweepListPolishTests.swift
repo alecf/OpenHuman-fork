@@ -86,7 +86,7 @@ extension RenderSweepTests {
             ListPolishRow(subject: "Returned and hovered", unread: false, chips: [.reminderReturned], state: .hover),
             ListPolishRow(subject: "Not returned", unread: false, chips: [clients]),
         ]
-        for (screen, width) in [("list-reminder-returned", 1000), ("list-reminder-returned-medium", 620),
+        for (screen, width) in [("list-reminder-returned", 1000), ("list-reminder-returned-medium", 620), ("list-reminder-returned-440", 440),
                                 ("list-reminder-returned-narrow", 420)] as [(String, CGFloat)] {
             let window = ListPolishWindow(rows: rows, theme: theme, width: width)
             defer { window.close() }

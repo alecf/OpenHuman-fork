@@ -52,7 +52,7 @@ final class ThreadRowStyle {
     static let chipsAreFilled = true
     static let maximumFilledChips = 2
     static let dimRun = NSAttributedString.Key("oh.row.dim")
-    private var cursorVariants: [(source: NSAttributedString, variant: NSAttributedString)] = []
+    private var fillVariants: [ObjectIdentifier: (source: NSAttributedString, variant: NSAttributedString)] = [:]
     private let spaceWidth: CGFloat
     private let metaSpaceWidth: CGFloat
     private let truncating: NSParagraphStyle
@@ -164,18 +164,23 @@ final class ThreadRowStyle {
         texts.removeAll(keepingCapacity: true)
         dates.removeAll(keepingCapacity: true)
         formattedDates.removeAll(keepingCapacity: true)
-        cursorVariants.removeAll()
+        fillVariants.removeAll()
     }
 
-    func onCursor(_ text: NSAttributedString) -> NSAttributedString {
-        if let hit = cursorVariants.first(where: { $0.source === text }) { return hit.variant }
+    func onFill(_ text: NSAttributedString) -> NSAttributedString {
+        let id = ObjectIdentifier(text)
+        if let hit = fillVariants[id], hit.source === text { return hit.variant }
         let copy = NSMutableAttributedString(attributedString: text)
+        var changed = false
         copy.enumerateAttribute(Self.dimRun, in: NSRange(location: 0, length: copy.length)) { value, range, _ in
-            if value != nil { copy.addAttribute(.foregroundColor, value: secondary, range: range) }
+            guard value != nil else { return }
+            copy.addAttribute(.foregroundColor, value: secondary, range: range)
+            changed = true
         }
-        cursorVariants.insert((text, copy), at: 0)
-        if cursorVariants.count > 4 { cursorVariants.removeLast() }
-        return copy
+        let variant: NSAttributedString = changed ? copy : text
+        if fillVariants.count >= 512 { fillVariants.removeAll(keepingCapacity: true) }
+        fillVariants[id] = (text, variant)
+        return variant
     }
 
     private static let draftWord = String(localized: "Draft")
@@ -209,7 +214,8 @@ final class ThreadRowStyle {
         let sender = format.sender(row)
         text.append(NSAttributedString(string: sender.name, attributes: attributes(font, nameColor)))
         if let count = sender.count {
-            text.append(NSAttributedString(string: " " + count, attributes: attributes(metaFont, tertiary)))
+            text.append(NSAttributedString(string: " " + count,
+                                           attributes: attributes(metaFont, tertiary, extra: [Self.dimRun: true])))
         }
         return text
     }
@@ -222,7 +228,8 @@ final class ThreadRowStyle {
         if let subject = format.subject(row) {
             line.append(NSAttributedString(string: subject, attributes: attributes(strong, muted ? secondary : primary)))
         } else {
-            line.append(NSAttributedString(string: Self.noSubject, attributes: attributes(bodyFont, tertiary)))
+            line.append(NSAttributedString(string: Self.noSubject,
+                                           attributes: attributes(bodyFont, tertiary, extra: [Self.dimRun: true])))
         }
         for chip in Self.chipsAreFilled ? [] : chips {
             gap(line, 8)
@@ -279,6 +286,7 @@ final class ThreadRowStyle {
     private func appendFilledChips(_ chips: [ThreadRowChip], to line: NSMutableAttributedString) {
         let shown = LabelChipRenderer.shown(chips, maximum: Self.maximumFilledChips)
         guard !shown.isEmpty else { return }
+        let counts = LabelChipRenderer.counts(chips, maximum: Self.maximumFilledChips)
         var end: CGFloat = 0
         for (index, chip) in shown.enumerated() {
             let start = line.length
@@ -289,7 +297,10 @@ final class ThreadRowStyle {
             let image = self.chips.image(chip.title, hue: chip.hue, muted: chip.muted)
             line.append(chipAttachment(image))
             end += image.image.size.width
-            line.addAttribute(Self.chipEnd, value: end, range: NSRange(location: start, length: line.length - start))
+            let range = NSRange(location: start, length: line.length - start)
+            line.addAttribute(Self.chipEnd, value: end, range: range)
+            let dropped = max(0, counts.visible - index) + counts.hidden
+            line.addAttribute(Self.chipCut, value: makeChipCut(count: dropped, leadingGap: index > 0), range: range)
         }
         let start = line.length
         gap(line, CGFloat(theme.space3))
@@ -299,6 +310,30 @@ final class ThreadRowStyle {
 
     static let chipEnd = NSAttributedString.Key("oh.row.chipEnd")
     static let chipsEnd = NSAttributedString.Key("oh.row.chipsEnd")
+    static let chipCut = NSAttributedString.Key("oh.row.chipCut")
+
+    final class ChipCut: NSObject {
+        let text: NSAttributedString
+        let width: CGFloat
+        init(text: NSAttributedString, width: CGFloat) {
+            self.text = text
+            self.width = width
+        }
+    }
+
+    private func makeChipCut(count: Int, leadingGap: Bool) -> ChipCut {
+        let chip = LabelChipRenderer.overflow(count)
+        let image = chips.image(chip.title, hue: chip.hue, muted: chip.muted)
+        let text = NSMutableAttributedString()
+        var width = image.image.size.width
+        if leadingGap {
+            gap(text, CGFloat(theme.space2))
+            width += CGFloat(theme.space2)
+        }
+        text.append(chipAttachment(image))
+        return ChipCut(text: text, width: width)
+    }
+
     static let minimumSubjectEms: CGFloat = 8
     var minimumSubjectWidth: CGFloat { (bodyFont.pointSize * Self.minimumSubjectEms).rounded() }
 
@@ -309,12 +344,12 @@ final class ThreadRowStyle {
     // Chips are images and cannot truncate, so ones that would starve the subject are dropped from the end.
     static func fitted(_ line: NSAttributedString, width: CGFloat, minimumSubject: CGFloat) -> NSAttributedString {
         let all = NSRange(location: 0, length: line.length)
-        var chipRuns: [(end: Int, x: CGFloat)] = []
+        var chipRuns: [(start: Int, end: Int, x: CGFloat)] = []
         var location = 0
         var range = NSRange()
         while location < line.length,
               let x = line.attribute(chipEnd, at: location, longestEffectiveRange: &range, in: all) as? CGFloat {
-            chipRuns.append((NSMaxRange(range), x))
+            chipRuns.append((location, NSMaxRange(range), x))
             location = NSMaxRange(range)
         }
         guard location < line.length,
@@ -323,9 +358,15 @@ final class ThreadRowStyle {
         let budget = width - minimumSubject
         guard total > budget else { return line }
         let trailingGap = total - (chipRuns.last?.x ?? 0)
+        let kept = chipRuns.lastIndex { $0.x + trailingGap <= budget }.map { $0 + 1 } ?? 0
+        let keptEnd = kept > 0 ? chipRuns[kept - 1].x : 0
+        let cutStart = kept > 0 ? chipRuns[kept - 1].end : 0
         let result = NSMutableAttributedString(attributedString: line)
-        if let keep = chipRuns.last(where: { $0.x + trailingGap <= budget }) {
-            result.deleteCharacters(in: NSRange(location: keep.end, length: location - keep.end))
+        let cut = kept < chipRuns.count ? line.attribute(chipCut, at: chipRuns[kept].start, effectiveRange: nil) as? ChipCut : nil
+        if let cut, keptEnd + cut.width + trailingGap <= budget {
+            result.replaceCharacters(in: NSRange(location: cutStart, length: location - cutStart), with: cut.text)
+        } else if kept > 0 {
+            result.deleteCharacters(in: NSRange(location: cutStart, length: location - cutStart))
         } else {
             result.deleteCharacters(in: NSRange(location: 0, length: NSMaxRange(range)))
         }
@@ -468,10 +509,19 @@ final class ThreadRowStyle {
                        buttonGap: 4 + open * CGFloat(theme.space3), buttonGlyph: (14 * type).rounded())
     }
 
-    func columns(width: CGFloat) -> Columns { Self.columns(width: width, metrics: metrics) }
+    static let narrowSenderMin: CGFloat = 100
 
-    static func columns(width: CGFloat, metrics m: Metrics) -> Columns {
-        let senderWidth = min(max(m.senderMin, (width * m.senderPct).rounded()), m.senderMax)
+    static func minimumSubject(for theme: ThemeTokens) -> CGFloat {
+        (CGFloat(densityTyped(theme).typeBody.size) * minimumSubjectEms).rounded()
+    }
+
+    func columns(width: CGFloat) -> Columns { Self.columns(width: width, metrics: metrics, minimumSubject: minimumSubjectWidth) }
+
+    static func columns(width: CGFloat, metrics m: Metrics, minimumSubject: CGFloat) -> Columns {
+        let preferred = min(max(m.senderMin, (width * m.senderPct).rounded()), m.senderMax)
+        let reserved = m.leading + m.senderGap + m.columnGap + m.indicatorWidth + m.dateWidth + m.trailing
+        let room = (width - reserved - minimumSubject).rounded(.down)
+        let senderWidth = max(min(m.senderMin, narrowSenderMin), min(preferred, room))
         let senderStart = m.leading
         let subjectStart = senderStart + senderWidth + m.senderGap
         let dateEnd = width - m.trailing
