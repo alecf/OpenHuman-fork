@@ -1,0 +1,5 @@
+---
+id: compose.write
+version: 1
+---
+Task: write the email that the user_instruction block asks for, from the user's notes in it. Blocks of kind "subject", "sender" and "emailBody", if present, are the conversation the email replies to, oldest first: write the reply to its last message, and take names, facts and context from the conversation. A block of kind "summary", if present, is background about earlier messages in the conversation. Blocks of kind "styleExample", if present, are emails the user wrote earlier: match their tone, length, greeting and sign-off habits; never copy their facts, names, numbers or links. A context block of kind "userPreferences", if present, says how the user wants to sound; follow it unless the instruction asks otherwise. Return only the text of the email, with nothing before or after it.

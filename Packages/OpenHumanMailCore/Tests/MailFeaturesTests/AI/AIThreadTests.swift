@@ -405,12 +405,5 @@ import Testing
         let work = try #require(page.accounts.first)
         page.setOnDeviceOnly(true, account: work.id)
         #expect(page.accounts.first?.onDeviceOnly == true)
-
-        f.center.summary(for: try await f.thread(minimumMessages: 3)).summarize(trigger: .user)
-        await eventually { !f.center.activity.entries.isEmpty }
-        await page.refresh()
-        #expect(page.activity.first?.feature == "Summary" && page.activity.first?.badge.title == "On this Mac")
-        page.clearActivity()
-        #expect(page.activity.isEmpty && f.center.activity.entries.isEmpty)
     }
 }

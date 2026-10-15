@@ -6,7 +6,6 @@ public enum AIPolicy {
     public static let reservedReduceTokens = 200
     public static let reservedReplyOptionsTokens = 450
     public static let reservedTriageTokens = 80
-    public static let reservedAskInboxTokens = 300
     public static let reservedSearchPlanTokens = 160
     public static let reservedSearchToolTokens = 120
     public static let searchToolMaxCalls = 3
@@ -23,6 +22,8 @@ public enum AIPolicy {
     public static let rewriteSelectionBudgetFraction = 0.6
     public static let classifyExcerptCharacters = 1_500
     public static let askInboxExcerptCharacters = 400
+    public static let askInboxExcerptStep = 64
+    public static let askInboxInputBudgetFraction = 0.6
     public static let askInboxMaxCandidates = 20
     public static let askInboxTimeout: Duration = .seconds(45)
     public static let agentCLIDefaultInputCap = 32_000

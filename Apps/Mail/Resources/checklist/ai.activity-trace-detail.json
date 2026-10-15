@@ -1,0 +1,14 @@
+{
+  "id": "ai.activity-trace-detail",
+  "area": "AI",
+  "title": "Activity lists each AI request and opens its full trace",
+  "steps": [
+    "Launch with -UseFakeData, open a draft, press ⌘J and run Improve writing",
+    "Open Settings › AI › Activity",
+    "Click the newest Write and rewrite (⌘J) row"
+  ],
+  "deepLink": null,
+  "expected": "The row shows the time, the model, tokens, the time taken and the On this Mac mark. The trace shows the model, where it ran, why this model, the prompt id, the prompt as sent, the input with the email text, the model output and any steps. ‹ Requests goes back to the list.",
+  "requires": "fake",
+  "addedIn": "2026-10-15"
+}

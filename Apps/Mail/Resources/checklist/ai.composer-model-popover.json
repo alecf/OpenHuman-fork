@@ -1,0 +1,14 @@
+{
+  "id": "ai.composer-model-popover",
+  "area": "AI",
+  "title": "The ⌘J badge shows the model, lets you change it and re-run",
+  "steps": [
+    "Launch with -UseFakeData, open a draft, press ⌘J and run Improve writing",
+    "Click the On this Mac badge next to the thumbs",
+    "Click View trace, go back, then click Re-run on this model"
+  ],
+  "deepLink": null,
+  "expected": "The popover shows the model behind this answer with its time and tokens, the model list for ⌘J with Mail's default checked and marked Default (no Automatic choice), why it is used, and the trace. Re-run closes the popover and writes a new version with the checked model.",
+  "requires": "fake",
+  "addedIn": "2026-10-15"
+}

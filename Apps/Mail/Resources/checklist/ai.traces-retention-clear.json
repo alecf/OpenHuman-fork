@@ -1,0 +1,14 @@
+{
+  "id": "ai.traces-retention-clear",
+  "area": "AI",
+  "title": "Trace retention settings and Clear all traces",
+  "steps": [
+    "Launch with -UseFakeData and run ⌘J once so a trace exists",
+    "In Settings › AI › Activity set Keep for to 7 days and untick Write and rewrite (⌘J) under Features to trace",
+    "Run ⌘J again, then press Clear all traces… and confirm"
+  ],
+  "deepLink": null,
+  "expected": "The second ⌘J run adds no new row. Clear all traces asks first; after confirming the list says No AI requests yet. The settings stay as set after quitting and relaunching.",
+  "requires": "fake",
+  "addedIn": "2026-10-15"
+}

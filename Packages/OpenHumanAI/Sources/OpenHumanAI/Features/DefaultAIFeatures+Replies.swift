@@ -43,7 +43,15 @@ extension DefaultAIFeatures {
                 let options = try? JSONDecoder().decode([ReplyOption].self, from: data)
             {
                 await record(prepared, engine: engine, untrustedTokens: used, usage: nil, outcome: .cached)
-                return ReplyOptionsResult(options: options, provenance: hit.provenance, report: AIOutputReport())
+                await traceCacheHit(prepared, engine: engine, task: .replyOptions, hit: hit,
+                                    text: String(decoding: data, as: UTF8.self))
+                var provenance = hit.provenance
+                provenance.traceID = prepared.traceID
+                provenance.feature = engine.feature
+                provenance.promptID = prepared.request.promptID
+                provenance.promptOverrideRevision = prepared.overrideRevision
+                return ReplyOptionsResult(options: options, provenance: provenance,
+                                          report: AIOutputReport(traceID: prepared.traceID, model: hit.model))
             }
             let (options, outcome, raw) = try await structuredAnswer(prepared, engine: engine, untrustedTokens: used) {
                 try OutputGuard.replyOptions(from: $0, sources: sources)
@@ -56,11 +64,14 @@ extension DefaultAIFeatures {
                     key, cachedResult(.json(data), engine: engine, model: outcome.model),
                     ttl: engine.ttl(AIPolicy.replyOptionsTTL))
             }
-            var provenance = engine.provenance
-            provenance.model = outcome.model
+            let traced = PreparedRequest(
+                request: prepared.request, promptDigest: prepared.promptDigest, fixedTokens: prepared.fixedTokens,
+                budget: prepared.budget, traceID: outcome.traceID ?? prepared.traceID,
+                overrideRevision: prepared.overrideRevision)
+            if suspicious { await amendTrace(traced, finalText: nil, steps: [AITraceStep(.flaggedSuspicious)]) }
             return ReplyOptionsResult(
-                options: options, provenance: provenance,
-                report: AIOutputReport(suspicious: suspicious, usage: outcome.usage))
+                options: options, provenance: engine.provenance(traced, model: outcome.model),
+                report: outcome.report(suspicious: suspicious))
         }
     }
 
@@ -76,12 +87,15 @@ extension DefaultAIFeatures {
         if let value = Self.parse(first, parse: parse) { return value }
 
         var repaired = prepared
+        repaired.traceID = makeTraceID()
+        repaired.parentTraceID = prepared.traceID
         do {
             repaired.request.system += "\n\n" + (try prompts.repairSuffix(schema: schema))
         } catch {
             throw AIError.invalidOutput("repair prompt unavailable")
         }
         let second = try await run(repaired, engine: engine, untrustedTokens: untrustedTokens)
+        await amendTrace(repaired, finalText: nil, steps: [AITraceStep(.repairedJSON)])
         if let value = Self.parse(second, parse: parse) { return value }
         throw AIError.invalidOutput("the model did not return valid JSON")
     }

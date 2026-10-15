@@ -28,7 +28,7 @@ enum AIServices {
                 : [FakeClassifier(id: "fake.autolabels", displayName: "Fake classifier",
                                   autoLabel: { FakeClassifier.keywordAutoLabel($0) })]
             return AICenter.make(registry: ProviderRegistry(providers: [provider], classifiers: classifiers),
-                                 settings: AISettingsBox(store: InMemoryAISettingsStore()))
+                                 settings: AISettingsBox(store: InMemoryAISettingsStore()), traces: InMemoryAITraceStore())
         }
         let settings = AISettingsBox(store: persistent ? AISettingsStore() as any AISettingsStoring : InMemoryAISettingsStore())
         let registry = ProviderRegistry()
@@ -43,7 +43,13 @@ enum AIServices {
            let file = try? SQLiteAIResultCache(url: directory.appendingPathComponent(SQLiteAIResultCache.fileName)) {
             cache = file
         }
-        return AICenter.make(registry: registry, settings: settings, cache: cache, makeProvider: makeProvider)
+        var traces: any AITraceStore = InMemoryAITraceStore()
+        if persistent, let directory = cacheDirectory,
+           let file = try? SQLiteAITraceStore(url: directory.appendingPathComponent(SQLiteAITraceStore.fileName)) {
+            traces = file
+        }
+        return AICenter.make(registry: registry, settings: settings, cache: cache, traces: traces,
+                             makeProvider: makeProvider)
     }
 
     nonisolated static func agentCLI(_ id: AIProviderID, settings: AISettings) -> (any AIProvider)? {

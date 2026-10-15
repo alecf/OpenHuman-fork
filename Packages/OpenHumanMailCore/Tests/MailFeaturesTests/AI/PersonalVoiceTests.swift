@@ -61,15 +61,15 @@ import Testing
         #expect(f.center.styleExampleCache.isEmpty)
     }
 
-    @Test func personalInstructionsAreCappedLocalSettingsThatReachTheRewrite() async throws {
+    @Test func personalInstructionsAreWholeLocalSettingsThatReachTheRewrite() async throws {
         let provider = ScriptedProvider()
         let f = AIFixture(safeMode: .readOnly, providers: [provider])
         await f.loaded()
         let page = AISettingsPageModel(center: f.center, environment: f.env)
-        page.aboutMe = String(repeating: "a", count: 1_200)
+        page.aboutMe = String(repeating: "a", count: 4_000)
         page.writingInstructions = "Short and warm."
         #expect(page.error == nil, "a local setting: read-only allows it")
-        #expect(page.aboutMe.count == AISettings.personalTextCap)
+        #expect(page.aboutMe.count == 4_000, "kept whole")
         #expect(f.center.settings.writingInstructions == "Short and warm.")
         page.aboutMe = "I run a small studio."
 

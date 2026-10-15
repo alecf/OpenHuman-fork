@@ -49,7 +49,7 @@ struct SettingsRoot: View {
             aiProviders: environment.ai.map { center in {
                 AnyView(AISettingsTabs(prompts: PromptServices.current.map {
                     PromptsSettingsModel(registry: $0, tester: Self.promptTester(center))
-                }, navigator: environment.settingsNavigator) {
+                }, activity: AIActivityModel(center: center), navigator: environment.settingsNavigator) {
                     SettingsSectionStack {
                         AISettingsSection(center: center, environment: environment,
                                           listsUnavailableModels: Self.showsDeveloperItems(developerOptions))

@@ -6,8 +6,11 @@ public final class DefaultAIFeatures: AIFeatures {
     let cache: any AIResultCache
     let promptSource: any PromptLibrarySource
     let activity: (any AIActivitySink)?
+    let traces: (any AITraceSink)?
+    let clock: any AIClock
     let now: @Sendable () -> Date
     let makeNonce: @Sendable () -> String
+    let makeTraceID: @Sendable () -> UUID
 
     public init(
         registry: ProviderRegistry,
@@ -15,16 +18,22 @@ public final class DefaultAIFeatures: AIFeatures {
         cache: any AIResultCache = InMemoryAIResultCache(),
         prompts: any PromptLibrarySource = PromptLibraryProvider.shared,
         activity: (any AIActivitySink)? = nil,
+        traces: (any AITraceSink)? = nil,
+        clock: any AIClock = ContinuousAIClock(),
         now: @escaping @Sendable () -> Date = { Date() },
-        makeNonce: @escaping @Sendable () -> String = { Untrusted.makeNonce() }
+        makeNonce: @escaping @Sendable () -> String = { Untrusted.makeNonce() },
+        makeTraceID: @escaping @Sendable () -> UUID = { UUID() }
     ) {
         self.registry = registry
         self.settingsSource = settings
         self.cache = cache
         self.promptSource = prompts
         self.activity = activity
+        self.traces = traces
+        self.clock = clock
         self.now = now
         self.makeNonce = makeNonce
+        self.makeTraceID = makeTraceID
     }
 
     var prompts: PromptLibrary { promptSource.current }
@@ -57,10 +66,22 @@ struct Engine: Sendable {
     let feature: AIFeature
     let workload: AIWorkload
     let threadKey: String?
+    var trigger: AITrigger = .user
+    var accountKeys: [String] = []
 
     var provenance: AIProvenance {
         AIProvenance(providerID: provider.id, providerName: provider.displayName,
                      dataLocation: capabilities.dataLocation)
+    }
+
+    func provenance(_ prepared: PreparedRequest, model: String? = nil) -> AIProvenance {
+        var provenance = self.provenance
+        provenance.model = model
+        provenance.traceID = prepared.traceID
+        provenance.feature = feature
+        provenance.promptID = prepared.request.promptID
+        provenance.promptOverrideRevision = prepared.overrideRevision
+        return provenance
     }
 
     func count(_ text: String) async -> Int { await provider.countTokens(text) }
@@ -84,6 +105,9 @@ struct PreparedRequest: Sendable {
     var promptDigest: String
     var fixedTokens: Int
     var budget: Int
+    var traceID: UUID
+    var parentTraceID: UUID? = nil
+    var overrideRevision: Int? = nil
 }
 
 struct RunOutcome: Sendable {
@@ -91,6 +115,16 @@ struct RunOutcome: Sendable {
     var structured: Data?
     var usage: AIUsage?
     var model: String?
+    var traceID: UUID? = nil
+    var latency: Duration? = nil
+    var firstToken: Duration? = nil
+    var countedInputTokens: Int? = nil
+
+    func report(suspicious: Bool = false, truncated: Bool = false) -> AIOutputReport {
+        AIOutputReport(
+            suspicious: suspicious, truncated: truncated, usage: usage, traceID: traceID, model: model, latency: latency,
+            firstToken: firstToken, countedInputTokens: countedInputTokens)
+    }
 }
 
 extension DefaultAIFeatures {
@@ -123,7 +157,8 @@ extension DefaultAIFeatures {
             return .model(
                 Engine(
                     provider: provider, capabilities: capabilities, modelVersion: await provider.modelVersion(),
-                    settings: settings, feature: feature, workload: workload, threadKey: threadKey))
+                    settings: settings, feature: feature, workload: workload, threadKey: threadKey, trigger: trigger,
+                    accountKeys: Self.knownKeys(accountKeys)))
         }
     }
 
@@ -155,7 +190,9 @@ extension DefaultAIFeatures {
             + (trusted.isEmpty ? 0 : await engine.count(Untrusted.renderTrusted(trusted, nonce: nonce)))
         let budget = try ContextBudgeter.inputBudget(
             engine.capabilities, fixedTokens: fixed, reservedOutput: output.maxTokens, shrink: shrink)
-        return PreparedRequest(request: request, promptDigest: rendered.digest, fixedTokens: fixed, budget: budget)
+        return PreparedRequest(
+            request: request, promptDigest: rendered.digest, fixedTokens: fixed, budget: budget, traceID: makeTraceID(),
+            overrideRevision: rendered.overrideRevision)
     }
 
     func requireFits(_ prepared: PreparedRequest, engine: Engine) async throws -> Int {
@@ -183,12 +220,17 @@ extension DefaultAIFeatures {
         onText: (String) throws -> Bool = { _ in true }
     ) async throws -> RunOutcome {
         let request = prepared.request
-        var outcome = RunOutcome(text: "", structured: nil, usage: nil, model: nil)
+        var outcome = RunOutcome(
+            text: "", structured: nil, usage: nil, model: nil, traceID: prepared.traceID,
+            countedInputTokens: prepared.fixedTokens + untrustedTokens)
         var gate: SecretGate? = {
             if case .thirdParty = engine.capabilities.dataLocation { return SecretGate(request: request) }
             return nil
         }()
         var stopped = false
+        var released = ""
+        var steps: [AITraceStep] = []
+        let startedAt = clock.elapsed()
         do {
             events: for try await event in engine.provider.run(request) {
                 try Task.checkCancellation()
@@ -196,16 +238,20 @@ extension DefaultAIFeatures {
                 case .started(_, let model):
                     outcome.model = model
                 case .textDelta(let delta):
+                    if outcome.firstToken == nil { outcome.firstToken = clock.elapsed() - startedAt }
                     outcome.text += delta
                     guard outcome.text.utf8.count <= AIPolicy.outputByteCap else {
                         throw AIError.invalidOutput("output too long")
                     }
                     let ready = try gate?.feed(delta) ?? delta
+                    released += ready
                     if !ready.isEmpty, !(try onText(ready)) {
                         stopped = true
+                        steps.append(AITraceStep(.stoppedAtOutputLimit))
                         break events
                     }
                 case .structured(let data):
+                    if outcome.firstToken == nil { outcome.firstToken = clock.elapsed() - startedAt }
                     guard data.count <= AIPolicy.outputByteCap else { throw AIError.invalidOutput("output too long") }
                     outcome.structured = data
                 case .finished(let usage):
@@ -215,19 +261,118 @@ extension DefaultAIFeatures {
             if !stopped, var finalGate = gate {
                 let rest = try finalGate.finish()
                 gate = finalGate
+                released += rest
                 if !rest.isEmpty { _ = try onText(rest) }
             }
             if gate != nil, let structured = outcome.structured {
                 try OutputGuard.requireNoSecrets(String(decoding: structured, as: UTF8.self), request: request)
             }
         } catch {
+            outcome.latency = clock.elapsed() - startedAt
+            let normalized = Self.normalized(error)
+            if case AIError.outputBlocked = normalized { steps.append(AITraceStep(.blockedBySecretGate)) }
             await record(prepared, engine: engine, untrustedTokens: untrustedTokens, usage: outcome.usage,
                          outcome: Self.activityOutcome(error))
-            throw Self.normalized(error)
+            await trace(prepared, engine: engine, outcome: outcome, shown: released, steps: steps, error: normalized)
+            throw normalized
         }
+        outcome.latency = clock.elapsed() - startedAt
         await record(prepared, engine: engine, untrustedTokens: untrustedTokens, usage: outcome.usage,
                      outcome: .completed)
+        let shown = outcome.structured.map { String(decoding: $0, as: UTF8.self) } ?? released
+        await trace(prepared, engine: engine, outcome: outcome, shown: shown, steps: steps, error: nil)
         return outcome
+    }
+
+    func trace(
+        _ prepared: PreparedRequest, engine: Engine, outcome: RunOutcome, shown: String, steps: [AITraceStep],
+        error: (any Error)?
+    ) async {
+        guard let traces else { return }
+        let request = prepared.request
+        let scrub = Self.scrubber(request.nonce)
+        let raw = outcome.structured.map { String(decoding: $0, as: UTF8.self) } ?? outcome.text
+        var record = baseTrace(prepared, engine: engine, model: outcome.model)
+        record.outputText = raw.isEmpty && error != nil ? nil : scrub(raw)
+        record.finalText = shown.isEmpty && error != nil ? nil : scrub(shown)
+        record.steps = steps
+        record.usage = outcome.usage
+        record.countedInputTokens = outcome.countedInputTokens
+        record.latencyMilliseconds = outcome.latency?.wholeMilliseconds
+        record.firstTokenMilliseconds = outcome.firstToken?.wholeMilliseconds
+        record.cache = Self.cachedTasks.contains(request.task) && engine.modelVersion != nil ? .miss : .none
+        if let error {
+            let aiError = error as? AIError
+            record.outcome = aiError == .cancelled ? .cancelled : .failed
+            record.errorKind = aiError?.traceKind ?? "error"
+            record.errorText = scrub(String(describing: error))
+        }
+        await traces.record(record)
+    }
+
+    func baseTrace(_ prepared: PreparedRequest, engine: Engine, model: String?) -> AITraceRecord {
+        let request = prepared.request
+        let scrub = Self.scrubber(request.nonce)
+        let parts = request.trusted.map {
+            AITracePart(kind: $0.kind.rawValue, id: nil, characters: $0.text.count, trusted: true)
+        } + request.untrusted.map {
+            AITracePart(kind: $0.kind.rawValue, id: $0.id, characters: $0.text.count, trusted: false)
+        }
+        return AITraceRecord(
+            id: prepared.traceID, createdAt: now(), feature: engine.feature, task: request.task, trigger: engine.trigger,
+            accountKeys: engine.accountKeys, threadKey: engine.threadKey, parentID: prepared.parentTraceID,
+            promptID: request.promptID, promptDigest: prepared.promptDigest, overrideRevision: prepared.overrideRevision,
+            providerID: engine.provider.id, providerName: engine.provider.displayName, model: model,
+            modelVersion: engine.modelVersion, dataLocation: engine.capabilities.dataLocation,
+            parameters: AITraceParameters(
+                temperature: request.temperature, outputLimit: request.output.maxTokens, inputBudget: prepared.budget),
+            systemText: scrub(request.system), inputText: scrub(request.renderedInput()), inputParts: parts,
+            countedInputTokens: prepared.fixedTokens, contextTokens: engine.capabilities.contextTokens,
+            outcome: .completed)
+    }
+
+    @discardableResult
+    func traceCacheHit(_ prepared: PreparedRequest?, engine: Engine, task: AITask, hit: CachedAIResult, text: String?)
+        async -> UUID
+    {
+        let id = prepared?.traceID ?? makeTraceID()
+        guard let traces else { return id }
+        var record: AITraceRecord
+        if let prepared {
+            record = baseTrace(prepared, engine: engine, model: hit.model)
+        } else {
+            record = AITraceRecord(
+                id: id, createdAt: now(), feature: engine.feature, task: task, trigger: engine.trigger,
+                accountKeys: engine.accountKeys, threadKey: engine.threadKey, providerID: hit.providerID,
+                providerName: hit.providerName, model: hit.model, modelVersion: engine.modelVersion,
+                dataLocation: hit.dataLocation, outcome: .cached)
+        }
+        record.providerID = hit.providerID
+        record.providerName = hit.providerName
+        record.dataLocation = hit.dataLocation
+        record.cache = .hit
+        record.outcome = .cached
+        record.finalText = text
+        record.outputText = text
+        await traces.record(record)
+        return id
+    }
+
+    func amendTrace(_ prepared: PreparedRequest, finalText: String?, steps: [AITraceStep]) async {
+        guard let traces else { return }
+        let scrub = Self.scrubber(prepared.request.nonce)
+        await traces.amend(prepared.traceID, finalText: finalText.map(scrub), steps: steps)
+    }
+
+    static let cachedTasks: Set<AITask> = [.summarize, .summarizeChunk, .reduce, .replyOptions, .classify, .followUp]
+
+    static func scrubber(_ nonce: String) -> @Sendable (String) -> String {
+        { text in nonce.isEmpty ? text : text.replacingOccurrences(of: nonce, with: AITraceRecord.nonceStandIn) }
+    }
+
+    static func knownKeys(_ keys: [String?]) -> [String] {
+        var seen = Set<String>()
+        return keys.compactMap { $0 }.filter { seen.insert($0).inserted }
     }
 
     func record(

@@ -72,6 +72,8 @@ extension DefaultAIFeatures {
                 let result = try? JSONDecoder().decode(TriageResult.self, from: data)
             {
                 await record(prepared, engine: engine, untrustedTokens: used, usage: nil, outcome: .cached)
+                await traceCacheHit(prepared, engine: engine, task: .classify, hit: hit,
+                                    text: String(decoding: data, as: UTF8.self))
                 return result
             }
             let ((result, flagged), outcome, raw) = try await structuredAnswer(

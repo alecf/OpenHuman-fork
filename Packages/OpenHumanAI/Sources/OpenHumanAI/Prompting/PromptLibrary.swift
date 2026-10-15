@@ -6,6 +6,7 @@ public enum PromptName: String, Sendable, Hashable, CaseIterable {
     case summarizeReduce = "summarize.reduce"
     case replyOptions = "reply.options"
     case rewrite = "rewrite.instruct"
+    case composeWrite = "compose.write"
     case classify = "triage.classify"
     case askInbox = "ask.inbox"
     case searchPlan = "search.plan"
@@ -39,7 +40,7 @@ public enum PromptName: String, Sendable, Hashable, CaseIterable {
         case .summarizeChunk: return .summarizeChunk
         case .summarizeReduce: return .reduce
         case .replyOptions: return .replyOptions
-        case .rewrite: return .rewrite
+        case .rewrite, .composeWrite: return .rewrite
         case .classify: return .classify
         case .askInbox: return .askInbox
         case .searchPlan, .searchTool: return .searchPlan

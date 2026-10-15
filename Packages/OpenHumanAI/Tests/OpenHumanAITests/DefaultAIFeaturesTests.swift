@@ -18,7 +18,11 @@ import Testing
         #expect(events.filter { if case .textDelta = $0 { return true } else { return false } }.count > 1)
         #expect(summaryProvenance(events)?.providerID == .fake)
         #expect(summaryProvenance(events)?.fromCache == false)
-        #expect(summaryReport(events) == AIOutputReport())
+        let report = summaryReport(events)
+        #expect(report?.suspicious == false)
+        #expect(report?.truncated == false)
+        #expect(report?.usage == nil)
+        #expect(report?.traceID != nil)
         #expect(provider.requests.count == 1)
         #expect(provider.requests[0].task == .summarize)
         #expect(provider.requests[0].promptID == PromptID("summarize.thread", version: 2))
@@ -343,7 +347,17 @@ import Testing
         #expect(system.requests.count == 2)
         let home = AIThreadInput(threadKey: "t", subject: "s", messages: [], accountKey: "home")
         _ = try await collect(features.rewrite("draft", instruction: "fix", context: home))
+        #expect(claude.requests.isEmpty, "an order alone never picks a model off this Mac")
+        #expect(system.requests.count == 3)
+
+        var pinned = settings
+        pinned.featurePins[.rewrite] = .agentClaude
+        let chosen = makeFeatures([claude, system], settings: pinned)
+        _ = try await collect(chosen.rewrite("draft", instruction: "fix", context: home))
         #expect(claude.requests.count == 1)
+        #expect(await aiError { _ = try await collect(chosen.rewrite("draft", instruction: "fix", context: work)) }
+            == .unavailable(.onDeviceOnly))
+        #expect(claude.requests.count == 1 && system.requests.count == 3)
     }
 }
 

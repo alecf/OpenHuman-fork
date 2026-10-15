@@ -112,42 +112,7 @@ public enum ProviderSelectionPolicy {
         feature: AIFeature, workload: AIWorkload, accountKeys: [String?], candidates: [ProviderCandidate],
         settings: AISettings
     ) -> ProviderSelection {
-        if let gate = featureGate(feature, workload: workload, settings: settings) {
-            return .unavailable(gate, providerID: nil)
-        }
-        let onDeviceOnly = settings.requiresOnDevice(accountKeys: accountKeys)
-
-        if let pinnedID = settings.featurePins[feature] {
-            guard let pinned = candidates.first(where: { $0.id == pinnedID }) else {
-                return .unavailable(.other("The provider chosen for this feature is not set up"), providerID: pinnedID)
-            }
-            if let reason = restriction(
-                for: pinned, feature: feature, workload: workload, onDeviceOnly: onDeviceOnly, settings: settings,
-                pinned: true)
-            {
-                return .unavailable(reason, providerID: pinnedID)
-            }
-            if let reason = pinned.availability.unavailableReason { return .unavailable(reason, providerID: pinnedID) }
-            return .selected(pinned)
-        }
-
-        var firstUnavailable: (AIAvailability.UnavailableReason, AIProviderID)?
-        var firstRestricted: (AIAvailability.UnavailableReason, AIProviderID)?
-        for candidate in candidates {
-            if let reason = restriction(
-                for: candidate, feature: feature, workload: workload, onDeviceOnly: onDeviceOnly, settings: settings,
-                pinned: false)
-            {
-                if firstRestricted == nil, candidate.autoSelectable { firstRestricted = (reason, candidate.id) }
-                continue
-            }
-            if let reason = candidate.availability.unavailableReason {
-                if firstUnavailable == nil { firstUnavailable = (reason, candidate.id) }
-                continue
-            }
-            return .selected(candidate)
-        }
-        if let (reason, id) = firstUnavailable ?? firstRestricted { return .unavailable(reason, providerID: id) }
-        return .unavailable(.other("No AI provider is set up"), providerID: nil)
+        FeatureRoute.explain(feature: feature, workload: workload, accountKeys: accountKeys, candidates: candidates,
+                             settings: settings).selection
     }
 }

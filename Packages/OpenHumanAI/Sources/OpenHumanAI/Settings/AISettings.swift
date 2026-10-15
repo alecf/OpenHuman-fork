@@ -69,22 +69,13 @@ public struct AISettings: Sendable, Hashable, Codable {
     public var writesRepliesAutomatically: Bool {
         draftReplies == .onDeviceAuto || (autoDraftReplies && draftReplies != .off)
     }
-    public var aboutMe: String {
-        didSet { if aboutMe.count > Self.personalTextCap { aboutMe = String(aboutMe.prefix(Self.personalTextCap)) } }
-    }
-    public var writingInstructions: String {
-        didSet {
-            if writingInstructions.count > Self.personalTextCap {
-                writingInstructions = String(writingInstructions.prefix(Self.personalTextCap))
-            }
-        }
-    }
+    public var aboutMe: String
+    public var writingInstructions: String
+    public var traces: AITraceSettings
 
     public var classifier: ClassifierPreference
     public var localClassifierInLowPowerMode: Bool
     public var modelsDirectory: String?
-
-    public static let personalTextCap = 1_000
 
     public var userPreferencesText: String? {
         let about = aboutMe.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -118,13 +109,15 @@ public struct AISettings: Sendable, Hashable, Codable {
         writingInstructions: String = "",
         classifier: ClassifierPreference = .automatic,
         localClassifierInLowPowerMode: Bool = false,
-        modelsDirectory: String? = nil
+        modelsDirectory: String? = nil,
+        traces: AITraceSettings = AITraceSettings()
     ) {
         self.classifier = classifier
         self.localClassifierInLowPowerMode = localClassifierInLowPowerMode
         self.modelsDirectory = modelsDirectory
-        self.aboutMe = String(aboutMe.prefix(Self.personalTextCap))
-        self.writingInstructions = String(writingInstructions.prefix(Self.personalTextCap))
+        self.aboutMe = aboutMe
+        self.writingInstructions = writingInstructions
+        self.traces = traces
         self.smartSearch = smartSearch
         self.enabled = enabled
         self.draftReplies = draftReplies
@@ -165,7 +158,7 @@ public struct AISettings: Sendable, Hashable, Codable {
             autoSummarizeOnOpen, onDeviceOnlyAccounts, consents, agentCLI, selectedLocalModel, outputLanguage,
             allowWritingTools,
             instantReplyStrip, smartSearch, aboutMe, writingInstructions, prepareInAdvance, autoDraftReplies, classifier,
-            localClassifierInLowPowerMode, modelsDirectory
+            localClassifierInLowPowerMode, modelsDirectory, traces
     }
 
     public init(from decoder: any Decoder) throws {
@@ -195,9 +188,9 @@ public struct AISettings: Sendable, Hashable, Codable {
         localClassifierInLowPowerMode = (try? c.decodeIfPresent(Bool.self, forKey: .localClassifierInLowPowerMode))
             ?? d.localClassifierInLowPowerMode
         modelsDirectory = (try? c.decodeIfPresent(String.self, forKey: .modelsDirectory)) ?? d.modelsDirectory
-        aboutMe = String(((try? c.decodeIfPresent(String.self, forKey: .aboutMe)) ?? d.aboutMe).prefix(Self.personalTextCap))
-        writingInstructions = String(((try? c.decodeIfPresent(String.self, forKey: .writingInstructions))
-            ?? d.writingInstructions).prefix(Self.personalTextCap))
+        aboutMe = (try? c.decodeIfPresent(String.self, forKey: .aboutMe)) ?? d.aboutMe
+        writingInstructions = (try? c.decodeIfPresent(String.self, forKey: .writingInstructions)) ?? d.writingInstructions
+        traces = (try? c.decodeIfPresent(AITraceSettings.self, forKey: .traces)) ?? d.traces
     }
 }
 

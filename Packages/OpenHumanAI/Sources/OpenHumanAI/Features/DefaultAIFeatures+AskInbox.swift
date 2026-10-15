@@ -15,40 +15,39 @@ extension DefaultAIFeatures {
             var emitted = false
             try await self.withOverflowRetry(emitted: { emitted }) { shrink in
                 let nonce = self.makeNonce()
-                var prepared = try await self.prepare(
+                let sizing = try await self.prepare(
                     .askInbox, engine: engine, nonce: nonce, trusted: trusted, untrusted: [],
-                    output: .text(maxTokens: AIPolicy.reservedAskInboxTokens), shrink: shrink)
+                    output: .text(maxTokens: AIPolicy.generationMinimumOutputTokens), shrink: shrink)
+                let limit = Int(Double(sizing.budget) * AIPolicy.askInboxInputBudgetFraction)
+                let width = await self.askExcerptWidth(candidates, keywords: keywords, engine: engine, nonce: nonce,
+                                                       limit: limit)
                 var parts: [UntrustedPart] = []
                 var included = Set<String>()
                 for candidate in candidates {
-                    var candidateParts: [UntrustedPart] = []
-                    if let subject = candidate.subject, !subject.isEmpty {
-                        candidateParts.append(
-                            UntrustedPart(kind: .subject, id: candidate.messageKey,
-                                          text: String(subject.prefix(AIPolicy.subjectCharacterCap))))
-                    }
-                    candidateParts.append(self.senderPart(candidate))
-                    candidateParts.append(
-                        UntrustedPart(
-                            kind: .excerpt, id: candidate.messageKey,
-                            text: ExcerptWindow.best(in: candidate.bodyText, keywords: keywords), date: candidate.date))
-                    if await engine.tokens(of: parts + candidateParts, nonce: nonce) <= prepared.budget {
+                    let candidateParts = self.askParts(candidate, keywords: keywords, width: width)
+                    if await engine.tokens(of: parts + candidateParts, nonce: nonce) <= limit {
                         parts += candidateParts
                         included.insert(candidate.messageKey)
                     }
                 }
                 if parts.isEmpty, let first = candidates.first {
                     let alone = await engine.tokens(of: [self.senderPart(first)], nonce: nonce)
-                    throw AIError.contextOverflow(counted: alone, limit: prepared.budget)
+                    throw AIError.contextOverflow(counted: alone, limit: limit)
                 }
-                prepared.request.untrusted = parts
+                let inputTokens = sizing.fixedTokens + (await engine.tokens(of: parts, nonce: nonce))
+                let output = OutputSpec.text(
+                    maxTokens: AIPolicy.generationOutputBudget(
+                        contextTokens: engine.capabilities.contextTokens, inputTokens: inputTokens))
+                let prepared = try await self.prepare(
+                    .askInbox, engine: engine, nonce: nonce, trusted: trusted, untrusted: parts, output: output,
+                    shrink: 1)
                 let used = try await self.requireFits(prepared, engine: engine)
                 if !started {
-                    continuation.yield(.started(engine.provenance))
+                    continuation.yield(.started(engine.provenance(prepared)))
                     started = true
                 }
                 var sources = SourcesLineFilter()
-                var capper = StreamCapper(maxTokens: AIPolicy.reservedAskInboxTokens)
+                var capper = StreamCapper(maxTokens: output.maxTokens)
                 let outcome = try await self.run(prepared, engine: engine, untrustedTokens: used) { delta in
                     let shown = capper.accept(sources.feed(delta))
                     if !shown.isEmpty {
@@ -59,13 +58,56 @@ extension DefaultAIFeatures {
                 }
                 let tail = capper.accept(sources.finish())
                 if !tail.isEmpty { continuation.yield(.textDelta(tail)) }
-                continuation.yield(.citations(OutputGuard.filterCitations(sources.cited, allowed: included)))
-                continuation.yield(
-                    .completed(
-                        AIOutputReport(
-                            suspicious: OutputGuard.isSuspicious(outcome.text, nonce: nonce),
-                            truncated: capper.truncated, usage: outcome.usage)))
+                let citations = OutputGuard.filterCitations(sources.cited, allowed: included)
+                continuation.yield(.citations(citations))
+                let suspicious = OutputGuard.isSuspicious(outcome.text, nonce: nonce)
+                var steps: [AITraceStep] = []
+                if outcome.text.range(of: SourcesLineFilter.marker, options: .caseInsensitive) != nil {
+                    steps.append(AITraceStep(.sourcesLineRemoved))
+                }
+                if citations.count < sources.cited.count {
+                    steps.append(AITraceStep(.citationsFiltered, detail: "\(sources.cited.count - citations.count)"))
+                }
+                if capper.truncated { steps.append(AITraceStep(.stoppedAtOutputLimit)) }
+                if suspicious { steps.append(AITraceStep(.flaggedSuspicious)) }
+                await self.amendTrace(prepared, finalText: capper.text, steps: steps)
+                continuation.yield(.completed(outcome.report(suspicious: suspicious, truncated: capper.truncated)))
             }
         }
+    }
+
+    func askParts(_ candidate: AIMessageInput, keywords: [String], width: Int) -> [UntrustedPart] {
+        var parts: [UntrustedPart] = []
+        if let subject = candidate.subject, !subject.isEmpty {
+            parts.append(
+                UntrustedPart(kind: .subject, id: candidate.messageKey, text: String(subject.prefix(AIPolicy.subjectCharacterCap))))
+        }
+        parts.append(senderPart(candidate))
+        parts.append(
+            UntrustedPart(kind: .excerpt, id: candidate.messageKey,
+                          text: ExcerptWindow.best(in: candidate.bodyText, keywords: keywords, width: width),
+                          date: candidate.date))
+        return parts
+    }
+
+    func askExcerptWidth(_ candidates: [AIMessageInput], keywords: [String], engine: Engine, nonce: String, limit: Int)
+        async -> Int
+    {
+        let floor = AIPolicy.askInboxExcerptCharacters
+        let longest = candidates.map(\.bodyText.count).max() ?? 0
+        guard longest > floor else { return floor }
+        func fits(_ width: Int) async -> Bool {
+            let parts = candidates.flatMap { askParts($0, keywords: keywords, width: width) }
+            return await engine.tokens(of: parts, nonce: nonce) <= limit
+        }
+        if await fits(longest) { return longest }
+        guard await fits(floor) else { return floor }
+        var low = floor
+        var high = longest
+        while high - low > AIPolicy.askInboxExcerptStep {
+            let middle = (low + high) / 2
+            if await fits(middle) { low = middle } else { high = middle }
+        }
+        return low
     }
 }

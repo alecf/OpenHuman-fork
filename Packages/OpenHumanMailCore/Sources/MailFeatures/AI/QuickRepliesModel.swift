@@ -42,6 +42,8 @@ public final class QuickRepliesModel {
     }
 
     @ObservationIgnored private weak var center: AICenter?
+
+    public var aiCenter: AICenter? { center }
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var requested: Set<AITrigger> = []
     @ObservationIgnored private var running: AITrigger?

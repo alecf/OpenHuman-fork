@@ -19,7 +19,7 @@ import Testing
                                     TrustedPart(kind: .userPreferences, text: preferences)])
         #expect(request.renderedInput().contains("<context kind=\"userPreferences\">\(preferences)</context>"))
         #expect(RequestInspector.problems(in: request).isEmpty)
-        #expect(request.promptID == PromptID("rewrite.instruct", version: 2))
+        #expect(request.promptID == PromptID("rewrite.instruct", version: 3))
         #expect(request.system.contains("userPreferences") && request.system.contains("styleExample"))
     }
 
@@ -75,18 +75,24 @@ import Testing
         #expect(DefaultAIFeatures.styleParts(examples, dataLocation: .appleCloud).isEmpty)
     }
 
-    @Test func thePersonalTextIsCappedAndOlderSettingsDecodeWithoutIt() throws {
-        let long = String(repeating: "x", count: 1_500)
+    @Test func thePersonalTextIsKeptWholeAndOlderSettingsDecodeWithoutIt() async throws {
+        let long = String(repeating: "x", count: 5_000)
         var settings = AISettings(aboutMe: long, writingInstructions: long)
-        #expect(settings.aboutMe.count == AISettings.personalTextCap && settings.writingInstructions.count == 1_000)
-        settings.aboutMe = long
-        #expect(settings.aboutMe.count == AISettings.personalTextCap, "capped when set later too")
+        #expect(settings.aboutMe.count == 5_000 && settings.writingInstructions.count == 5_000)
+        settings.aboutMe = long + long
+        #expect(settings.aboutMe.count == 10_000, "not cut when set later either")
         let stored = Data(#"{"aboutMe":"\#(long)","writingInstructions":"Brief."}"#.utf8)
         let decoded = try JSONDecoder().decode(AISettings.self, from: stored)
-        #expect(decoded.aboutMe.count == 1_000 && decoded.writingInstructions == "Brief.")
+        #expect(decoded.aboutMe.count == 5_000 && decoded.writingInstructions == "Brief.")
         let older = try JSONDecoder().decode(AISettings.self, from: Data(#"{"pccEnabled":true}"#.utf8))
         #expect(older.aboutMe.isEmpty && older.writingInstructions.isEmpty && older.pccEnabled)
         let round = AISettings(aboutMe: "Me.", writingInstructions: "Brief.")
         #expect(try JSONDecoder().decode(AISettings.self, from: JSONEncoder().encode(round)) == round)
+
+        let provider = ScriptedProvider(capabilities: .fake(contextTokens: 32_768)) { _, _ in .text("Done.") }
+        let features = makeFeatures([provider], settings: AISettings(aboutMe: long))
+        _ = try await collect(features.rewrite("thx", instruction: "Make it polite", context: nil))
+        let request = try #require(provider.requests.first)
+        #expect(request.trusted.contains(TrustedPart(kind: .userPreferences, text: "About me: " + long)))
     }
 }

@@ -25,6 +25,17 @@ import Testing
         #expect(model.sections.first?.group == .summaries && model.sections.flatMap(\.rows).count == model.rows.count)
     }
 
+    @Test func aRowIsBasedOnAnOlderDefaultOnlyWhenItsOverrideWasWrittenForAnEarlierVersion() async throws {
+        let model = model()
+        await model.load()
+        var row = try #require(model.rows.first { $0.id == "rewrite.instruct" })
+        #expect(!row.isBasedOnOlderDefault)
+        row.activeBaseVersion = row.version - 1
+        #expect(row.isBasedOnOlderDefault)
+        row.activeBaseVersion = row.version
+        #expect(!row.isBasedOnOlderDefault)
+    }
+
     @Test func saveMakesARevisionResetKeepsTheHistoryRevertCopies() async throws {
         let model = model()
         await model.select("summarize.line")

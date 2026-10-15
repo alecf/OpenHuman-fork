@@ -126,6 +126,7 @@ final class AppModel {
                 await session?.calendarConnections?.forget(account)
                 guard let environment else { return }
                 await environment.ai?.clearCache()
+                await environment.ai?.forgetTraces(for: account)
                 await environment.system.removeAccount(account)
             },
             removed: { [weak self] account in await self?.accountRemoved(account) })

@@ -3,36 +3,42 @@ import SwiftUI
 
 public struct AISettingsTabs<Overview: View>: View {
     public enum Tab: String, CaseIterable, Sendable {
-        case overview, prompts
+        case overview, prompts, activity
 
         var title: String {
             switch self {
             case .overview: String(localized: "Overview")
             case .prompts: String(localized: "Prompts")
+            case .activity: String(localized: "Activity")
             }
         }
     }
 
     @State private var tab: Tab
     @State private var prompts: PromptsSettingsModel?
+    @State private var activity: AIActivityModel?
     private let navigator: SettingsNavigator?
     private let overview: Overview
     @Environment(\.theme) private var theme
 
-    public init(prompts: @autoclosure () -> PromptsSettingsModel?, navigator: SettingsNavigator? = nil,
-                initialTab: Tab = .overview, @ViewBuilder overview: () -> Overview) {
+    public init(prompts: @autoclosure () -> PromptsSettingsModel?, activity: @autoclosure () -> AIActivityModel? = nil,
+                navigator: SettingsNavigator? = nil, initialTab: Tab = .overview, @ViewBuilder overview: () -> Overview) {
         let model = prompts()
+        let activityModel = activity()
         _prompts = State(initialValue: model)
-        _tab = State(initialValue: model == nil ? .overview : initialTab)
+        _activity = State(initialValue: activityModel)
+        let offered = initialTab == .overview || (initialTab == .prompts && model != nil)
+            || (initialTab == .activity && activityModel != nil)
+        _tab = State(initialValue: offered ? initialTab : .overview)
         self.navigator = navigator
         self.overview = overview()
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: theme.space7) {
-            if prompts != nil {
+            if tabs.count > 1 {
                 Picker(String(localized: "AI settings"), selection: $tab) {
-                    ForEach(Tab.allCases, id: \.self) { tab in Text(tab.title).tag(tab) }
+                    ForEach(tabs, id: \.self) { tab in Text(tab.title).tag(tab) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -43,9 +49,21 @@ public struct AISettingsTabs<Overview: View>: View {
             case .overview: overview
             case .prompts:
                 if let prompts { PromptsSettingsView(model: prompts) }
+            case .activity:
+                if let activity { AIActivityView(model: activity) }
             }
         }
         .task(id: navigator?.requestedPrompt) { await takeRequest() }
+    }
+
+    private var tabs: [Tab] {
+        Tab.allCases.filter { tab in
+            switch tab {
+            case .overview: true
+            case .prompts: prompts != nil
+            case .activity: activity != nil
+            }
+        }
     }
 
     private func takeRequest() async {
