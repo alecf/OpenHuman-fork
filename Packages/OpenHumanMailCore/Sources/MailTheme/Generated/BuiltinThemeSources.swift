@@ -134,7 +134,7 @@ enum BuiltinThemeSources {
     {"name": "footer.height", "layer": "component", "type": "number", "path": ["components", "footer", "height"], "swift": "height", "group": "footer", "groupSwift": "footer", "default": 28, "unit": "pt", "min": 0, "max": 4000},
     {"name": "footer.bg", "layer": "component", "type": "color", "path": ["components", "footer", "bg"], "swift": "bg", "group": "footer", "groupSwift": "footer", "default": "{bg.window}"},
     {"name": "footer.divider", "layer": "component", "type": "color", "path": ["components", "footer", "divider"], "swift": "divider", "group": "footer", "groupSwift": "footer", "default": "{border.hairline}"},
-    {"name": "tab.text", "layer": "component", "type": "color", "path": ["components", "tab", "text"], "swift": "text", "group": "tab", "groupSwift": "tab", "default": "{text.secondary}"},
+    {"name": "tab.text", "layer": "component", "type": "color", "path": ["components", "tab", "text"], "swift": "text", "group": "tab", "groupSwift": "tab", "default": "{text.tertiary}"},
     {"name": "tab.textActive", "layer": "component", "type": "color", "path": ["components", "tab", "textActive"], "swift": "textActive", "group": "tab", "groupSwift": "tab", "default": "{text.primary}"},
     {"name": "tab.count", "layer": "component", "type": "color", "path": ["components", "tab", "count"], "swift": "count", "group": "tab", "groupSwift": "tab", "default": "{text.tertiary}"},
     {"name": "tab.gap", "layer": "component", "type": "number", "path": ["components", "tab", "gap"], "swift": "gap", "group": "tab", "groupSwift": "tab", "default": 20, "unit": "pt", "min": 0, "max": 4000},
@@ -335,7 +335,7 @@ enum BuiltinThemeSources {
       "title":         { "size": 20, "lineHeight": 26, "weight": 500, "trackingEm": -0.01 },
       "headline":      { "size": 15, "lineHeight": 20, "weight": 600, "trackingEm": 0 },
       "tab":           { "size": 18, "lineHeight": 24, "weight": 400, "trackingEm": 0 },
-      "tab.active":    { "size": 18, "lineHeight": 24, "weight": 400, "trackingEm": 0 },
+      "tab.active":    { "size": 19, "lineHeight": 24, "weight": 400, "trackingEm": 0 },
       "body":          { "size": 13, "lineHeight": 18, "weight": 400, "trackingEm": 0 },
       "body.strong":   { "size": 13, "lineHeight": 18, "weight": 600, "trackingEm": 0 },
       "palette.input": { "size": 18, "lineHeight": 24, "weight": 400, "trackingEm": 0, "family": "mono" },
@@ -375,7 +375,7 @@ enum BuiltinThemeSources {
     "window":   { "minWidth": 960, "minHeight": 600, "defaultWidth": 1360, "defaultHeight": 860 },
     "toolbar":  { "height": 52, "bg": "{bg.window}", "divider": "{border.hairline}", "paddingX": 24, "iconSize": 18 },
     "footer":   { "height": 28, "bg": "{bg.window}", "divider": "{border.hairline}" },
-    "tab":      { "text": "{text.secondary}", "textActive": "{text.primary}", "count": "{text.tertiary}", "gap": 20, "countGap": 4 },
+    "tab":      { "text": "{text.tertiary}", "textActive": "{text.primary}", "count": "{text.tertiary}", "gap": 20, "countGap": 4 },
     "row": {
       "paddingX": 24, "dotGutter": 16, "senderMin": 160, "senderMax": 240, "senderPct": 0.22,
       "indicatorWidth": 40, "dateWidth": 72, "columnGap": 16,
@@ -524,6 +524,7 @@ enum BuiltinThemeSources {
     }
   },
   "components": {
+    "tab": { "count": "{gray.487}" },
     "thread": { "cardShadow": "0 1 2 0 rgba(0,0,0,0.20)" },
     "row": { "unreadDot": "#88CAFC" },
     "labelChip": {
@@ -615,6 +616,7 @@ enum BuiltinThemeSources {
     }
   },
   "components": {
+    "tab": { "count": "{gray.611}" },
     "row": { "chipBg": "{gray.893}" }
   }
 }
@@ -695,6 +697,7 @@ enum BuiltinThemeSources {
     }
   },
   "components": {
+    "tab": { "count": "{ink.437}" },
     "row": { "chipBg": "{ink.188}" }
   }
 }
@@ -774,6 +777,7 @@ enum BuiltinThemeSources {
     }
   },
   "components": {
+    "tab": { "count": "{sand.573}" },
     "row": { "chipBg": "{sand.860}" }
   }
 }
@@ -844,7 +848,7 @@ enum BuiltinThemeSources {
         "trackingEm": 0
       },
       "tab.active": {
-        "size": 13,
+        "size": 14,
         "lineHeight": 18,
         "weight": 400,
         "trackingEm": 0
@@ -935,6 +939,7 @@ enum BuiltinThemeSources {
     }
   },
   "components": {
+    "tab": { "count": "{ctl}" },
     "row": { "chipBg": "{chip.8}" }
   }
 }
@@ -1004,7 +1009,7 @@ enum BuiltinThemeSources {
         "trackingEm": 0
       },
       "tab.active": {
-        "size": 13,
+        "size": 14,
         "lineHeight": 18,
         "weight": 400,
         "trackingEm": 0
@@ -1095,6 +1100,7 @@ enum BuiltinThemeSources {
     }
   },
   "components": {
+    "tab": { "count": "{ctl}" },
     "row": { "chipBg": "{chip.82}" }
   }
 }

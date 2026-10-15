@@ -27,7 +27,6 @@ public enum ReaderDocument {
         details.oh-quoted > summary::-webkit-details-marker { display: none; }
         .oh-placeholder { color: var(--oh-text-secondary); }
         img.oh-blocked { background: var(--oh-sunken); }
-        .oh-body:not(.oh-original-spacing) img.oh-blocked { max-height: 48px !important; }
         """
     }
 

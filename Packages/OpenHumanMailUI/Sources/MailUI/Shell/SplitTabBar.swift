@@ -28,23 +28,18 @@ public struct SplitTabBar: View {
     }
 
     private func tabButton(_ tab: MailTab, isActive: Bool) -> some View {
-        Button {
+        let count = Self.countText(state.tabCount(tab))
+        return Button {
             router.go(to: tab.location)
         } label: {
-            HStack(alignment: .firstTextBaseline, spacing: theme.component.tab.countGap) {
-                Text(tab.title)
-                    .font((isActive ? theme.typeTabActive : theme.typeTab).swiftUIFont)
-                    .foregroundStyle((isActive ? theme.component.tab.textActive : theme.component.tab.text).color)
-                    .lineLimit(1)
-                if let count = Self.countText(state.tabCount(tab)) {
-                    Text(count)
-                        .font(theme.typeTabCount.swiftUIFont)
-                        .foregroundStyle(theme.component.tab.count.color)
+            tabLabel(tab.title, count: count, isActive: true)
+                .hidden()
+                .overlay(alignment: Alignment(horizontal: .leading, vertical: .firstTextBaseline)) {
+                    tabLabel(tab.title, count: count, isActive: isActive)
                 }
-            }
-            .padding(.horizontal, ShellMetrics.tabHitPadding)
-            .frame(height: ShellMetrics.tabHeight)
-            .contentShape(Rectangle())
+                .padding(.horizontal, ShellMetrics.tabHitPadding)
+                .frame(height: ShellMetrics.tabHeight)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -58,6 +53,20 @@ public struct SplitTabBar: View {
         .accessibilityLabel(tab.title)
         .accessibilityValue(Self.spokenCount(tab))
         .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    private func tabLabel(_ title: String, count: String?, isActive: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: theme.component.tab.countGap) {
+            Text(title)
+                .font((isActive ? theme.typeTabActive : theme.typeTab).swiftUIFont)
+                .foregroundStyle((isActive ? theme.component.tab.textActive : theme.component.tab.text).color)
+                .lineLimit(1)
+            if let count {
+                Text(count)
+                    .font(theme.typeTabCount.swiftUIFont)
+                    .foregroundStyle(theme.component.tab.count.color)
+            }
+        }
     }
 
     static func tooltip(_ tab: MailTab) -> String {

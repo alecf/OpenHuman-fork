@@ -76,6 +76,7 @@
     }
   },
   "components": {
+    "tab": { "count": "{gray.611}" },
     "row": { "chipBg": "{gray.893}" }
   }
 }

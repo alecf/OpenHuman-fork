@@ -87,7 +87,7 @@ import Testing
     @Test func listAndTabMetrics() {
         let t = ThemeTokens.light
         #expect(t.typeTab.size == 18 && t.typeTab.lineHeight == 24 && t.typeTab.weight == 400)
-        #expect(t.typeTabActive == t.typeTab)
+        #expect(t.typeTabActive.size == 19 && t.typeTabActive.lineHeight == 24 && t.typeTabActive.weight == 400)
         #expect(t.typeTabCount.size == 13 && t.typeTabCount.weight == 400 && t.typeTabCount.monospacedDigits)
         #expect([t.densityCompactRow, t.densityDefaultRow, t.densityComfortableRow] == [32, 36, 44])
         #expect(t.component.row.snippet == t.textTertiary && t.component.row.date == t.textTertiary)
@@ -96,7 +96,26 @@ import Testing
         let library = ThemeLibrary.builtIn
         for (id, appearance) in [(BuiltinThemeID.systemLight, ThemeAppearance.light), (BuiltinThemeID.systemDark, .dark)] {
             let s = library.resolve(themeID: id, appearance: appearance).tokens
-            #expect(s.typeTab.size == 13 && s.typeTabActive.weight == 400 && s.typeTabCount.size == 10, "\(id)")
+            #expect(s.typeTab.size == 13 && s.typeTabActive.size == 14 && s.typeTabActive.weight == 400
+                    && s.typeTabCount.size == 10, "\(id)")
+        }
+    }
+
+    @Test func selectedSplitTabStandsApartByTextContrastOnly() {
+        for (label, t) in Self.everyResolvedTheme() {
+            let tab = t.component.tab
+            let active = tab.textActive.contrastRatio(on: t.bgWindow)
+            let inactive = tab.text.contrastRatio(on: t.bgWindow)
+            let count = tab.count.contrastRatio(on: t.bgWindow)
+            #expect(tab.textActive == t.textPrimary && tab.text == t.textTertiary, "\(label)")
+            #expect(t.typeTabActive.weight == t.typeTab.weight && t.typeTabActive.size > t.typeTab.size, "\(label)")
+            #expect(inactive >= 4.5 && active > inactive, "tab.text on bg.window: \(label)")
+            #expect(count >= 3, "tab.count on bg.window: \(label)")
+            if t.increaseContrast {
+                #expect(count >= 4.5, "tab.count with Increase Contrast: \(label)")
+            } else {
+                #expect(count < inactive, "tab.count is lighter than an unselected tab: \(label)")
+            }
         }
     }
 
