@@ -19,10 +19,10 @@ public struct AISettingsSection: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: theme.space7) {
             providers
+            AIFeatureModelsSection(center: model.center)
             choices
             personal
             accounts
-            activity
             SettingsErrorLine(text: model.error)
         }
         .task { await model.refresh() }
@@ -30,7 +30,7 @@ public struct AISettingsSection: View {
 
     private var providers: some View {
         SettingsSection(String(localized: "Models"),
-                        footnote: String(localized: "Mail uses the first model that is ready, on this Mac first.")) {
+                        footnote: String(localized: "The models Mail can use. Each feature's model is chosen below.")) {
             ForEach(model.providers) { row in
                 SettingsRow(row.name, detail: row.status, status: row.warning, statusTone: .warning) {
                     AIProviderBadgeView(badge: row.badge)
@@ -148,33 +148,6 @@ public struct AISettingsSection: View {
             ForEach(model.accounts) { account in
                 SettingsRow(account.title, isOn: Binding(get: { account.onDeviceOnly },
                                                          set: { model.setOnDeviceOnly($0, account: account.id) }))
-            }
-        }
-    }
-
-    private var activity: some View {
-        SettingsSection(String(localized: "Recent AI requests"),
-                        footnote: String(localized: "Only times, features, providers and token counts are kept, never mail text."),
-                        compact: true) {
-            SettingsRow(model.activity.isEmpty ? String(localized: "No AI requests yet.")
-                                               : String(localized: "Requests on this Mac")) {
-                HStack(spacing: theme.space3) {
-                    Button("Clear list") { model.clearActivity() }.disabled(model.activity.isEmpty)
-                    Button("Clear AI cache") { Task { await model.clearCache() } }
-                }
-            }
-            ForEach(model.activity) { row in
-                HStack(spacing: theme.space3) {
-                    Text(row.date, style: .time).themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
-                    Text(verbatim: row.feature).themeFont(theme.typeBody).foregroundStyle(theme.textPrimary.color)
-                    AIProviderBadgeView(badge: row.badge)
-                    Spacer(minLength: theme.space3)
-                    Text(verbatim: "\(row.tokens) · \(row.outcome)").themeFont(theme.typeMeta)
-                        .foregroundStyle(theme.textSecondary.color)
-                }
-                .padding(.vertical, theme.space2)
-                .frame(minHeight: SettingsMetrics.compactRowMinHeight)
-                .accessibilityElement(children: .combine)
             }
         }
     }

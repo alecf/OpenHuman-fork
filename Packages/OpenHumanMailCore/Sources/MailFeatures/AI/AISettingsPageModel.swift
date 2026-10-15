@@ -21,19 +21,8 @@ public final class AISettingsPageModel {
         public let onDeviceOnly: Bool
     }
 
-    public struct ActivityRow: Identifiable, Hashable, Sendable {
-        public let id: Int
-        public let date: Date
-        public let feature: String
-        public let provider: String
-        public let badge: AIProviderBadge
-        public let tokens: String
-        public let outcome: String
-    }
-
     public let center: AICenter
     public private(set) var error: String?
-    public private(set) var activity: [ActivityRow] = []
     @ObservationIgnored private weak var environment: AppEnvironment?
 
     public var listsUnavailableModels: Bool
@@ -190,45 +179,10 @@ public final class AISettingsPageModel {
     public func refresh() async {
         await center.refreshProviders()
         onDeviceReady = await center.onDeviceStatus().available
-        let names = Dictionary(center.providers.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
-        activity = center.activity.entries.prefix(30).enumerated().map { index, record in
-            Self.row(index, record, providerName: names[record.providerID] ?? record.providerID.rawValue)
-        }
-    }
-
-    public func clearActivity() {
-        center.activity.clear()
-        activity = []
     }
 
     public func clearCache() async {
         await center.clearCache()
-    }
-
-    static func row(_ index: Int, _ record: AIActivityRecord, providerName: String) -> ActivityRow {
-        let feature = switch record.feature {
-        case .summarize: String(localized: "Summary")
-        case .replyOptions: String(localized: "Quick replies")
-        case .rewrite: String(localized: "Rewrite (⌘J)")
-        case .classify: String(localized: "Triage")
-        case .askInbox: String(localized: "Ask your inbox")
-        case .searchPlan: String(localized: "Search as a sentence")
-        case .followUp: String(localized: "Follow-up check")
-        case .scheduling: String(localized: "Scheduling replies")
-        }
-        var tokens = String(localized: "\(record.countedInputTokens) tokens")
-        if let usage = record.usage, let input = usage.inputTokens, let output = usage.outputTokens {
-            tokens += String(localized: " (model: \(input) in, \(output) out)")
-        }
-        let outcome = switch record.outcome {
-        case .completed: String(localized: "Done")
-        case .cached: String(localized: "From cache")
-        case .cancelled: String(localized: "Stopped")
-        case .failed: String(localized: "Failed")
-        }
-        return ActivityRow(id: index, date: record.date, feature: feature, provider: providerName,
-                           badge: AIProviderBadge(providerName: providerName, location: record.dataLocation),
-                           tokens: tokens, outcome: outcome)
     }
 
     static let saveFailure = String(localized: "Couldn't save the AI setting")

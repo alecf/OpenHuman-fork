@@ -146,6 +146,12 @@ public final class AIComposerModel: Identifiable {
 
     func settle() async { await task?.value }
 
+    public var aiCenter: AICenter? { center }
+
+    public var accountKey: String? { session.flatMap { center?.policyKey($0.account.id) } }
+
+    public var canRerun: Bool { phase != .working && currentVersion?.isComplete == true }
+
     private func loadVoice() async {
         guard let center, let session else { return }
         let examples = await center.styleExamples(for: session.account)
@@ -391,6 +397,12 @@ public final class AIComposerModel: Identifiable {
                 phase = .ready
                 return
             }
+        }
+        if case AIError.unavailable = error, let center,
+           let found = await center.route(for: .rewrite, accountKeys: [accountKey]), found.0.selection.candidate == nil,
+           let line = await center.whyLine(for: .rewrite, accountKeys: [accountKey]) {
+            phase = .failed(line)
+            return
         }
         phase = .failed(AIWording.failure(error))
     }

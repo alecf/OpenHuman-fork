@@ -90,10 +90,16 @@ import Testing
     @Test func perAccountOnDeviceOnlyFailsClosed() {
         let settings = AISettings(onDeviceOnlyAccounts: ["work"])
         #expect(select(.rewrite, .interactive, [Self.claude, Self.system], settings, account: "work").candidate?.id == .appleSystem)
-        #expect(select(.rewrite, .interactive, [Self.claude, Self.system], settings, account: "home").candidate?.id == .agentClaude)
+        #expect(select(.rewrite, .interactive, [Self.claude, Self.system], settings, account: "home").candidate?.id == .appleSystem,
+                "unpinned, every account uses the default model on this Mac")
         #expect(select(.rewrite, .interactive, [Self.claude, Self.system], settings, account: nil).candidate?.id == .appleSystem)
         #expect(select(.rewrite, .interactive, [Self.claude], settings, account: "work")
             == .unavailable(.onDeviceOnly, providerID: .agentClaude))
+        var pinned = settings
+        pinned.featurePins[.rewrite] = .agentClaude
+        #expect(select(.rewrite, .interactive, [Self.claude, Self.system], pinned, account: "home").candidate?.id == .agentClaude)
+        #expect(select(.rewrite, .interactive, [Self.claude, Self.system], pinned, account: "work")
+            == .unavailable(.onDeviceOnly, providerID: .agentClaude), "a pin never overrides the account's policy")
     }
 
     @Test func pinsNeverFallBackSilently() {

@@ -1,0 +1,14 @@
+{
+  "id": "ai.why-this",
+  "area": "AI",
+  "title": "Why this? on an Ask AI answer",
+  "steps": [
+    "Launch with -UseFakeData, press ⌘J outside a draft and ask a question",
+    "When the answer shows, click the On this Mac badge with the ⓘ in the footer",
+    "Click View trace"
+  ],
+  "deepLink": null,
+  "expected": "A popover names the feature, the model, where it ran, why this model (Mail's default for this feature) and the prompt, time and tokens. View trace shows the full trace inside the popover; ‹ Why this? goes back.",
+  "requires": "fake",
+  "addedIn": "2026-10-15"
+}

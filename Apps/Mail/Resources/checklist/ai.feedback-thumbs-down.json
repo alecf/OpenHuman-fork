@@ -1,0 +1,14 @@
+{
+  "id": "ai.feedback-thumbs-down",
+  "area": "AI",
+  "title": "Feedback shows rated ⌘J answers and filters to thumbs down",
+  "steps": [
+    "Launch with -UseFakeData, run ⌘J twice in a draft and rate one answer thumbs up and one thumbs down",
+    "Open Settings › AI › Activity and choose Feedback",
+    "Tick Thumbs down only, then click the remaining row"
+  ],
+  "deepLink": null,
+  "expected": "Feedback lists both rated answers with their thumb. With Thumbs down only ticked just the thumbs-down answer stays, and its trace shows Your rating: Thumbs down.",
+  "requires": "fake",
+  "addedIn": "2026-10-15"
+}

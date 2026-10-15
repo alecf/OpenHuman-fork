@@ -70,7 +70,7 @@ struct AIEditActions: View {
             }
             if model.currentVersion != nil {
                 if let badge {
-                    AIProviderBadgeView(badge: badge, short: true)
+                    AIComposerModelButton(model: model, badge: badge)
                         .fixedSize()
                         .layoutPriority(1)
                         .padding(.horizontal, theme.space1)

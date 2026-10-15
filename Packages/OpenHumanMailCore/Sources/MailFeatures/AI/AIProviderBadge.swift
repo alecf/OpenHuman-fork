@@ -7,6 +7,7 @@ public struct AIProviderBadge: Hashable, Sendable {
     public let leavesMac: Bool
     public let help: String
     public let short: String
+    public internal(set) var traceID: UUID?
 
     public init(title: String, symbol: String, leavesMac: Bool, help: String, short: String) {
         self.title = title
@@ -18,6 +19,7 @@ public struct AIProviderBadge: Hashable, Sendable {
 
     public init(provenance: AIProvenance) {
         self.init(providerName: provenance.providerName, location: provenance.dataLocation, fromCache: provenance.fromCache)
+        traceID = provenance.traceID
     }
 
     public init(providerName: String, location: AIDataLocation, fromCache: Bool = false) {

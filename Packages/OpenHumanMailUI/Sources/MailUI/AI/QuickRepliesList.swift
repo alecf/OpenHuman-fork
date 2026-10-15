@@ -20,7 +20,7 @@ struct QuickRepliesList: View {
                     .font(theme.typeLabel.swiftUIFont)
                     .foregroundStyle(theme.textSecondary.color)
                 Spacer(minLength: theme.space4)
-                if let badge = model.badge, model.phase == .ready { AIProviderBadgeView(badge: badge) }
+                if let badge = model.badge, model.phase == .ready { AIWhyThisBadge(badge: badge, center: model.aiCenter) }
             }
             switch model.phase {
             case .loading, .idle:

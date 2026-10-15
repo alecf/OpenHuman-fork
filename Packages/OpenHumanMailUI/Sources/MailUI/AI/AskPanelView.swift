@@ -467,7 +467,7 @@ public struct AskPanelView: View {
                 .foregroundStyle(theme.textTertiary.color)
                 .lineLimit(1)
             Spacer(minLength: theme.space3)
-            if let badge = model.badge { AIProviderBadgeView(badge: badge) }
+            if let badge = model.badge { AIWhyThisBadge(badge: badge, center: model.aiCenter) }
         }
         .padding(.horizontal, OverlayMetrics.rowIconX)
         .frame(height: AskPanelMetrics.footerHeight)
