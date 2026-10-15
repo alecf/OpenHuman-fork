@@ -54,7 +54,8 @@ extension RenderSweepTests {
         try await sweepShoot(w.window, screen: "recent-opens-contact-pane", theme: theme)
     }
 
-    @Test(arguments: SweepTheme.selected(SweepTheme.allBuiltIns, slugs: "light,dark"))
+    @Test(arguments: SweepTheme.selected(SweepTheme.allBuiltIns + [SweepTheme.lightBlueAccent],
+                                         slugs: "light,dark,system-light,system-dark,light-blue"))
     func selectModeCursorUnderACheckedRow(_ theme: SweepTheme) async throws {
         let environment = SweepWindow.environment()
         let w = try await SweepWindow.make(environment, theme: theme)
@@ -107,4 +108,10 @@ extension RenderSweepTests {
         #expect(environment.actions.perform(.toggleContextSidebar, source: .menu, host: w.router))
         try await sweepShoot(w.window, screen: "recent-opens-across-the-week", theme: theme)
     }
+}
+
+extension SweepTheme {
+    static let lightBlueAccent = SweepTheme(name: "Light + Blue", slug: "light-blue",
+                                            preferences: ThemePreferences(mode: .light, lightThemeID: BuiltinThemeID.light,
+                                                                          accentID: "blue"))
 }

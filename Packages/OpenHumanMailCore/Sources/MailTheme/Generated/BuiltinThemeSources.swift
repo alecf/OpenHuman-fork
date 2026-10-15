@@ -480,7 +480,7 @@ enum BuiltinThemeSources {
       "red.668": "#FF7A72",
       "red.159": "#3D1F1F",
       "sky.751": "#7CC0F2",
-      "sky.221": "#1C3655",
+      "sky.224": "#023957",
       "violet.675": "#A897FA",
       "violet.164": "#2A2540"
     }
@@ -527,7 +527,7 @@ enum BuiltinThemeSources {
   "components": {
     "tab": { "count": "{gray.487}" },
     "thread": { "cardShadow": "0 1 2 0 rgba(0,0,0,0.20)" },
-    "row": { "unreadDot": "#88CAFC", "bgChecked": "{sky.221}" },
+    "row": { "unreadDot": "#88CAFC", "bgChecked": "{sky.224}" },
     "labelChip": {
       "roseBg": "#4A2139", "roseText": "#F6B8DA", "coralBg": "#4C2519", "coralText": "#F9BBA3",
       "tangerineBg": "#47301A", "tangerineText": "#F5C894", "amberBg": "#433815", "amberText": "#EFD27A",
@@ -572,7 +572,7 @@ enum BuiltinThemeSources {
       "green.425": "#1A7340",
       "red.947": "#FDECEC",
       "red.438": "#C62828",
-      "sky.904": "#D3E6F8",
+      "sky.906": "#C1EBF8",
       "sky.462": "#2272AE",
       "violet.947": "#F1EEFC",
       "violet.437": "#6A4FD8"
@@ -619,7 +619,7 @@ enum BuiltinThemeSources {
   },
   "components": {
     "tab": { "count": "{gray.611}" },
-    "row": { "chipBg": "{gray.893}", "bgChecked": "{sky.904}" }
+    "row": { "chipBg": "{gray.893}", "bgChecked": "{sky.906}" }
   }
 }
 

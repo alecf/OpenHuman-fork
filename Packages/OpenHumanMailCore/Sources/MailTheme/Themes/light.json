@@ -31,7 +31,7 @@
       "green.425": "#1A7340",
       "red.947": "#FDECEC",
       "red.438": "#C62828",
-      "sky.904": "#D3E6F8",
+      "sky.906": "#C1EBF8",
       "sky.462": "#2272AE",
       "violet.947": "#F1EEFC",
       "violet.437": "#6A4FD8"
@@ -78,6 +78,6 @@
   },
   "components": {
     "tab": { "count": "{gray.611}" },
-    "row": { "chipBg": "{gray.893}", "bgChecked": "{sky.904}" }
+    "row": { "chipBg": "{gray.893}", "bgChecked": "{sky.906}" }
   }
 }

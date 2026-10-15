@@ -203,23 +203,35 @@ public final class ThreadRowView: NSTableCellView {
         }
 
         let options: NSString.DrawingOptions = [.usesLineFragmentOrigin, .truncatesLastVisibleLine]
-        let onCursor = isCursorRow
         NSGraphicsContext.saveGraphicsState()
         if let band = frames.actions {
             NSBezierPath(rect: rtl ? NSRect(x: band.maxX, y: 0, width: max(0, width - band.maxX), height: height)
                                    : NSRect(x: 0, y: 0, width: max(0, band.minX), height: height)).addClip()
         }
-        if let sender = frames.sender { content.sender.draw(with: sender, options: options, context: nil) }
-        if let line = frames.line {
-            let fitted = fittedLine(width: c.subject.upperBound - c.subject.lowerBound)
-            let text = isChecked ? style.chips.onChecked(fitted) : fitted
-            (onCursor ? style.onCursor(text) : text).draw(with: line, options: options, context: nil)
-        }
+        if let sender = frames.sender, let text = drawnSender() { text.draw(with: sender, options: options, context: nil) }
+        if let line = frames.line, let text = drawnLine(frames) { text.draw(with: line, options: options, context: nil) }
         NSGraphicsContext.restoreGraphicsState()
-        if let date = frames.date {
-            (onCursor ? style.onCursor(content.date) : content.date).draw(with: date, options: options, context: nil)
-        }
+        if let date = frames.date, let text = drawnDate() { text.draw(with: date, options: options, context: nil) }
         for (image, frame) in zip(content.indicators, frames.indicators) { image.draw(in: frame) }
+    }
+
+    private var onFill: Bool { isChecked || isCursorRow }
+
+    func drawnLine(_ frames: DrawnFrames) -> NSAttributedString? {
+        guard let line = frames.line else { return nil }
+        let fitted = fittedLine(width: line.width)
+        let text = isChecked ? style.chips.onChecked(fitted) : fitted
+        return onFill ? style.onFill(text) : text
+    }
+
+    func drawnSender() -> NSAttributedString? {
+        guard let content else { return nil }
+        return onFill ? style.onFill(content.sender) : content.sender
+    }
+
+    func drawnDate() -> NSAttributedString? {
+        guard let content else { return nil }
+        return onFill ? style.onFill(content.date) : content.date
     }
 
     func fittedLine(width: CGFloat) -> NSAttributedString {
@@ -375,7 +387,8 @@ public final class ThreadRowView: NSTableCellView {
     }
 
     public static func columns(width: CGFloat) -> Columns {
-        let c = ThreadRowStyle.columns(width: width, metrics: ThreadRowStyle.metrics(.light))
+        let c = ThreadRowStyle.columns(width: width, metrics: ThreadRowStyle.metrics(.light),
+                                       minimumSubject: ThreadRowStyle.minimumSubject(for: .light))
         return Columns(dotCenterX: c.dotCenterX, sender: c.sender, subject: c.subject, indicators: c.indicators, date: c.date)
     }
 
