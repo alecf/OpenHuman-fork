@@ -53,6 +53,24 @@ private func row(_ n: Int64, unread: Bool = false, starred: Bool = false, labels
         let unlabel = MailCommand.modifyLabels([key(1)], add: [], remove: [GmailLabelID("Label_7")])
         #expect(OptimisticEffect.of(unlabel, in: .label(GmailLabelID("Label_7")), labelRows: rows).hidden == [key(1)])
     }
+
+    @Test func snoozeOutsideTheInboxMarksTheRowInsteadOfHidingIt() {
+        let wake = Date(timeIntervalSince1970: 1_800_000_030)
+        let due = ScheduleStamp.floorToMinute(wake)
+        let snooze = MailCommand.snooze([key(1)], until: wake)
+        #expect(OptimisticEffect.of(snooze, in: .system(.inbox)).hidden == [key(1)])
+        let staying: [MailLocation] = [.system(.allMail), .system(.starred), .system(.done), .system(.snoozed),
+                                       .label(GmailLabelID("Label_7"))]
+        for place in staying {
+            let effect = OptimisticEffect.of(snooze, in: place)
+            #expect(effect.hidden.isEmpty && effect.patches[key(1)]?.snoozedUntil == .some(due), "\(place)")
+        }
+        #expect(OptimisticEffect.of(.unsnooze([key(1)]), in: .system(.done)).hidden == [key(1)], "waking moves it to the inbox")
+        #expect(OptimisticEffect.of(.unsnooze([key(1)]), in: .system(.starred)).patches[key(1)]?.snoozedUntil == .some(nil))
+        #expect(OptimisticEffect.of(.clearSnooze([key(1)]), in: .system(.snoozed)).hidden == [key(1)])
+        #expect(OptimisticEffect.of(.clearSnooze([key(1)]), in: .system(.done)).patches[key(1)]?.snoozedUntil == .some(nil),
+                "ending a snooze without waking leaves it in Done")
+    }
 }
 
 @Suite struct ThreadListOverlayTests {
@@ -117,6 +135,31 @@ private func row(_ n: Int64, unread: Bool = false, starred: Bool = false, labels
         #expect(overlay.apply(to: [row(1, unread: false)]).rows[0].isUnread == false,
                 "the earlier mark unread does not return once the read is confirmed")
         #expect(overlay.isEmpty)
+    }
+
+    @Test func aSnoozePatchShowsTheWakeTimeUntilTheStoreAgrees() {
+        var overlay = ThreadListOverlay()
+        let wake = Date(timeIntervalSince1970: 1_800_000_030)
+        let due = ScheduleStamp.floorToMinute(wake)
+        overlay.add(.of(.snooze([key(1)], until: wake), in: .system(.allMail)), at: start)
+        #expect(overlay.apply(to: [row(1)]).rows[0].snoozedUntil == due)
+        let stored = [key(1): row(1).replacing(snoozedUntil: .some(due))]
+        #expect(!overlay.confirm { stored[$0] }.isEmpty)
+        #expect(overlay.isEmpty)
+    }
+
+    @Test func aProvisionalLabelHandsOverToTheStoredOne() {
+        var overlay = ThreadListOverlay()
+        overlay.add(OptimisticEffect(patches: [key(1): RowPatch(addUserLabels: [-1]), key(2): RowPatch(isUnread: false)]),
+                    at: start)
+        let version = overlay.version
+        #expect(overlay.relabel([-1: 9]) == [key(1)])
+        #expect(overlay.version > version)
+        #expect(overlay.patch(for: key(1)) == RowPatch(addUserLabels: [9]))
+        #expect(overlay.patch(for: key(2)) == RowPatch(isUnread: false))
+        let stored = [key(1): row(1, labels: [9]), key(2): row(2)]
+        #expect(!overlay.confirm { stored[$0] }.isEmpty, "settles once the stored label is on the row")
+        #expect(overlay.patch(for: key(1)) == nil)
     }
 
     @Test func aNewerChangeLeavesOtherFieldsAndThreadsAlone() {

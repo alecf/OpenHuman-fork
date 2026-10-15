@@ -509,7 +509,16 @@ extension ComposeManager {
         await session.settle()
         session.expectsDraftGone = true
         guard session.canPersist, let key = session.draftKey, let commands = environment.commands else { return }
-        try? await commands.discardDraft(key)
+        do {
+            try await commands.discardDraft(key)
+        } catch MailPortError.notFound(_) {
+            // Deleted elsewhere already: nothing to bring back
+        } catch {
+            if pending.wasPendingReview { try? await commands.setReviewState(key, .pending) }
+            let detail = (error as? MailPortError)?.description ?? String(localized: "Try again.")
+            bringBack(session, String(localized: "Couldn't discard the draft. \(detail)"))
+            return
+        }
         recovery.remove(key)
     }
 

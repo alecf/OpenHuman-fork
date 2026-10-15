@@ -58,6 +58,9 @@ public final class ThreadListModel {
     @ObservationIgnored private var chromeTasks: [Task<Void, Never>] = []
     @ObservationIgnored private var listeners: [(owner: ObjectIdentifier, handler: @MainActor (Event) -> Void)] = []
     @ObservationIgnored private var labelRowsByGmailID: [GmailLabelID: Int64] = [:]
+    @ObservationIgnored private var provisionalLabels: [Int64: LabelInfo] = [:]
+    @ObservationIgnored private var provisionalTickets: [OptimisticTicket: Int64] = [:]
+    @ObservationIgnored private var nextProvisionalLabel: Int64 = -1
     @ObservationIgnored private var requestedThrough = -1
     @ObservationIgnored private var visiblePages: ClosedRange<Int>?
     @ObservationIgnored public var onInstall: ((ThreadListChange, Duration) -> Void)?
@@ -306,7 +309,37 @@ public final class ThreadListModel {
 
     @discardableResult
     public func applyOptimistic(_ command: MailCommand) -> OptimisticTicket? {
-        let effect = OptimisticEffect.of(command, in: location, labelRows: labelRowsByGmailID)
+        applyEffect(OptimisticEffect.of(command, in: location, labelRows: labelRowsByGmailID))
+    }
+
+    @discardableResult
+    public func applyOptimisticLabel(named name: String, to keys: [ThreadKey]) -> OptimisticTicket? {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, !keys.isEmpty else { return nil }
+        let effect = { (id: Int64) in
+            OptimisticEffect(patches: Dictionary(keys.map { ($0, RowPatch(addUserLabels: [id])) },
+                                                 uniquingKeysWith: { $1 }))
+        }
+        if let known = labels.values.first(where: { $0.kind == .user && $0.name == name }) {
+            return applyEffect(effect(known.id))
+        }
+        let id = nextProvisionalLabel
+        nextProvisionalLabel -= 1
+        let label = LabelInfo(id: id, account: account, labelID: GmailLabelID("oh:provisional:\(-id)"), kind: .user,
+                              name: name, displayName: String(name.split(separator: "/").last ?? Substring(name)),
+                              position: Int.max)
+        provisionalLabels[id] = label
+        labels[id] = label
+        guard let ticket = applyEffect(effect(id)) else {
+            provisionalLabels[id] = nil
+            labels[id] = nil
+            return nil
+        }
+        provisionalTickets[ticket] = id
+        return ticket
+    }
+
+    private func applyEffect(_ effect: OptimisticEffect) -> OptimisticTicket? {
         guard !effect.isEmpty else { return nil }
         lastKeyAt = now()
         let present = effect.keys.filter { snapshot.index(of: $0) != nil }
@@ -327,6 +360,9 @@ public final class ThreadListModel {
     }
 
     public func revertOptimistic(_ ticket: OptimisticTicket) {
+        if let id = provisionalTickets.removeValue(forKey: ticket), provisionalLabels.removeValue(forKey: id) != nil {
+            labels[id] = nil
+        }
         guard overlay.revert(ticket) else { return }
         pushOverlay(changedKeys: [])
     }
@@ -431,7 +467,35 @@ public final class ThreadListModel {
         labelRowsByGmailID = byGmail
         let muted = list.first { $0.name == OHGmailLabels.muted }?.id
         if muted != mutedLabelRowID { mutedLabelRowID = muted }
-        if byID != labels { labels = byID }
+        var swaps: [Int64: Int64] = [:]
+        for (id, label) in provisionalLabels {
+            let stored = byID.values.first { $0.kind == .user && $0.name == label.name }
+            if let stored { swaps[id] = stored.id }
+        }
+        for id in swaps.keys { provisionalLabels[id] = nil }
+        if !swaps.isEmpty { provisionalTickets = provisionalTickets.filter { provisionalLabels[$0.value] != nil } }
+        let shown = byID.merging(provisionalLabels) { stored, _ in stored }
+        if shown != labels { labels = shown }
+        handOver(swaps)
+    }
+
+    private func handOver(_ swaps: [Int64: Int64]) {
+        let touched = overlay.relabel(swaps)
+        guard !touched.isEmpty else { return }
+        var next = snapshot
+        var reconfigured = IndexSet()
+        for key in touched {
+            guard let i = next.index(of: key) else { continue }
+            var ids: [Int64] = []
+            for id in next.rows[i].userLabelIDs.map({ swaps[$0] ?? $0 }) where !ids.contains(id) { ids.append(id) }
+            next.rows[i] = next.rows[i].replacing(userLabelIDs: ids)
+            reconfigured.insert(i)
+        }
+        if reconfigured.isEmpty {
+            pushOverlay(changedKeys: touched)
+        } else {
+            localEdit(next, change: .update(ThreadListEdit(reconfigured: reconfigured)), changedKeys: touched)
+        }
     }
 
     public func isMuted(_ row: ThreadRow) -> Bool {

@@ -8,6 +8,7 @@ final class RecordingCommands: MailCommanding {
     let store: FakeMailStore
     private let log = Mutex<[String]>([])
     private let scheduleHold = Mutex<Checkpoint?>(nil)
+    private let discardFailure = Mutex<MailPortError?>(nil)
 
     init(_ store: FakeMailStore) { self.store = store }
 
@@ -15,6 +16,7 @@ final class RecordingCommands: MailCommanding {
     private func record(_ name: String) { log.withLock { $0.append(name) } }
 
     func holdSchedules(at checkpoint: Checkpoint) { scheduleHold.withLock { $0 = checkpoint } }
+    func failDiscards(with error: MailPortError) { discardFailure.withLock { $0 = error } }
 
     func apply(_ command: MailCommand) async throws -> UndoToken { record("apply"); return try await store.apply(command) }
     func undo(_ token: UndoToken) async throws -> UndoToken? { record("undo"); return try await store.undo(token) }
@@ -25,7 +27,11 @@ final class RecordingCommands: MailCommanding {
         record("updateDraft"); return try await store.updateDraft(key, fields, expectedVersion: expectedVersion)
     }
     func flushDraft(_ key: DraftKey) async throws { record("flushDraft"); try await store.flushDraft(key) }
-    func discardDraft(_ key: DraftKey) async throws { record("discardDraft"); try await store.discardDraft(key) }
+    func discardDraft(_ key: DraftKey) async throws {
+        record("discardDraft")
+        if let failure = discardFailure.withLock({ $0 }) { throw failure }
+        try await store.discardDraft(key)
+    }
     func setReviewState(_ key: DraftKey, _ state: DraftReview) async throws {
         record("setReviewState"); try await store.setReviewState(key, state)
     }
