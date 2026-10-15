@@ -51,6 +51,11 @@ and failed checks fail the job.
 The project also generates from a source archive without Git metadata (for
 example GitHub's Download ZIP); only the build's commit stamp needs Git.
 
+Builds use Xcode's compilation cache, stored in
+`~/Library/Caches/OpenHuman/compilation-cache` (override with `OH_COMPILATION_CACHE_PATH`), outside
+derived data, so deleting derived data keeps it. It grows to a few GB; delete the folder to reset it.
+Hits are per checkout path: another worktree does not reuse them, even with prefix mapping enabled.
+
 Local build output is under `build/`; the app product is
 `build/dd/Build/Products/Release/OpenHumanMail.app`. Release signing and binary
 distribution are described in [the release guide](release/RELEASE-HOWTO.md).

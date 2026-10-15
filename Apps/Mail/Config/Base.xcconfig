@@ -17,5 +17,8 @@ CODE_SIGN_IDENTITY = -
 CURRENT_PROJECT_VERSION = 1
 GENERATE_INFOPLIST_FILE = NO
 
+COMPILATION_CACHE_ENABLE_CACHING = YES
+COMPILATION_CACHE_CAS_PATH = $(HOME)/Library/Caches/OpenHuman/compilation-cache
+
 // Local overrides go last so they win over the defaults above (a developer's signing team, identity and bundle id prefix).
 #include? "Local.xcconfig"
