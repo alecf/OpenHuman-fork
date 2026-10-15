@@ -56,8 +56,8 @@ import Testing
         #expect(!back.contains("OpenHuman/News") && back.contains("OpenHuman/Pitch"))
     }
 
-    @Test func labelAsInReadOnlyChangesOnlyThisMacsAnswer() async throws {
-        let f = F(safeMode: .readOnly, writes: true, verdict: { _ in .pitch })
+    @Test func labelAsWithGmailWritesOffChangesOnlyThisMacsAnswer() async throws {
+        let f = F(writes: false, verdict: { _ in .pitch })
         f.store.deliverMessage(account: F.work, from: Self.recruiter, subject: Self.roleSubject, text: "A role for you.")
         await f.center.classifyRecent()
         let role = try await row(f, Self.roleSubject)
@@ -67,18 +67,6 @@ import Testing
         #expect(f.recorder.calls.count == calls, "nothing reaches the mail port")
         #expect(try await f.index.entry(account: F.work, thread: role.id.gmailThreadID)?.category == "Travel")
         #expect(await f.env.classification.examples().count == 1)
-    }
-
-    @Test func notImportantInReadOnlyRecordsTheExampleAndSaysWhy() async throws {
-        let f = F(safeMode: .readOnly, writes: true)
-        let target = try #require(try await f.inbox().first)
-        let rulesBefore = f.rules.allRules.count
-        await perform(f, .classificationNotImportant, on: target)
-        #expect(f.rules.allRules.count == rulesBefore, "the importance rule is refused")
-        #expect(f.env.notices.toasts.contains { $0.message == ClassificationCorrectionHandler.readOnlyNote })
-        let example = try #require(await f.env.classification.examples().first)
-        #expect(example.feature == "importance" && example.expected == "not_important")
-        #expect(f.env.undo?.stack.isEmpty == true)
     }
 
     @Test func notImportantIsOneUndoEntryAndTheFollowUpSavesNothingUntilTapped() async throws {

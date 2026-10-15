@@ -89,9 +89,7 @@ public struct DevFeedbackSnapshot: Codable, Sendable, Hashable {
     }
 
     public struct StatusInfo: Codable, Sendable, Hashable {
-        public var safeModeText: String?
         public var syncText: String?
-        public var blockedNotice: String?
     }
 
     public struct ListInfo: Codable, Sendable, Hashable {
@@ -158,7 +156,6 @@ public struct DevFeedbackSnapshot: Codable, Sendable, Hashable {
     public var capturedAtLocal: String
     public var timeZone: String
     public var app: AppInfo
-    public var safeMode: String
     public var screen: String
     public var route: String
     public var status: StatusInfo?

@@ -47,15 +47,6 @@ extension RenderSweepTests {
             try await sweepShoot(w.window, screen: "reader-invite-card-original", theme: theme)
         }
         do {
-            let env = SweepWindow.environment(safeMode: .readOnly)
-            let w = try await SweepWindow.make(env, theme: theme)
-            defer { w.close() }
-            let (thread, message) = try await InviteFixtures.invitation(env, corpus: corpus)
-            _ = try await w.open(thread)
-            try await until { w.reader.messageViews[message.id]?.inviteHost?.showsCard == true }
-            try await sweepShoot(w.window, screen: "reader-invite-card-read-only", theme: theme)
-        }
-        do {
             let env = SweepWindow.environment()
             let w = try await SweepWindow.make(env, theme: theme)
             defer { w.close() }

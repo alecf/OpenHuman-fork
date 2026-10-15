@@ -3,12 +3,12 @@
   "area": "Block",
   "title": "New mail from a blocked sender skips the Inbox (real Gmail)",
   "steps": [
-    "With a real Gmail account in write mode, block a low-stakes sender that sends often, choosing Keep for the cleanup",
+    "With a real Gmail account, block a low-stakes sender that sends often, choosing Keep for the cleanup",
     "Wait for the next message from them, or send one from another address you own",
     "Open the Inbox, then All mail, then Settings > Blocked > Show mail"
   ],
   "deepLink": null,
   "expected": "The new message never shows in the Inbox: it is archived and marked read (or in Trash if that rule or the default says Trash) and Gmail shows the same on the web. All mail and Show mail still list it. Mail you sent to them is untouched. Unblocking stops this for later mail only.",
-  "requires": "real-write",
+  "requires": "real",
   "addedIn": "2026-10-13"
 }

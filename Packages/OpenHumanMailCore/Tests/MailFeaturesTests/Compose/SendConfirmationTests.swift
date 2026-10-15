@@ -7,33 +7,44 @@ import Testing
 @testable import MailFeatures
 
 @MainActor
-@Suite struct WriteModeTests {
-    private func fixture() -> ComposeFixture { ComposeFixture(writeMode: WriteModeSession()) }
+@Suite struct SendConfirmationTests {
+    private func fixture() -> ComposeFixture { ComposeFixture(isLiveAccount: true) }
 
-    @Test func writeModeHasNoIndicator() async throws {
+    @Test func onlyALiveAccountOffersConfirmBeforeSendingAndItLooksLikeAnyOther() async throws {
         let f = fixture()
         await f.loaded()
-        #expect(f.env.writeMode != nil && f.env.status.isWriteMode)
-        #expect(f.env.status.safeModeText == nil && f.env.status.safeModeDetail == nil && f.env.status.safeModeHelp == nil)
-        #expect(!f.router.windowTitle.contains("Write mode"))
-        #expect(GeneralSettingsModel(environment: f.env).showsWriteModeSending)
+        #expect(f.env.isLiveAccount)
+        #expect(GeneralSettingsModel(environment: f.env).showsConfirmBeforeSending)
 
         let plain = ComposeFixture()
         await plain.loaded()
-        #expect(plain.env.writeMode == nil && !plain.env.status.isWriteMode && plain.env.status.safeModeText == nil)
-        #expect(plain.router.windowTitle == f.router.windowTitle, "write mode and normal look the same")
-        #expect(!GeneralSettingsModel(environment: plain.env).showsWriteModeSending)
-        let readOnly = StatusModel(data: FakeMailStore(corpus: .make(), options: .init(safeMode: .readOnly)), isWriteMode: true)
-        #expect(!readOnly.isWriteMode && readOnly.safeModeText == "Read-only")
+        #expect(!plain.env.isLiveAccount)
+        #expect(plain.router.windowTitle == f.router.windowTitle, "a live account and fake data look the same")
+        #expect(!GeneralSettingsModel(environment: plain.env).showsConfirmBeforeSending)
+        let noPort = ComposeFixture(writePort: false, isLiveAccount: true)
+        #expect(!GeneralSettingsModel(environment: noPort.env).showsConfirmBeforeSending, "nothing to send with")
+    }
+
+    @Test func confirmBeforeSendingNeverAsksOnFakeData() async throws {
+        let f = ComposeFixture()
+        await f.loaded()
+        try await f.store.set(SendSettings.confirmEverySend, true)
+        let session = try #require(f.compose.openNew(placement: .modal))
+        session.to.text = "dana@acme.example,"
+        session.subject = "Synthetic"
+        session.updateBody(doc("Hello"))
+        #expect(await f.run(.send, in: session))
+        #expect(f.recorder.calls.contains("send"), "the send reached the port when the action finished")
+        #expect(session.sendConfirmation == nil, "no card off a live account")
     }
 
     @Test func sendIsHiddenByDefaultAndConfirmBeforeSendingShowsTheCard() async throws {
         let f = fixture()
         await f.loaded()
-        #expect(WriteModeSession.confirmEverySend.defaultValue == false)
+        #expect(SendSettings.confirmEverySend.defaultValue == false)
         let settings = GeneralSettingsModel(environment: f.env)
         settings.start()
-        #expect(settings.showsWriteModeSending && GeneralSettingsModel.confirmBeforeSendingTitle == "Confirm before sending")
+        #expect(settings.showsConfirmBeforeSending && GeneralSettingsModel.confirmBeforeSendingTitle == "Confirm before sending")
         await soon { !settings.confirmEverySend.value }
         #expect(settings.confirmEverySend.value == false, "off by default")
 
@@ -47,7 +58,7 @@ import Testing
         await f.toast("Sending to ")
 
         await settings.confirmEverySend.set(true)
-        #expect(try await f.store.get(WriteModeSession.confirmEverySend) == true)
+        #expect(try await f.store.get(SendSettings.confirmEverySend) == true)
         let asked = try #require(f.compose.openNew(placement: .modal))
         asked.to.text = "sam@acme.example,"
         asked.subject = "Synthetic"
@@ -63,7 +74,7 @@ import Testing
     @Test func aSendOfAnySizeGoesStraightToItsUndoWindow() async throws {
         let f = fixture()
         await f.loaded()
-        #expect(try await f.store.get(WriteModeSession.confirmEverySend) == false, "off by default")
+        #expect(try await f.store.get(SendSettings.confirmEverySend) == false, "off by default")
         let session = try #require(f.compose.openNew(placement: .modal))
         session.to.text = (1...25).map { "person\($0)@acme.example" }.joined(separator: ", ") + ","
         session.subject = "Synthetic"
@@ -82,7 +93,7 @@ import Testing
     @Test func confirmEverySendIsTheUsersChoice() async throws {
         let f = fixture()
         await f.loaded()
-        try await f.store.set(WriteModeSession.confirmEverySend, true)
+        try await f.store.set(SendSettings.confirmEverySend, true)
         let session = try #require(f.compose.openNew(placement: .modal))
         session.to.text = "Dana Ruiz <dana@acme.example>,"
         session.subject = "Synthetic"
@@ -100,7 +111,7 @@ import Testing
         f.store.completeHeldSends()
         f.heldGate.release()
         await f.compose.settle()
-        #expect(try await f.store.get(WriteModeSession.confirmEverySend) == false, "Don't ask again turned it off")
+        #expect(try await f.store.get(SendSettings.confirmEverySend) == false, "Don't ask again turned it off")
     }
 
     @Test func sendLaterAsksOnlyWhenConfirmEverySendIsOn() async throws {
@@ -114,7 +125,7 @@ import Testing
         #expect(quiet.sendConfirmation == nil && f.recorder.calls.contains("scheduleSend"))
         await f.toast("Scheduled for ")
 
-        try await f.store.set(WriteModeSession.confirmEverySend, true)
+        try await f.store.set(SendSettings.confirmEverySend, true)
         let asked = try #require(f.compose.openNew(placement: .modal))
         asked.to.text = "sam@acme.example,"
         asked.updateBody(doc("Later too"))
@@ -152,18 +163,5 @@ import Testing
         #expect(await f.run(.undo))
         await soon { f.recorder.calls.filter { $0 == "undo" }.count == 1 }
         await soon { rows.allSatisfy { f.store.labelNames(of: $0) == before[$0] } }
-    }
-
-    @Test func theSignInScreenOffersOpenReadOnlyOnlyWhenTheAppSetsIt() async {
-        let store = FakeMailStore(corpus: .make())
-        let model = SignInModel(accounts: store, safeMode: .normal, loginHint: "robin@example.com",
-                                notice: "Sign in again to allow changes.")
-        #expect(!model.offersReadOnly)
-        model.openReadOnly()
-        var opened = 0
-        model.onOpenReadOnly = { opened += 1 }
-        #expect(model.offersReadOnly)
-        model.openReadOnly()
-        #expect(opened == 1)
     }
 }

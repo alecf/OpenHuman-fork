@@ -6,14 +6,13 @@ public final class FakeWaitingRules: WaitingPort, Sendable {
     private struct State {
         var choices: [ThreadKey: WaitingChoice] = [:]
         var known: Set<ThreadKey>?
-        var safeMode: SafeModeInfo
         var failNext: MailPortError?
     }
 
     private let state: Mutex<State>
 
-    public init(safeMode: SafeModeInfo = .normal, knownThreads: Set<ThreadKey>? = nil) {
-        state = Mutex(State(known: knownThreads, safeMode: safeMode))
+    public init(knownThreads: Set<ThreadKey>? = nil) {
+        state = Mutex(State(known: knownThreads))
     }
 
     public var choices: [ThreadKey: WaitingChoice] { state.withLock { $0.choices } }
@@ -44,7 +43,6 @@ public final class FakeWaitingRules: WaitingPort, Sendable {
             s.failNext = nil
             throw failure
         }
-        if s.safeMode == .readOnly { throw MailPortError.blockedBySafeMode }
         if let known = s.known, !known.contains(thread) { throw MailPortError.notFound("thread") }
     }
 }

@@ -4,8 +4,7 @@ import OpenHumanLinks
 public struct DevChecklistItem: Identifiable, Sendable, Hashable {
     public enum Requirement: String, Sendable, Hashable, Codable, CaseIterable {
         case fake
-        case realReadOnly = "real-readonly"
-        case realWrite = "real-write"
+        case real
     }
 
     public let id: String
@@ -147,7 +146,7 @@ public enum DevChecklistLoader {
         }
         guard let requiresText = fields["requires"] as? String,
               let requires = DevChecklistItem.Requirement(rawValue: requiresText)
-        else { return .failure(Problem("\(id): requires must be \"fake\", \"real-readonly\" or \"real-write\"")) }
+        else { return .failure(Problem("\(id): requires must be \"fake\" or \"real\"")) }
         let addedIn = text(fields["addedIn"], max: maxAddedIn) ?? ""
 
         var deepLink: String?

@@ -34,7 +34,7 @@ public enum CLIStatus: Int32, Sendable, CaseIterable {
         case .usage: return "bad arguments, ambiguous label or account, confirmation required under --no-input"
         case .notFound: return "thread, message, draft or account not in the cache"
         case .authRequired: return "no account, or the account needs reauthorization in the app"
-        case .policyBlocked: return "read-only mode, safe mode, send_not_supported, not_supported, reserved_label or command not allowed"
+        case .policyBlocked: return "read-only run (--readonly), mail_changes_in_app, send_not_supported, not_supported, reserved_label or command not allowed"
         case .queued: return "write accepted and queued; the app has not confirmed it yet"
         case .busy: return "the store stayed busy beyond retries"
         case .rateLimited: return "Gmail rate limit and the command needed the network"
@@ -129,8 +129,8 @@ public struct CLIError: Error, Sendable {
             return .policy("send_not_supported", "The CLI does not send mail. Create a draft and send it from OpenHuman Mail.")
         case .oauthClientMissing:
             return .appRequired("No OAuth client is configured. Open OpenHuman Mail.")
-        case .blockedBySafeMode:
-            return .policy("blocked_by_safe_mode", "Blocked by the safe mode. Make mail changes in OpenHuman Mail.")
+        case .writeAccessMissing:
+            return CLIError("auth_required", "The account needs to be reauthorized in OpenHuman Mail to allow changes.", .authRequired)
         }
     }
 }

@@ -74,7 +74,6 @@ extension ComposeManager {
     }
 
     private var remindDecision: ActionAvailability {
-        if !environment.status.safeMode.allowsMailChanges { return .disabled(.safeMode) }
         if environment.commands == nil {
             return .disabled(.unavailable(environment.actions.descriptor(.remind)?.title ?? String(localized: "Remind me")))
         }

@@ -101,7 +101,7 @@ extension FakeMailStore {
         switch outcome {
         case .succeed(let email, let name): return (email, name)
         case .cancel: throw AccountSetupError(.cancelled, "Sign-in was cancelled.")
-        case .refuse: throw AccountSetupError(.refused, "Google granted more than read-only access, so Mail refused the sign-in.")
+        case .refuse: throw AccountSetupError(.refused, "Google gave Mail more access than it asks for, so Mail stopped and saved nothing.")
         case .fail: throw AccountSetupError(.failed, "Sign-in failed. Try again.")
         case nil: return (loginHint ?? "new.account\(next)@example.org", nil)
         }

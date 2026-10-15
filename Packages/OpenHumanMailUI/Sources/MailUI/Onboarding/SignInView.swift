@@ -218,7 +218,7 @@ public struct SignInView: View {
             disclosure("What does Mail ask for?", isExpanded: model.showsAccessInfo) { model.toggleAccessInfo() }
             if model.showsAccessInfo {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(accessText)
+                    Text(Self.accessText)
                         .font(theme.typeMeta.swiftUIFont)
                         .foregroundStyle(theme.textSecondary.color)
                         .fixedSize(horizontal: false, vertical: true)
@@ -230,11 +230,6 @@ public struct SignInView: View {
                         .font(theme.typeMeta.swiftUIFont)
                         .foregroundStyle(theme.textTertiary.color)
                         .fixedSize(horizontal: false, vertical: true)
-                    if let mode = modeText {
-                        Label(mode, systemImage: "lock.fill")
-                            .font(theme.typeMeta.swiftUIFont)
-                            .foregroundStyle(theme.textWarning.color)
-                    }
                 }
                 .padding(.leading, SignInMetrics.optionsIndent)
             }
@@ -385,30 +380,8 @@ public struct SignInView: View {
         + "own, import its client file, or pick one you imported before. Each account signs in with the client you pick "
         + "here; accounts already added keep theirs."
 
-    static func accessText(_ mode: SafeModeInfo) -> String {
-        switch mode {
-        case .readOnly:
-            return "Mail asks Gmail for read-only access: it can read and sync your inbox on this Mac, but it can't "
-                + "change, delete or send any mail."
-        case .writeAllowlist:
-            return "Mail asks Gmail to read and sync your mail on this Mac."
-        case .normal:
-            return "Mail asks Gmail for permission to read and change your mail: archive, star, label, snooze, trash, "
-                + "save drafts and send. It never asks to delete mail permanently or to change Gmail settings or filters."
-        }
-    }
-
-    static func modeText(_ mode: SafeModeInfo) -> String? {
-        switch mode {
-        case .readOnly: return "Read-only: Mail can't change or send mail"
-        case .writeAllowlist: return "Test writes only"
-        case .normal: return nil
-        }
-    }
-
-    private var accessText: String { Self.accessText(model.safeMode) }
-
-    private var modeText: String? { Self.modeText(model.safeMode) }
+    static let accessText = "Mail asks Gmail for permission to read and change your mail: archive, star, label, snooze, "
+        + "trash, save drafts and send. It never asks to delete mail permanently or to change Gmail settings or filters."
 }
 
 enum SignInMetrics {

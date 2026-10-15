@@ -118,7 +118,7 @@ struct RequestExecutor: Sendable {
             switch error {
             case .cancelled:
                 return AttemptResult(outcome: .failure(.cancelled), status: nil, units: 0)
-            case .blockedBySafeMode:
+            case .refusedByGuard:
                 return AttemptResult(outcome: .failure(.transport(error)), status: nil, units: 0)
             default:
                 return AttemptResult(outcome: .failure(.transport(error)), status: nil, units: cost)
@@ -170,7 +170,7 @@ struct RequestExecutor: Sendable {
             case .tls: return "transport:tls"
             case .cancelled: return "transport:cancelled"
             case .other: return "transport:other"
-            case .blockedBySafeMode: return "blocked_by_safe_mode"
+            case .refusedByGuard: return "refused_by_guard"
             }
         case .decoding: return "decoding"
         case .cancelled: return "cancelled"

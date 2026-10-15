@@ -163,26 +163,6 @@ import Testing
         #expect(f.registry.availability(.snooze, host: f.router) == .enabled)
     }
 
-    @Test func readOnlySafeModeRefusesBeforeAnyPickerOpens() async throws {
-        var options = FakeMailStore.Options(remoteAck: .immediate)
-        options.safeMode = .readOnly
-        let f = OverlayFixture(options: options)
-        await f.loaded(10)
-        #expect(await f.run(.snooze), "the key is consumed and the refusal announced")
-        #expect(await f.run(.remind))
-        #expect(f.center.overlay.isNone)
-        await f.toast("Read-only: Mail can't change your mail")
-        let key = try #require(f.rows.first?.id)
-        #expect(f.registry.threadActions?.snooze([key], until: fixedNow.addingTimeInterval(86_400), host: f.router) == nil)
-        #expect(f.registry.threadActions?.remind(key, at: fixedNow.addingTimeInterval(86_400), kind: .always, host: f.router) == nil)
-        #expect(try await Self.snooze(of: key, f) == nil)
-        #expect(try await Self.reminders(f).isEmpty)
-        await f.run(.commandPalette)
-        let palette = try #require(f.palette)
-        palette.query = "snooze until"
-        #expect(!palette.entries.contains { if case .snooze = $0.kind { true } else { false } })
-    }
-
     @Test func theSendLaterCardIsAvailableToTheComposer() async throws {
         let f = OverlayFixture()
         await f.loaded(10)

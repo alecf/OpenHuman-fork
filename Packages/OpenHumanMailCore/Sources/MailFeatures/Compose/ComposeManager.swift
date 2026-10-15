@@ -396,7 +396,7 @@ public final class ComposeManager: ActionPresenting {
         let environment = self.environment
         let settings = environment.settings
         return ComposeServices(
-            data: environment.data, commands: environment.commands, safeMode: environment.status.safeMode,
+            data: environment.data, commands: environment.commands,
             timing: timing, recovery: recovery, staging: staging, calendar: calendar, locale: locale,
             accountCount: { [weak environment] in environment?.router.accounts.count ?? 1 },
             location: { [weak environment] in environment?.router.active?.location },
@@ -405,7 +405,7 @@ public final class ComposeManager: ActionPresenting {
             defaultFromSetting: { [weak self] account in self?.defaultFrom[account] ?? nil },
             rememberFrom: { [weak self] email, thread in self?.rememberFrom(email, thread: thread, settings: settings) },
             recordSnippetUse: { [weak environment] id in
-                guard let commands = environment?.commands, environment?.status.safeMode != .readOnly else { return }
+                guard let commands = environment?.commands else { return }
                 Task { try? await commands.recordSnippetUse(id) }
             },
             draftOpened: { [weak self] _ in self?.updateOpenDrafts() })

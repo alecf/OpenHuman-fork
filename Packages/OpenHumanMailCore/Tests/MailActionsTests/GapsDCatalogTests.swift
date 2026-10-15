@@ -44,16 +44,10 @@ import Testing
             #expect(!descriptor.appearsInMenu && descriptor.appearsInPalette, "\(id)")
         }
         #expect(ActionCatalog.descriptor(.goAllInboxes)?.shortcutHint == "⌃0")
-        #expect(ActionCatalog.descriptor(.goAllInboxes)?.changesMail == false, "a view: every safe mode")
+        #expect(ActionCatalog.descriptor(.goAllInboxes)?.changesMail == false, "a view")
         #expect(ActionCatalog.descriptor(.suggestCleanup)?.changesMail == false, "it only counts")
-        #expect(ActionCatalog.descriptor(.archiveSuggested)?.changesMail == true, "refused in read-only")
+        #expect(ActionCatalog.descriptor(.archiveSuggested)?.changesMail == true)
         #expect(ActionCatalog.descriptor(.archiveSuggested)?.module == .hygiene)
         #expect(ActionCatalog.descriptor(.archiveSuggested)?.shortcutHint == "⌥⌘E")
-    }
-
-    @Test func archivingTheSuggestionIsRefusedInReadOnly() throws {
-        let descriptor = try #require(ActionCatalog.descriptor(.archiveSuggested))
-        let context = ActionContext(scope: .list, safeMode: .readOnly, canWrite: true)
-        #expect(ActionRules.availability(descriptor, in: context) == .disabled(.safeMode))
     }
 }

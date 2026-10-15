@@ -29,24 +29,24 @@ struct ReaderActionLayoutTests {
             let descriptor = ActionCatalog.all.first { $0.id == id }
             #expect(descriptor?.scopes.contains(.reader) == true, "\(id.rawValue) works in a conversation")
             #expect(descriptor?.category == .navigation)
-            #expect(descriptor?.changesMail == false, "\(id.rawValue) never changes mail (enabled in read-only safe mode)")
+            #expect(descriptor?.changesMail == false, "\(id.rawValue) never changes mail")
             #expect(!ReaderActions.threadActions.contains { $0.id == id })
             #expect(!ReaderActions.moreMenuSections.joined().contains { $0.id == id })
         }
         #expect(ReaderActions.navigationActions.map(\.id) == ReaderActions.navigationActionIDs)
     }
 
-    @Test func readOnlySafeModeLeavesTheArrowsEnabled() throws {
+    @Test func theArrowsStayEnabledWithoutAWritePort() throws {
         let thread = ThreadKey(account: AccountID(1), rowID: 1, gmailThreadID: GmailThreadID("t1"))
         var context = ActionContext(accountCount: 1, location: .system(.inbox))
         context.scope = .reader
         context.selection = [thread]
         context.focusedThread = thread
-        context.safeMode = .readOnly
+        context.canWrite = false
         for descriptor in ReaderActions.navigationActions {
             #expect(ActionRules.availability(descriptor, in: context) == .enabled, "\(descriptor.id.rawValue)")
         }
         let done = try #require(ActionCatalog.descriptor(.markDone))
-        #expect(ActionRules.availability(done, in: context) == .disabled(.safeMode), "the rule applies here")
+        #expect(ActionRules.availability(done, in: context) == .disabled(.unavailable(done.title)), "the rule applies here")
     }
 }

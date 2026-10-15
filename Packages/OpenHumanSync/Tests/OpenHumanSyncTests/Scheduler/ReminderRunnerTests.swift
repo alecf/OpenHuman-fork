@@ -192,12 +192,12 @@ import Testing
         #expect(try h.store.thread(try h.ref(h.threads[0]))?.returnedByReminder == false)
     }
 
-    @Test func readOnlyRunsNoReminderScheduler() async throws {
-        let h = try await EngineHarness(safeMode: .readOnly, scopes: [GmailScope.readonly])
+    @Test func anAccountWithoutModifyRunsNoReminderScheduler() async throws {
+        let h = try await EngineHarness(scopes: [GmailScope.readonly])
         try await syncOnce(h)
         _ = try h.store.apply(.setReminder(try h.ref(h.threads[0]), dueAt: h.clock.now.addingTimeInterval(60),
                                            condition: .always), origin: .app)
-        let engine = h.engine(safeMode: .readOnly)
+        let engine = h.engine()
         let events = EngineEvents(engine)
         await engine.start()
         try await h.waitForSyncs(engine)

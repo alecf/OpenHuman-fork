@@ -183,15 +183,6 @@ import WebKit
         #expect(on.keys.bindings[.list]?[.char(snoozeKey)] == .snooze)
     }
 
-    @Test func readOnlyRefusesTheKeyAndSaysWhy() async {
-        let f = await fixture(options: .init(safeMode: .readOnly))
-        #expect(f.keys.route(key("e", code: 14)) == nil, "consumed")
-        #expect(f.env.notices.toasts.map(\.message) == ["Read-only: Mail can't change your mail"])
-        #expect(f.router.list?.rows.count == 10)
-        #expect(f.keys.route(key("j", code: 38)) == nil)
-        #expect(f.router.list?.cursorIndex == 1)
-    }
-
     @Test func commandFIsSearchInTheListAndFindInAConversation() async throws {
         let f = await fixture()
         let commandF = KeyChord(.character("f"), modifiers: .command)

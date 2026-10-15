@@ -62,7 +62,7 @@ public enum MoveToSuperset {
             if place != .inbox, targets.count != 1 {
                 return MovePlaceOption(place: place, disabledReason: oneConversationReason)
             }
-            if case .disabled(let reason) = available, reason != .safeMode {
+            if case .disabled(let reason) = available {
                 return MovePlaceOption(place: place, disabledReason: reason.description)
             }
             return MovePlaceOption(place: place)

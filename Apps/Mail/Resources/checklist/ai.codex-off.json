@@ -7,5 +7,5 @@
     "On a Mac where Codex was allowed in Mail, open Settings › AI"
   ],
   "expected": "The Codex row says it is not available because Mail can't run it without its tools, and no codex process starts.",
-  "requires": "real-readonly"
+  "requires": "real"
 }

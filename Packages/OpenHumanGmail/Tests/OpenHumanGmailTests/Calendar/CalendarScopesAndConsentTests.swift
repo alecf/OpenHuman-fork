@@ -4,15 +4,12 @@ import Testing
 @testable import OpenHumanGmail
 
 @Suite struct CalendarScopesTests {
-    @Test func eachModeAsksForTheNarrowCalendarScopesOnly() {
-        #expect(CalendarScopes.requested(for: .readOnly) == ["https://www.googleapis.com/auth/calendar.events.readonly",
-                                                             "https://www.googleapis.com/auth/calendar.freebusy"])
-        #expect(CalendarScopes.requested(for: .writeAllowlist) == CalendarScopes.requested(for: .readOnly),
-                "write-allowlist never creates events")
-        #expect(CalendarScopes.requested(for: .normal) == ["https://www.googleapis.com/auth/calendar.events",
-                                                           "https://www.googleapis.com/auth/calendar.freebusy"])
-        for mode in SafeMode.allCases {
-            let scopes = CalendarScopes.requested(for: mode)
+    @Test func theRequestIsTheNarrowCalendarScopesOnly() {
+        #expect(CalendarScopes.request.write == ["https://www.googleapis.com/auth/calendar.events",
+                                                 "https://www.googleapis.com/auth/calendar.freebusy"])
+        #expect(CalendarScopes.request.read == ["https://www.googleapis.com/auth/calendar.events.readonly",
+                                                "https://www.googleapis.com/auth/calendar.freebusy"])
+        for scopes in [CalendarScopes.request.write, CalendarScopes.request.read] {
             #expect(!scopes.contains("https://www.googleapis.com/auth/calendar"), "never the full calendar scope")
             #expect(!scopes.contains(where: CalendarScopes.isMailScope), "never a Gmail scope")
             #expect(Set(scopes).isSubset(of: CalendarScopes.all))
@@ -20,11 +17,11 @@ import Testing
     }
 
     @Test func aGrantIsTheRequestExactlyIdentityScopesAside() throws {
-        let read = CalendarScopes.requested(for: .readOnly)
+        let read = CalendarScopes.request.read
         try CalendarScopes.check(granted: read, requested: read)
         try CalendarScopes.check(granted: read + ["openid", "email", "https://www.googleapis.com/auth/userinfo.email"],
                                  requested: read)
-        let write = CalendarScopes.requested(for: .normal)
+        let write = CalendarScopes.request.write
         try CalendarScopes.check(granted: write + [CalendarScope.eventsReadonly], requested: write)
         #expect(throws: OAuthError.insufficientScopes(missing: [CalendarScope.freebusy])) {
             try CalendarScopes.check(granted: [CalendarScope.eventsReadonly], requested: read)
@@ -39,36 +36,33 @@ import Testing
         }
     }
 
-    @Test func onlyAUsableGrantIsUsedAndOnlyWriteModeWrites() {
-        let read = CalendarScopes.requested(for: .readOnly)
-        let write = CalendarScopes.requested(for: .normal)
+    @Test func onlyAUsableGrantIsUsedAndOnlyAWriteGrantWrites() {
+        let read = CalendarScopes.request.read
+        let write = CalendarScopes.request.write
         #expect(CalendarScopes.isUsable(read) && CalendarScopes.isUsable(write))
         #expect(CalendarScopes.isUsable(write + ["openid"]))
         #expect(!CalendarScopes.isUsable([CalendarScope.eventsReadonly]), "free/busy is part of it")
         #expect(!CalendarScopes.isUsable(read + [GmailScope.readonly]), "a calendar token never carries a Gmail scope")
         #expect(!CalendarScopes.isUsable([]))
-        #expect(CalendarScopes.allowsWrites(mode: .normal, granted: write))
-        #expect(!CalendarScopes.allowsWrites(mode: .normal, granted: read), "a read grant never writes")
-        #expect(!CalendarScopes.allowsWrites(mode: .readOnly, granted: write), "read-only never writes")
-        #expect(!CalendarScopes.allowsWrites(mode: .writeAllowlist, granted: write), "write-allowlist never writes events")
-        #expect(!CalendarScopes.allowsWrites(mode: .normal, granted: write + [GmailScope.modify]))
+        #expect(CalendarScopes.allowsWrites(granted: write))
+        #expect(CalendarScopes.allowsWrites(granted: write + ["openid"]))
+        #expect(!CalendarScopes.allowsWrites(granted: read), "a read grant never writes")
+        #expect(!CalendarScopes.allowsWrites(granted: [CalendarScope.events]), "an unusable grant never writes")
+        #expect(!CalendarScopes.allowsWrites(granted: write + [GmailScope.modify]))
     }
 
     @Test func theGmailRulesAreExactlyAsTheyWere() throws {
-        #expect(SafeMode.readOnly.oauthScopes == [GmailScope.readonly])
-        #expect(SafeMode.normal.oauthScopes == [GmailScope.modify])
-        let signIn = OAuthFlow(client: Synthetic.client, mode: .readOnly, transport: ScriptedTransport(),
+        #expect(OAuthScopes.mailRequest == [GmailScope.modify])
+        let signIn = OAuthFlow(client: Synthetic.client, scopes: OAuthScopes.mailRequest, transport: ScriptedTransport(),
                                receiver: FakeReceiver(), browser: FakeBrowser(), clock: TestClock())
-        #expect(signIn.toleratedExtraScopes == OAuthScopes.identity)
-        #expect(throws: OAuthError.self) { try signIn.checkGrantedScopes([GmailScope.readonly, CalendarScope.eventsReadonly]) }
-        let write = OAuthFlow(client: Synthetic.client, mode: .normal, transport: ScriptedTransport(),
-                              receiver: FakeReceiver(), browser: FakeBrowser(), clock: TestClock())
-        #expect(throws: OAuthError.self) { try write.checkGrantedScopes([GmailScope.modify, CalendarScope.events]) }
+        #expect(signIn.toleratedExtraScopes == OAuthScopes.identity.union([GmailScope.readonly]))
+        #expect(throws: OAuthError.self) { try signIn.checkGrantedScopes([GmailScope.modify, CalendarScope.events]) }
+        #expect(throws: OAuthError.self) { try signIn.checkGrantedScopes([GmailScope.modify, CalendarScope.eventsReadonly]) }
         #expect(OAuthScopes.beyondGrant([GmailScope.readonly, CalendarScope.eventsReadonly, CalendarScope.freebusy],
                                         stored: [GmailScope.readonly]) == [CalendarScope.eventsReadonly, CalendarScope.freebusy])
         #expect(OAuthScopes.beyondGrant([GmailScope.modify, CalendarScope.events], stored: [GmailScope.modify])
                     == [CalendarScope.events])
-        #expect(!OAuthScopes.carriesMailWrite(CalendarScopes.requested(for: .normal)))
+        #expect(!OAuthScopes.carriesMailWrite(CalendarScopes.request.write))
     }
 
     @Test func theCalendarTokenItemIsItsOwnFamily() {
@@ -97,20 +91,20 @@ import Testing
     }
 
     @Test func theConsentAsksForExactlyTheCalendarScopesAndMakesNoGmailCall() async throws {
-        let read = CalendarScopes.requested(for: .readOnly)
-        let endpoint = tokenEndpoint(scope: read.joined(separator: " "))
+        let write = CalendarScopes.request.write
+        let endpoint = tokenEndpoint(scope: write.joined(separator: " "))
         let receiver = FakeReceiver()
         let browser = consenting(receiver)
         let clock = TestClock()
-        let consent = CalendarConsent(client: Synthetic.client, mode: .readOnly, transport: endpoint, receiver: receiver,
+        let consent = CalendarConsent(client: Synthetic.client, transport: endpoint, receiver: receiver,
                                       browser: browser, clock: clock)
-        #expect(consent.scopes == read)
+        #expect(consent.scopes == write)
         let token = try await consent.authorize(account: Self.me, timeout: .seconds(300))
-        #expect(token.grantedScopes == read)
+        #expect(token.grantedScopes == write)
         #expect(token.refreshToken == "synthetic-refresh-cal" && token.clientID == Synthetic.clientID)
         #expect(token.accessTokenExpiry == clock.now.addingTimeInterval(3599))
         let url = try #require(browser.openedURLs.first)
-        #expect(queryValue(url, "scope") == read.joined(separator: " "))
+        #expect(queryValue(url, "scope") == write.joined(separator: " "))
         #expect(queryValue(url, "include_granted_scopes") == nil, "the Gmail grant is never folded in")
         #expect(queryValue(url, "login_hint") == Self.me)
         #expect(endpoint.requests.count == 1, "the token endpoint only: no Gmail profile call")
@@ -119,24 +113,26 @@ import Testing
         #expect(receiver.startCount == 1 && receiver.stopCount == 1)
     }
 
-    @Test func writeModeAsksToCreateEventsToo() async throws {
-        let write = CalendarScopes.requested(for: .normal)
+    @Test func theConsentAlwaysAsksToCreateEvents() async throws {
+        let write = CalendarScopes.request.write
         let receiver = FakeReceiver()
         let browser = consenting(receiver)
-        let consent = CalendarConsent(client: Synthetic.client, mode: .normal,
+        let consent = CalendarConsent(client: Synthetic.client,
                                       transport: tokenEndpoint(scope: write.joined(separator: " ")), receiver: receiver,
                                       browser: browser, clock: TestClock())
+        #expect(consent.scopes.contains(CalendarScope.events) && !consent.scopes.contains(CalendarScope.eventsReadonly))
         let token = try await consent.authorize(account: Self.me, timeout: .seconds(300))
         #expect(token.grantedScopes == write.sorted())
+        #expect(CalendarScopes.allowsWrites(granted: token.grantedScopes))
         #expect(queryValue(try #require(browser.openedURLs.first), "scope") == write.joined(separator: " "))
     }
 
     @Test func aGrantCarryingAGmailScopeIsRefused() async throws {
-        let read = CalendarScopes.requested(for: .readOnly)
+        let write = CalendarScopes.request.write
         for extra in [GmailScope.readonly, GmailScope.modify, "https://mail.google.com/", "https://www.googleapis.com/auth/calendar"] {
             let receiver = FakeReceiver()
-            let consent = CalendarConsent(client: Synthetic.client, mode: .readOnly,
-                                          transport: tokenEndpoint(scope: (read + [extra]).joined(separator: " ")),
+            let consent = CalendarConsent(client: Synthetic.client,
+                                          transport: tokenEndpoint(scope: (write + [extra]).joined(separator: " ")),
                                           receiver: receiver, browser: consenting(receiver), clock: TestClock())
             await #expect(throws: OAuthError.denied("calendar grant refused"), "\(extra)") {
                 _ = try await consent.authorize(account: Self.me, timeout: .seconds(300))
@@ -146,8 +142,8 @@ import Testing
 
     @Test func aBoxLeftUntickedIsInsufficientScopes() async throws {
         let receiver = FakeReceiver()
-        let consent = CalendarConsent(client: Synthetic.client, mode: .readOnly,
-                                      transport: tokenEndpoint(scope: CalendarScope.eventsReadonly), receiver: receiver,
+        let consent = CalendarConsent(client: Synthetic.client,
+                                      transport: tokenEndpoint(scope: CalendarScope.events), receiver: receiver,
                                       browser: consenting(receiver), clock: TestClock())
         await #expect(throws: OAuthError.insufficientScopes(missing: [CalendarScope.freebusy])) {
             _ = try await consent.authorize(account: Self.me, timeout: .seconds(300))
@@ -156,13 +152,13 @@ import Testing
 
     @Test func aCalendarRefreshThatComesBackBroaderIsNeverUsed() async throws {
         let clock = TestClock()
-        let read = CalendarScopes.requested(for: .readOnly)
+        let write = CalendarScopes.request.write
         let calendarTokens = InMemoryTokenStore([Self.me: Synthetic.token(refresh: "r-cal", access: "old",
                                                                           expiry: clock.now.addingTimeInterval(-1),
-                                                                          scopes: read)])
+                                                                          scopes: write)])
         let endpoint = ScriptedTransport { _ in
             jsonResponse(200, ["access_token": "refreshed", "expires_in": 3600,
-                               "scope": (read + [GmailScope.readonly]).joined(separator: " ")])
+                               "scope": (write + [GmailScope.readonly]).joined(separator: " ")])
         }
         let events = EventLog()
         let credentials = AccountCredentials(store: calendarTokens, client: Synthetic.client, transport: endpoint,

@@ -117,39 +117,26 @@ import Testing
         #expect(String(decoding: r[2].body ?? Data(), as: UTF8.self).contains("{\"message\":{\"threadId\":\"t9\"}}"))
     }
 
-    @Test func factoryWrapsEveryAccountPerSafeMode() async throws {
-        let table: [(SafeMode, [String], Bool)] = [
-            (.readOnly, [GmailScope.readonly], false),
-            (.readOnly, [GmailScope.modify], false),
-            (.normal, [GmailScope.readonly], false),
-            (.normal, [GmailScope.modify], true),
-            (.writeAllowlist, [GmailScope.modify], false),
-        ]
-        for (mode, scopes, writes) in table {
+    @Test func factoryClientsWriteWithAModifyGrantAndAreCachedPerAccount() async throws {
+        for scopes in [[GmailScope.modify], [GmailScope.modify, GmailScope.readonly, "openid"]] {
             let http = FakeHTTPTransport()
             http.on("POST", "/gmail/v1/users/me/messages/m1/modify") { _ in FakeHTTPTransport.json(200, ["id": "m1"]) }
             http.on("GET", "/gmail/v1/users/me/labels") { _ in FakeHTTPTransport.json(200, ["labels": []]) }
-            let factory = DefaultGmailClientFactory(safeMode: mode, apiTransport: http,
+            let factory = DefaultGmailClientFactory(apiTransport: http,
                                                     config: GmailClientConfig(userAgent: "t"), clock: InstantClock()) { _ in
                 (StaticTokenProvider(), scopes)
             }
             let api = try factory.client(for: "Me@Example.com")
             #expect(api.accountEmail == "me@example.com")
             _ = try await api.listLabels()
-            if writes {
-                _ = try await api.modifyMessage(id: "m1", add: [], remove: ["INBOX"])
-            } else {
-                await #expect(throws: GmailError.transport(.blockedBySafeMode("POST /gmail/v1/users/me/messages/m1/modify"))) {
-                    _ = try await api.modifyMessage(id: "m1", add: [], remove: ["INBOX"])
-                }
-            }
-            #expect(http.requests.filter { $0.method != "GET" }.count == (writes ? 1 : 0), "\(mode) \(scopes)")
+            _ = try await api.modifyMessage(id: "m1", add: [], remove: ["INBOX"])
+            #expect(http.requests.filter { $0.method != "GET" }.count == 1, "\(scopes)")
             #expect(try factory.gmailClient(for: "me@example.com") === factory.gmailClient(for: "ME@example.com"))
         }
     }
 
     @Test func factoryWithoutAStoredTokenNeedsReauth() throws {
-        let factory = DefaultGmailClientFactory(safeMode: .readOnly, tokenStore: InMemoryTokenStore(),
+        let factory = DefaultGmailClientFactory(tokenStore: InMemoryTokenStore(),
                                                 oauthClient: OAuthClientConfig(clientID: "client.apps.example",
                                                                                authURI: URL(string: "https://auth.invalid")!,
                                                                                tokenURI: URL(string: "https://token.invalid")!),
@@ -158,13 +145,13 @@ import Testing
         #expect(throws: GmailError.reauthRequired) { _ = try factory.client(for: "me@example.com") }
     }
 
-    @Test func fullStackAgainstFakeGmailInReadOnlyMode() async throws {
+    @Test func fullStackAgainstFakeGmailReadsWithGETsOnly() async throws {
         let gmail = FakeGmail()
         let (_, thread) = await gmail.deliver(subject: "Synthetic", body: "Hello there", html: "<p>Hello there</p>")
         let wire = FakeGmailTransport(gmail)
-        let factory = DefaultGmailClientFactory(safeMode: .readOnly, apiTransport: wire,
+        let factory = DefaultGmailClientFactory(apiTransport: wire,
                                                 config: GmailClientConfig(userAgent: "t"), clock: InstantClock()) { _ in
-            (StaticTokenProvider(), [GmailScope.readonly])
+            (StaticTokenProvider(), [GmailScope.modify])
         }
         let api = try factory.client(for: "me@example.com")
         let profile = try await api.getProfile(priority: .interactive)
@@ -181,7 +168,6 @@ import Testing
             _ = try await api.listHistory(startHistoryID: HistoryID(1), pageToken: nil, types: [], labelID: nil,
                                           maxResults: 500, priority: .sync)
         }
-        await #expect(throws: GmailError.self) { try await api.batchModifyMessages(ids: ["x"], add: [], remove: ["INBOX"]) }
-        #expect(wire.nonGETRequests.isEmpty)
+        #expect(wire.nonGETRequests.isEmpty, "reading never writes")
     }
 }

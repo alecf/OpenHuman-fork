@@ -20,12 +20,12 @@ enum FakeGmailLaunch {
     static let fakeUnitsPerMinute = 60_000
 
     @MainActor
-    static func makeSession(safeMode: SafeMode, store: MailStore, gmail: FakeGmail, clock: any OHClock = SystemClock(),
+    static func makeSession(store: MailStore, gmail: FakeGmail, clock: any OHClock = SystemClock(),
                             pollInterval: Duration = .seconds(60), systemEvents: AppSystemEvents? = nil,
                             tokenEvents: AsyncStream<TokenEvent>? = nil, draftsDirectory: URL? = nil,
                             unsubscribeTransport: (any HTTPTransport)? = nil) throws -> Running {
         let wire = FakeGmailTransport(gmail)
-        let scopes = safeMode.oauthScopes
+        let scopes = OAuthScopes.mailRequest
         let id = try store.accounts().first { $0.email == gmail.accountEmail }?.id
             ?? store.addAccount(email: gmail.accountEmail, displayName: "FakeGmail", scopes: scopes)
         guard let account = try store.accounts().first(where: { $0.id == id }) else {
@@ -33,7 +33,7 @@ enum FakeGmailLaunch {
         }
         let config = GmailClientConfig(unitsPerMinute: fakeUnitsPerMinute, userAgent: "OpenHumanMail/fake-gmail")
         let metrics = SyncMetricsRegistry()
-        let factory = DefaultGmailClientFactory(safeMode: safeMode, apiTransport: wire, config: config, clock: clock,
+        let factory = DefaultGmailClientFactory(apiTransport: wire, config: config, clock: clock,
                                                 metrics: { metrics.collector(for: $0) }) { _ in
             (StaticTokenProvider(token: accessToken), scopes)
         }
@@ -69,13 +69,13 @@ enum FakeGmailLaunch {
     }
 
     @MainActor
-    static func launch(safeMode: SafeMode, corpus: FakeCorpus = .make(threadCount: 80)) throws -> Running {
+    static func launch(corpus: FakeCorpus = .make(threadCount: 80)) throws -> Running {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("OpenHumanMail-FakeGmail-\(UUID().uuidString)", isDirectory: true)
         let store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: .app,
                                                     observeExternalChanges: true, appVersion: CompositionRoot.appVersion))
         let gmail = FakeGmail(accountEmail: corpus.account.email)
-        let running = try makeSession(safeMode: safeMode, store: store, gmail: gmail, systemEvents: AppSystemEvents(),
+        let running = try makeSession(store: store, gmail: gmail, systemEvents: AppSystemEvents(),
                                       draftsDirectory: store.location.draftsDirectory)
         Task {
             await seed(gmail, corpus: corpus)

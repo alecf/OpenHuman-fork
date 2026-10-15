@@ -28,10 +28,12 @@ class CheckChecklistTests(unittest.TestCase):
     def test_bare_array(self):
         self.assertEqual(run([item()], wrap=False)[0], [])
 
-    def test_requires_real_fails(self):
-        errors, _ = run([item(requires="real")])
-        self.assertEqual(len(errors), 1)
-        self.assertIn("a.b-1", errors[0])
+    def test_requires_is_fake_or_real_only(self):
+        self.assertEqual(run([item(requires="real")])[0], [])
+        for value in ("real-readonly", "real-write", "live"):
+            errors, _ = run([item(requires=value)])
+            self.assertEqual(len(errors), 1)
+            self.assertIn("a.b-1", errors[0])
 
     def test_bad_id(self):
         self.assertTrue(run([item(id="bad id")])[0])

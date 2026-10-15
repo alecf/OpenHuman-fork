@@ -34,8 +34,8 @@ enum InviteFixtures {
 @Suite(.serialized) struct InviteCardWindowTests {
     private let corpus = FakeCorpus.small
 
-    private func environment(_ safeMode: SafeModeInfo = .normal) -> AppEnvironment {
-        AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate, safeMode: safeMode))
+    private func environment() -> AppEnvironment {
+        AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate))
     }
 
     @Test func theHostShowsTheCardOnceReadAndTheHTMLAfterShowOriginal() async throws {
@@ -63,15 +63,6 @@ enum InviteFixtures {
         await InviteFixtures.loadCard(env, thread, message)
         let host = InviteCardHostView(center: env.invites, message: message.id, theme: .light) { _ in }
         #expect(!host.showsCard && env.invites.entries[message.id] == .unavailable)
-    }
-
-    @Test func inSafeModeTheCardStillShowsAndSaysWhyItsAnswersAreOff() async throws {
-        let env = environment(.readOnly)
-        let (thread, message) = try await InviteFixtures.invitation(env, corpus: corpus)
-        await InviteFixtures.loadCard(env, thread, message)
-        #expect(env.invites.answerBlock(for: message.id)?.hasPrefix("Read-only safe mode") == true)
-        let host = InviteCardHostView(center: env.invites, message: message.id, theme: .light) { _ in }
-        #expect(host.showsCard, "the card still shows; only its answers are off")
     }
 
     @Test func theButtonsSayWhatTheyDo() {

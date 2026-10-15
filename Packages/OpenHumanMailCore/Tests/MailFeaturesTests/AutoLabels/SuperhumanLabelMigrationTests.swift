@@ -202,7 +202,7 @@ import Testing
         #expect(!f.store.labelNames(of: sorted).contains("OpenHuman/Meeting"))
     }
 
-    @Test func fakeDataAndReadOnlyRefuseBeforeAnyPortCall() async throws {
+    @Test func fakeDataRefusesBeforeAnyPortCall() async throws {
         let fake = F(writes: true)
         _ = try await Self.seed(fake.store)
         let model = importer(fake, writes: nil)
@@ -212,22 +212,19 @@ import Testing
         #expect(await model.importLabels() == false)
         guard case .failed = model.phase else { throw TestFailure("\(model.phase)") }
         #expect(fake.recorder.calls.isEmpty, "fake data: nothing reaches the mail port")
+        #expect(await model.removeSuperhumanLabels() == false)
+        #expect(fake.recorder.calls.isEmpty)
+    }
 
-        let store = FakeMailStore(corpus: .rich(threadCount: 60, now: fixedNow),
-                                  options: .init(remoteAck: .immediate, heldSends: .manual, safeMode: .normal,
-                                                 now: { fixedNow }))
-        _ = try await Self.seed(store)
-        store.setSafeMode(.readOnly)
-        let readOnly = F(safeMode: .readOnly, writes: true, sharing: store)
-        let blocked = importer(readOnly)
-        await blocked.count(account: F.work)
-        #expect(blocked.phase == .counted, "counting works in read-only")
-        #expect(blocked.writeBlockedReason?.hasPrefix("Read-only") == true)
-        let entries = readOnly.env.undo?.stack.count ?? 0
-        #expect(await blocked.importLabels() == false)
-        #expect(await blocked.removeSuperhumanLabels() == false)
-        #expect(readOnly.recorder.calls.isEmpty)
-        #expect(readOnly.env.undo?.stack.count == entries)
+    @Test func aLiveAccountImportsToGmail() async throws {
+        let live = F(writes: nil, isLiveAccount: true)
+        let seeded = try await Self.seed(live.store)
+        let model = importer(live, writes: nil)
+        await model.count(account: F.work)
+        #expect(model.writeBlockedReason == nil && model.canImport)
+        #expect(await model.importLabels())
+        #expect(live.recorder.calls.contains("createLabel"))
+        #expect(seeded.meeting.allSatisfy { live.store.labelNames(of: $0).contains("OpenHuman/Meeting") })
     }
 
     @Test func removeIsExplicitTouchesOnlyMappedAILabelsAndIsUndoable() async throws {

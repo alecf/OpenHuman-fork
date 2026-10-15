@@ -8,11 +8,11 @@ let work = AccountID(1)
 let personal = AccountID(2)
 
 func makeStore(threads: Int = 120, clock: FakeClock = FakeClock(fixedNow), ack: FakeMailStore.Options.RemoteAck = .manual,
-               safeMode: SafeModeInfo = .normal, oauthClient: OAuthClientStatus = .configured(source: .file),
+               oauthClient: OAuthClientStatus = .configured(source: .file),
                liveConnectivity: Bool = false) -> FakeMailStore {
     FakeMailStore(corpus: .rich(threadCount: threads, now: fixedNow),
                   options: .init(remoteAck: ack, heldSends: .manual, liveConnectivity: liveConnectivity,
-                                 safeMode: safeMode, oauthClient: oauthClient, now: { clock.now }))
+                                 oauthClient: oauthClient, now: { clock.now }))
 }
 
 func first<T: Sendable>(_ stream: AsyncThrowingStream<T, Error>, where predicate: (T) -> Bool = { _ in true }) async throws -> T {

@@ -80,7 +80,7 @@ public final class SplitSettingsModel {
         for task in countsTasks { task.cancel() }
     }
 
-    public var canEdit: Bool { availability.canEditStoredItems }
+    public var canEdit: Bool { availability.hasCommands }
 
     public func start() {
         guard tasks.isEmpty else { return }

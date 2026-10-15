@@ -63,7 +63,6 @@ public final class SignInModel {
     public private(set) var errorMessage: String?
     public private(set) var clientNote: String?
     public let notice: String?
-    public let safeMode: SafeModeInfo
     public var loginHint: String
     public private(set) var remoteURL: URL?
     public var pastedAddress: String = ""
@@ -77,26 +76,16 @@ public final class SignInModel {
     @ObservationIgnored private var copiedTask: Task<Void, Never>?
 
     @ObservationIgnored public var onSignedIn: (@MainActor (AccountID) -> Void)?
-    @ObservationIgnored public var onOpenReadOnly: (@MainActor () -> Void)? {
-        didSet { offersReadOnly = onOpenReadOnly != nil }
-    }
-    public private(set) var offersReadOnly = false
-
-    public func openReadOnly() {
-        guard let onOpenReadOnly, phase != .signingIn else { return }
-        onOpenReadOnly()
-    }
     @ObservationIgnored private let accounts: any AccountManaging
     @ObservationIgnored private var signInTask: Task<Void, Never>?
     @ObservationIgnored private var remoteTask: Task<Void, Never>?
     @ObservationIgnored private var expiryTask: Task<Void, Never>?
     @ObservationIgnored private let remoteTimeout: Duration
 
-    public init(accounts: any AccountManaging, safeMode: SafeModeInfo, loginHint: String = "", notice: String? = nil,
+    public init(accounts: any AccountManaging, loginHint: String = "", notice: String? = nil,
                 remoteTimeout: Duration = .seconds(600)) {
         self.remoteTimeout = remoteTimeout
         self.accounts = accounts
-        self.safeMode = safeMode
         self.loginHint = loginHint
         self.notice = notice
         self.showsAccountField = !loginHint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -201,7 +190,7 @@ public final class SignInModel {
     }
 
     public var offersOwnClient: Bool {
-        guard phase == .ready, notice == nil, !offersReadOnly else { return false }
+        guard phase == .ready, notice == nil else { return false }
         if case .configured(let source) = clientStatus { return source != .environment }
         return false
     }

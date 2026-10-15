@@ -46,14 +46,7 @@ import Testing
         #expect(session.pendingReminder != nil, "kept with the draft until the send commits")
     }
 
-    @Test func shiftCommandHIsRefusedInReadOnlyAndGoneWithRemindersOff() async throws {
-        let readOnly = ComposeFixture(safeMode: .readOnly)
-        await readOnly.loaded()
-        let session = try #require(readOnly.compose.openNew(placement: .modal))
-        _ = await readOnly.run(.composeRemind, in: session)
-        #expect(readOnly.timePicker == nil, "no picker: a reminder is a change")
-        #expect(session.pendingReminder == nil)
-
+    @Test func shiftCommandHIsGoneWithRemindersOff() async throws {
         let off = ComposeFixture(flags: FeatureFlags().with(.reminders, false))
         await off.loaded()
         let draft = try #require(off.compose.openNew(placement: .modal))

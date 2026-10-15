@@ -8,5 +8,5 @@
     "Import the downloaded JSON"
   ],
   "expected": "Sign-in becomes available without displaying credentials.",
-  "requires": "real-readonly"
+  "requires": "real"
 }

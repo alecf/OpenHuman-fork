@@ -105,14 +105,14 @@ struct SplitSettingsTests {
         #expect(model.errorMessage?.contains("exists") == true)
     }
 
-    @Test func presetsAreRefusedInReadOnlySafeModeWithTheReason() async throws {
-        let f = SettingsFixture(safeMode: .readOnly)
+    @Test func presetsAreRefusedWithoutAWritePortWithTheReason() async throws {
+        let f = SettingsFixture(writePort: false)
         let model = await model(f)
         let initial = try await f.splits(f.work).count
         let github = try #require(model.presets.first { $0.id == "github" })
         model.beginPreset(github)
         #expect(model.draft == nil, "the editor does not open")
-        #expect(model.presetsUnavailableReason?.contains("Read-only") == true)
+        #expect(model.presetsUnavailableReason == "Editing isn't available here.")
         #expect(try await f.splits(f.work).count == initial)
     }
 
@@ -160,9 +160,9 @@ struct SplitSettingsTests {
         #expect(rules["Mine"] == "from:notifications@github.com OR is:starred")
     }
 
-    @Test func theLaunchMigrationWritesNothingInReadOnlySafeMode() async throws {
+    @Test func theLaunchMigrationWritesNothingWithoutAWritePort() async throws {
         let f = SettingsFixture()
-        let ro = SettingsFixture(safeMode: .readOnly)
+        let ro = SettingsFixture(writePort: false)
         _ = try await f.store.upsertSplit(SplitDefinition(account: f.work, name: "GitHub", ruleText: "from:notifications@github.com"))
         let n = await SplitPresetMigration.runAtLaunch(data: f.env.data, commands: f.env.commands,
                                                        availability: SettingsAvailability(environment: ro.env))
@@ -186,8 +186,8 @@ struct SplitSettingsTests {
         await eventually { model.splits.contains { $0.name == "Asana" } }
     }
 
-    @Test func readOnlySafeModeDisablesEditingAndSaysWhy() async throws {
-        let f = SettingsFixture(safeMode: .readOnly)
+    @Test func withoutAWritePortEditingIsOffAndSaysWhy() async throws {
+        let f = SettingsFixture(writePort: false)
         let model = await model(f)
         let initial = try await f.splits(f.work).count
         #expect(!model.canEdit)
@@ -197,7 +197,7 @@ struct SplitSettingsTests {
         #expect(!model.canSave)
         await model.save()
         #expect(try await f.splits(f.work).count == initial, "nothing written")
-        #expect(model.availability.storedItemsNote?.contains("Read-only") == true)
+        #expect(model.availability.storedItemsNote == "Editing isn't available here.")
     }
 }
 
@@ -279,8 +279,8 @@ struct SnippetSettingsTests {
         #expect(SnippetBody.isFormatted("<b>bold</b>") && !SnippetBody.isFormatted(html))
     }
 
-    @Test func readOnlySafeModeKeepsTheListButBlocksEditing() async throws {
-        let f = SettingsFixture(safeMode: .readOnly)
+    @Test func withoutAWritePortTheListStaysButEditingIsOff() async throws {
+        let f = SettingsFixture(writePort: false)
         let model = await model(f)
         #expect(!model.canEdit && !model.snippets.isEmpty)
         model.beginNew()

@@ -78,11 +78,10 @@ struct ReaderViewTests {
         #expect(reader.router === content.windowModel)
     }
 
-    @Test func readOnlySafeModeShowsWriteActionsDisabled() async throws {
+    @Test func theBarAndTheMoreMenuFollowTheCatalogOrder() async throws {
         let detail = F.conversation(2, count: 1)
-        let source = UITestSource(details: [detail], bodies: [detail.messages[0].id: MessageContent(html: nil, text: "Hi")],
-                                  safeMode: .readOnly)
-        let h = try await ReaderHarness.make(source, thread: detail.id, safeMode: .readOnly)
+        let source = UITestSource(details: [detail], bodies: [detail.messages[0].id: MessageContent(html: nil, text: "Hi")])
+        let h = try await ReaderHarness.make(source, thread: detail.id)
         defer { h.close() }
         try await until { !h.controller.threadActionButtons.isEmpty }
         let buttons = h.controller.threadActionButtons
@@ -99,25 +98,6 @@ struct ReaderViewTests {
         #expect(items.map { $0.identifier?.rawValue } == more.map(\.id.rawValue))
         #expect(menu.items.filter(\.isSeparatorItem).count == sections.count - 1)
         #expect(offered.contains { $0.id == .markDone } && offered.contains { $0.id == .trash })
-        let reason = DisabledReason.safeMode.description
-        for (descriptor, item) in zip(more, items) where descriptor.changesMail {
-            #expect(!item.isEnabled && item.toolTip == reason, "\(descriptor.title)")
-        }
-        for (descriptor, button) in zip(primary, buttons) {
-            let decided = h.controller.decided(descriptor)
-            if descriptor.changesMail {
-                #expect(decided == .disabled(.safeMode))
-                #expect(!button.isEnabled, "\(descriptor.title)")
-                #expect(button.tipText == reason, "\(button.tipText ?? "")")
-                #expect(button.accessibilityHelp() == reason)
-            } else {
-                #expect(button.isEnabled == decided.isEnabled)
-            }
-        }
-        let header = try await h.header(detail.messages[0].id)
-        for button in header.actionButtons where button.identifier?.rawValue != "reader.more" {
-            #expect(!button.isEnabled)
-        }
     }
 
     @Test func markDoneFromTheReaderGoesThroughTheRouter() async throws {

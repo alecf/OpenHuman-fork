@@ -29,7 +29,7 @@ private final class Flag {
     let application = NotificationCenter()
     let workspace = NotificationCenter()
     let events = AppSystemEvents(application: application, workspace: workspace, monitorsNetwork: false)
-    let running = try FakeGmailLaunch.makeSession(safeMode: .readOnly, store: try MailStore.openInMemoryForTesting(),
+    let running = try FakeGmailLaunch.makeSession(store: try MailStore.openInMemoryForTesting(),
                                                   gmail: gmail, pollInterval: .seconds(3_600), systemEvents: events)
     let session = running.session
     let status = session.environment.status
@@ -68,7 +68,7 @@ private final class Flag {
     await eventually("a sync when the network returns") { requests(wire, endingWith: "/history") > history }
     await eventually("synced again") { status.syncText(now: Date())?.hasPrefix("Synced") == true }
 
-    #expect(wire.requests.allSatisfy(isReadOnlyOnTheWire))
+    #expect(wire.requests.allSatisfy(isReadOnTheWire))
 }
 
 @MainActor
@@ -77,11 +77,11 @@ private final class Flag {
     let gmail = FakeGmail(accountEmail: corpus.account.email)
     await FakeGmailLaunch.seed(gmail, corpus: corpus)
     let extra = "https://www.googleapis.com/auth/userinfo.email"
-    let google = FakeGoogle(gmail: gmail, grantedScope: "\(GmailScope.readonly) \(extra)")
+    let google = FakeGoogle(gmail: gmail, grantedScope: "\(GmailScope.modify) \(extra)")
     let email = corpus.account.email
     let store = try MailStore.openInMemoryForTesting()
-    _ = try store.addAccount(email: email, displayName: nil, scopes: [GmailScope.readonly])
-    let token = StoredToken(refreshToken: "synthetic-refresh", grantedScopes: [GmailScope.readonly],
+    _ = try store.addAccount(email: email, displayName: nil, scopes: [GmailScope.modify])
+    let token = StoredToken(refreshToken: "synthetic-refresh", grantedScopes: [GmailScope.modify],
                             clientID: SyntheticClient.clientID)
     let tokens = InMemoryTokenStore([email: token])
     let backend = liveBackend(google: google, store: store, tokens: tokens, browser: RecordingBrowser(),
@@ -98,7 +98,7 @@ private final class Flag {
     }
     #expect(try tokens.load(account: email)?.grantedScopes.contains(extra) == true)
     #expect(google.http.requests.contains { $0.url.path == "/token" })
-    #expect(google.api.requests.allSatisfy(isReadOnlyOnTheWire))
+    #expect(google.api.requests.allSatisfy(isReadOnTheWire))
 }
 
 @MainActor
@@ -107,7 +107,7 @@ private final class Flag {
     let gmail = FakeGmail(accountEmail: corpus.account.email)
     await FakeGmailLaunch.seed(gmail, corpus: corpus)
     let store = try MailStore.openInMemoryForTesting()
-    let running = try FakeGmailLaunch.makeSession(safeMode: .readOnly, store: store, gmail: gmail)
+    let running = try FakeGmailLaunch.makeSession(store: store, gmail: gmail)
     let session = running.session
     await session.start()
     await eventually("synced") { (try? store.syncStatus(account: session.account).lastSuccessAt) != nil }
@@ -119,7 +119,7 @@ private final class Flag {
     await eventually("quit finished") { finished.isSet }
     #expect(try store.lease(account: session.account) == nil, "the lease is released, so the next launch syncs at once")
     #expect(session.backfillProgress == nil)
-    #expect(running.wire.requests.allSatisfy(isReadOnlyOnTheWire))
+    #expect(running.wire.requests.allSatisfy(isReadOnTheWire))
 }
 
 @Test func aTokenBroaderThanModifyIsNeverHandedToAClient() throws {
@@ -138,17 +138,14 @@ private final class Flag {
                                        clientID: SyntheticClient.clientID),
     ])
     let credentials = AccountCredentials(store: tokens, client: client, transport: FakeHTTPTransport(), clock: SystemClock())
-    for mode in [SafeMode.readOnly, .normal] {
-        for broader in ["kim@example.com", "lee@example.com", "nobody@example.com"] {
-            #expect(throws: GmailError.reauthRequired, "\(mode) \(broader)") {
-                try LiveBackend.credentials(broader, from: credentials, safeMode: mode)
-            }
+    for broader in ["kim@example.com", "lee@example.com", "nobody@example.com"] {
+        #expect(throws: GmailError.reauthRequired, "\(broader)") {
+            try LiveBackend.credentials(broader, from: credentials)
         }
-        #expect(try LiveBackend.credentials("robin@example.com", from: credentials, safeMode: mode).grantedScopes
-            == [GmailScope.modify])
-        #expect(try LiveBackend.credentials("sam@example.com", from: credentials, safeMode: mode).grantedScopes
-            == [GmailScope.readonly])
     }
+    #expect(try LiveBackend.credentials("robin@example.com", from: credentials).grantedScopes == [GmailScope.modify])
+    #expect(try LiveBackend.credentials("sam@example.com", from: credentials).grantedScopes == [GmailScope.readonly],
+            "a narrower grant is passed on; the client factory then asks to sign in again")
     #expect(LiveBackend.scopeRefusal([GmailScope.readonly, GmailScope.modify, "openid"]) == nil)
     #expect(LiveBackend.scopeRefusal(["https://mail.google.com/", GmailScope.modify]) == "https://mail.google.com/")
 }
@@ -156,21 +153,21 @@ private final class Flag {
 @MainActor
 @Test func anAccountThatCannotSyncDoesNotHideOneThatCan() throws {
     let tokens = InMemoryTokenStore(["robin@example.com": StoredToken(refreshToken: "synthetic-refresh",
-                                                                      grantedScopes: [GmailScope.readonly],
+                                                                      grantedScopes: [GmailScope.modify],
                                                                       clientID: SyntheticClient.clientID)])
     func backend(_ store: MailStore) throws -> LiveBackend {
         liveBackend(google: FakeGoogle(gmail: FakeGmail(accountEmail: "robin@example.com")), store: store, tokens: tokens,
                     browser: RecordingBrowser(), clientPath: try SyntheticClient.writeJSON(), systemEvents: nil)
     }
     let store = try MailStore.openInMemoryForTesting()
-    let stale = try store.addAccount(email: "old@example.com", displayName: nil, scopes: [GmailScope.readonly])
+    let stale = try store.addAccount(email: "old@example.com", displayName: nil, scopes: [GmailScope.modify])
     try store.setAccountStatus(stale, .needsReauth)
-    let usable = try store.addAccount(email: "robin@example.com", displayName: nil, scopes: [GmailScope.readonly])
+    let usable = try store.addAccount(email: "robin@example.com", displayName: nil, scopes: [GmailScope.modify])
     let live = try backend(store)
     #expect(live.initialStep() == .session(try #require(live.account(usable))))
 
     let alone = try MailStore.openInMemoryForTesting()
-    _ = try alone.addAccount(email: "old@example.com", displayName: nil, scopes: [GmailScope.readonly])
+    _ = try alone.addAccount(email: "old@example.com", displayName: nil, scopes: [GmailScope.modify])
     try alone.setAccountStatus(try #require(try alone.accounts().first).id, .needsReauth)
     #expect(try backend(alone).initialStep()
         == .signIn(loginHint: "old@example.com", notice: "Google signed this account out. Sign in again."))

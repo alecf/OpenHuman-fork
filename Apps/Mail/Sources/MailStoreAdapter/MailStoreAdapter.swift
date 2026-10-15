@@ -30,7 +30,6 @@ public final class MailStoreAdapter: MailDataSource, Sendable {
     let store: any Store
     private let ensureBody: (@Sendable (MessageKey) async throws -> Void)?
     private let attachmentFile: (@Sendable (MessageKey, AttachmentInfo) async throws -> URL)?
-    let safeModeValue: SafeModeInfo
     let connectivitySource: (@Sendable () -> AsyncStream<[AccountID: ConnectivityState]>)?
     private let progressSource: (@Sendable () -> AsyncStream<[AccountID: String]>)?
     let searchFallback: GmailSearchFallback?
@@ -41,7 +40,6 @@ public final class MailStoreAdapter: MailDataSource, Sendable {
 
     public init(store: any Store, ensureBody: (@Sendable (MessageKey) async throws -> Void)? = nil,
                 attachmentFile: (@Sendable (MessageKey, AttachmentInfo) async throws -> URL)? = nil,
-                safeMode: SafeModeInfo = .normal,
                 connectivity: (@Sendable () -> AsyncStream<[AccountID: ConnectivityState]>)? = nil,
                 syncProgress: (@Sendable () -> AsyncStream<[AccountID: String]>)? = nil,
                 onDemand: OnDemand? = nil, semantic: SemanticSearchArm? = nil) {
@@ -49,7 +47,6 @@ public final class MailStoreAdapter: MailDataSource, Sendable {
         self.semanticArm = semantic
         self.ensureBody = ensureBody
         self.attachmentFile = attachmentFile
-        self.safeModeValue = safeMode
         self.connectivitySource = connectivity
         self.progressSource = syncProgress
         self.searchFallback = onDemand?.remoteSearch.map { GmailSearchFallback(delay: onDemand?.remoteSearchDelay ?? .zero,
@@ -57,8 +54,6 @@ public final class MailStoreAdapter: MailDataSource, Sendable {
         self.viewLoader = onDemand?.loadView.map(ViewLoader.init)
         self.askRemoteSearch = onDemand?.remoteSearchCapped
     }
-
-    public func safeMode() -> SafeModeInfo { safeModeValue }
 
     public func connectivity() -> AsyncStream<[AccountID: ConnectivityState]> {
         connectivitySource?() ?? AsyncStream { $0.finish() }

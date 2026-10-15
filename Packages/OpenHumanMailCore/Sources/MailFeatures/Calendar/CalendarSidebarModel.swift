@@ -105,7 +105,6 @@ public final class CalendarSidebarModel {
 
     public let eventStore: CalendarEventStore
 
-    public var safeMode: SafeModeInfo { environment.status.safeMode }
     public var providerName: String { (draftProvider ?? shownProvider ?? provider).info.name }
     public var isSample: Bool { (shownProvider ?? provider).info.isSample }
 
@@ -699,15 +698,7 @@ public final class CalendarSidebarModel {
 
     public var createRefusal: String? {
         let target: (any CalendarProviding)? = draft != nil ? draftCalendar : (shownProvider ?? provider)
-        return safeModeRefusal ?? (draft != nil ? draftAccountRefusal : nil) ?? target?.info.createRefusal
-    }
-
-    private var safeModeRefusal: String? {
-        switch safeMode {
-        case .readOnly: "Read-only safe mode: Mail never creates calendar events."
-        case .writeAllowlist: "Test-writes safe mode: creating calendar events is off (it can email the attendees)."
-        case .normal: nil
-        }
+        return (draft != nil ? draftAccountRefusal : nil) ?? target?.info.createRefusal
     }
 
     public var canCreate: Bool { createRefusal == nil && draft?.problem == nil && !isCreating }
@@ -715,11 +706,6 @@ public final class CalendarSidebarModel {
     @discardableResult
     public func createEvent() async -> Bool {
         guard let draft, !isCreating else { return false }
-        if let refusal = safeModeRefusal {
-            draftNote = refusal
-            environment.actions.refuse(.calendarCreateEvent, .safeMode)
-            return false
-        }
         guard let target = draftCalendar else {
             draftNote = draftAccountRefusal ?? Self.notConnected(String(localized: "this account"))
             return false
@@ -914,7 +900,7 @@ public final class CalendarSidebarModel {
 
     private func createHeld(_ draft: CalendarEventDraft, thread: ThreadKey?, on target: any CalendarProviding,
                             placeholder shown: (key: CalendarCacheKey, id: String)? = nil) async {
-        if let refusal = safeModeRefusal ?? target.info.createRefusal {
+        if let refusal = target.info.createRefusal {
             if let shown { eventStore.removeLocal(shown.key, id: shown.id) }
             environment.notices.post(String(localized: "Couldn't create the event. \(refusal)"), style: .error)
             return

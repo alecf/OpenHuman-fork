@@ -22,7 +22,7 @@ private enum Hostile {
     static var clientJSON: String {
         #"{"installed":{"client_id":"\#(clientID)","client_secret":"\#(clientSecret)","token_uri":"https://oauth2.example.invalid/token"}}"#
     }
-    static let pasted = "http://127.0.0.1:53682/?state=MARKERSTATE7f3a&code=4/MARKERCODE7f3a&scope=https://www.googleapis.com/auth/gmail.readonly"
+    static let pasted = "http://127.0.0.1:53682/?state=MARKERSTATE7f3a&code=4/MARKERCODE7f3a&scope=https://www.googleapis.com/auth/gmail.modify"
     static let loginHint = "marker.hint7f3a@work.example"
 
     static let markers = ["MARKER-SUBJ", "Marker7f3a", "marker7f3a", "MARKER-BODY", "MARKER-HTML", "MARKERTOKEN",
@@ -66,8 +66,7 @@ private enum Hostile {
         await FakeGmailLaunch.seed(gmail, corpus: corpus)
         _ = await gmail.deliver(from: "\(Hostile.senderName) <\(Hostile.senderEmail)>", to: Hostile.toEmail,
                                 subject: Hostile.subject, body: Hostile.body, html: Hostile.html, date: Date())
-        let running = try FakeGmailLaunch.makeSession(safeMode: .readOnly, store: try MailStore.openInMemoryForTesting(),
-                                                      gmail: gmail)
+        let running = try FakeGmailLaunch.makeSession(store: try MailStore.openInMemoryForTesting(), gmail: gmail)
         await running.session.start()
         let environment = running.session.environment
         let app = AppModel(screen: .mail(environment), session: running.session)
@@ -110,7 +109,6 @@ private enum Hostile {
         let snapshot = try #require(bundle.snapshot)
         #expect(snapshot.route == "mail/reader/inbox")
         #expect(snapshot.reader?.threadID == row.id.gmailThreadID.rawValue)
-        #expect(snapshot.safeMode == "readOnly")
         #expect(snapshot.app.dataMode == "fakeGmail")
         #expect((snapshot.accounts.first?.threadCount ?? 0) > 0)
         #expect((snapshot.accounts.first?.inboxThreads ?? 0) > 0)
@@ -129,7 +127,7 @@ private enum Hostile {
     @Test func signInScreenBundleHasNoHintOrPastedAddress() async throws {
         defer { try? FileManager.default.removeItem(at: support) }
         let store = FakeMailStore(corpus: .make(threadCount: 2))
-        let signIn = SignInModel(accounts: store, safeMode: .readOnly, loginHint: Hostile.loginHint)
+        let signIn = SignInModel(accounts: store, loginHint: Hostile.loginHint)
         signIn.pastedAddress = Hostile.pasted
         let app = AppModel(screen: .signIn(signIn))
         let (center, host) = try center(for: app)
@@ -140,7 +138,6 @@ private enum Hostile {
         let (bundle, _) = await model.makeBundle()
         let text = String(decoding: try DevFeedbackBundle.encoder.encode(bundle), as: UTF8.self)
         assertNoMarkers(text, "sign-in bundle")
-        #expect(bundle.snapshot?.safeMode == "readOnly")
         #expect(bundle.snapshot?.screen.hasPrefix("signIn/") == true)
         #expect(bundle.content == nil)
     }

@@ -252,8 +252,6 @@ extension FakeMailStore {
         stream { s in s.failures.filter { account == nil || $0.account == account } }
     }
 
-    public func safeMode() -> SafeModeInfo { state.withLock { $0.safeMode } }
-
     public func localThread(_ account: AccountID, gmailThreadID: GmailThreadID) async throws -> ThreadRow? {
         state.withLock { s in
             guard let key = (s.threadOrder[account] ?? []).first(where: { $0.gmailThreadID == gmailThreadID }) else {
@@ -315,7 +313,7 @@ extension FakeMailStore {
                 errors[failure.errorCode] = ((current?.0 ?? 0) + 1, max(current?.1 ?? failure.failedAt, failure.failedAt))
             }
             return DiagnosticsSnapshot(
-                generatedAt: generatedAt, safeMode: "\(s.safeMode)", accounts: entries, operations: operations,
+                generatedAt: generatedAt, accounts: entries, operations: operations,
                 recentErrors: errors.keys.sorted().map {
                     DiagnosticsSnapshot.ErrorTally(code: $0, count: errors[$0]?.0 ?? 0, lastAt: errors[$0]?.1)
                 })

@@ -199,25 +199,6 @@ import Testing
         #expect(store.sentMessages.count == 1)
     }
 
-    @Test func readOnlyOffersRemindMeDisabledWithTheReasonAndSendsNothing() async throws {
-        let w = try await InlineReplyWindow.make(safeMode: .readOnly, frameName: Self.frameName)
-        defer { w.close() }
-        let (thread, _) = try await w.conversationWithAMiddleSender()
-        _ = try await w.open(thread)
-        #expect(w.router.perform(.reply))
-        let composer = try await w.inlineComposer()
-        let session = composer.session
-        #expect(w.isUnderItsMessage(composer))
-        let remind = try #require(w.environment.compose.remindButton(for: session))
-        #expect(!remind.isEnabled && remind.help == DisabledReason.safeModeText)
-        #expect(w.environment.compose.remind(from: session), "refused with the reason, not silently")
-        if case .time = w.environment.overlays.overlay { Issue.record("no picker in read-only") }
-        #expect(!w.environment.compose.canSendInThisProcess)
-        #expect(w.environment.compose.perform(.send, in: session, source: .keyboard))
-        #expect(session.notice?.kind == .error && w.environment.compose.outgoing.isEmpty, "no card for a refused send")
-        #expect(w.reader.outgoingViews.isEmpty && w.reader.inlineComposer === composer)
-    }
-
     @Test func theCardsAndTheSendPillKeepTheirContrastInEveryBuiltInTheme() {
         let library = ThemeLibrary.builtIn
         let darkThemes = [BuiltinThemeID.dark, BuiltinThemeID.midnight, BuiltinThemeID.systemDark]

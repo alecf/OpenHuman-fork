@@ -94,9 +94,8 @@ schemes:
   Mail:
     build: { targets: { Mail: all } }
     run:
-      # Set explicitly so real-account runs stay read-only whatever the saved write-mode switch says
-      environmentVariables: { OPENHUMAN_SAFE_MODE: read-only }
-      commandLineArguments: { "-UseFakeGmail": false }
+      # Untick to sign in to a real account: every change then reaches Gmail
+      commandLineArguments: { "-UseFakeGmail": true }
     test:
       targets: [MailAppTests]
       commandLineArguments: { "-UseFakeData": true, "-UseFakeCalendar": true }

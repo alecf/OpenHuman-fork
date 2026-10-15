@@ -120,8 +120,7 @@ private func behaviour(_ events: [(TriageSignal, LearnedSubject, TimeInterval)])
 
     private func fixture() async throws -> Fixture {
         let store = FakeMailStore(corpus: .rich(threadCount: 20, now: fixedNow),
-                                  options: .init(remoteAck: .immediate, heldSends: .manual, safeMode: .normal,
-                                                 now: { fixedNow }))
+                                  options: .init(remoteAck: .immediate, heldSends: .manual, now: { fixedNow }))
         let rules = FakeImportanceRules(corpus: nil, now: { fixedNow })
         let saved = InMemoryLearnedBehaviourStore()
         let env = AppEnvironment(data: store, commands: store, accounts: store, settings: store, isFake: true,

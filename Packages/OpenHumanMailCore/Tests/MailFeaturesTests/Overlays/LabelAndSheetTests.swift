@@ -129,7 +129,7 @@ import Testing
         #expect(f.store.pendingOperationCount > 0, "queued for when the connection returns")
     }
 
-    @Test func theCreateRowIsHiddenForAnExactNameAndWhenReadOnly() async throws {
+    @Test func theCreateRowIsHiddenForAnExactNameAndThePickerNeedsAWritePort() async throws {
         let (f, _, _) = try await fixture()
         await f.run(.label)
         let picker = try #require(f.labelPicker)
@@ -138,14 +138,12 @@ import Testing
         picker.query = "Cli"
         #expect(picker.rows.last.map { if case .create = $0.kind { true } else { false } } == true)
 
-        var options = FakeMailStore.Options(remoteAck: .immediate)
-        options.safeMode = .readOnly
-        let readOnly = OverlayFixture(corpus: .rich(threadCount: 60, now: fixedNow), options: options)
-        await readOnly.loaded()
-        #expect(await readOnly.run(.label), "refused out loud, not opened")
-        #expect(readOnly.center.overlay.isNone)
-        let key = try #require(readOnly.router.list?.cursor)
-        #expect(readOnly.registry.threadActions?.createLabel(named: "X", account: key.account, applyTo: [key], host: readOnly.router) == nil)
+        let noPort = OverlayFixture(corpus: .rich(threadCount: 60, now: fixedNow), writePort: false)
+        await noPort.loaded()
+        #expect(await noPort.run(.label), "refused out loud, not opened")
+        #expect(noPort.center.overlay.isNone)
+        let key = try #require(noPort.router.list?.cursor)
+        #expect(noPort.registry.threadActions?.createLabel(named: "X", account: key.account, applyTo: [key], host: noPort.router) == nil)
     }
 }
 

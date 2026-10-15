@@ -15,21 +15,12 @@ extension ComposeManager {
     }
 
     func refusal(for session: ComposeSession) -> ComposeSession.Notice {
-        switch environment.status.safeMode {
-        case .readOnly:
-            ComposeSession.Notice(.error, String(localized: "Not sent: Mail is read-only, so nothing was saved or queued."))
-        case .writeAllowlist:
-            ComposeSession.Notice(.error, String(localized: "Not sent. Sending is off in the test-writes safe mode; nothing was queued."))
-        case .normal:
-            ComposeSession.Notice(.error, String(localized: "Not sent: sending isn't available here."))
-        }
+        ComposeSession.Notice(.error, String(localized: "Not sent: sending isn't available here."))
     }
 
-    var canSend: Bool { environment.status.safeMode == .normal && environment.commands != nil }
+    var canSend: Bool { environment.commands != nil }
 
     public var canSendInThisProcess: Bool { canSend }
-
-    public var isReadOnly: Bool { environment.status.safeMode == .readOnly }
 
     public var offersSendLater: Bool { environment.actions.contains(.sendLater) }
 
@@ -37,7 +28,7 @@ extension ComposeManager {
         guard session.isOpen else { return .notHandled }
         guard canSend else {
             session.notice = refusal(for: session)
-            environment.actions.refuse(.send, .safeMode)
+            refuseRowAction(.send)
             return .done
         }
         guard sendsStarting.insert(session.id).inserted else { return .done }
@@ -66,7 +57,7 @@ extension ComposeManager {
             session.notice = ComposeSession.Notice(.warning, String(localized: "\(names) may still need filling in. Press ⌘↵ again to send anyway."))
             return
         }
-        if await asksWriteModeConfirmation(session, .send) { return }
+        if await asksSendConfirmation(session, .send) { return }
         guard await session.save(force: true), let key = session.draftKey else {
             session.notice = ComposeSession.Notice(.error, String(localized: "Couldn't save the draft, so it wasn't sent."),
                                                    offersSendAgain: true)
@@ -80,11 +71,6 @@ extension ComposeManager {
         do {
             token = try await commands.send(key, undoWindow: .seconds(seconds))
             await rememberSendReminder(of: session, draft: key)
-        } catch MailPortError.blockedBySafeMode {
-            session.expectsDraftGone = false
-            session.notice = refusal(for: session)
-            environment.actions.refuse(.send, .safeMode)
-            return
         } catch {
             session.expectsDraftGone = false
             let detail = (error as? MailPortError)?.description ?? String(localized: "Try again.")
@@ -233,13 +219,13 @@ extension ComposeManager {
         }
     }
 
-    func asksWriteModeConfirmation(_ session: ComposeSession, _ kind: ComposeSession.SendConfirmation.Kind) async -> Bool {
-        guard environment.writeMode != nil else { return false }
+    func asksSendConfirmation(_ session: ComposeSession, _ kind: ComposeSession.SendConfirmation.Kind) async -> Bool {
+        guard environment.isLiveAccount else { return false }
         if session.sendConfirmed {
             session.sendConfirmed = false
             return false
         }
-        guard await Self.read(environment.settings, WriteModeSession.confirmEverySend) ?? false else { return false }
+        guard await Self.read(environment.settings, SendSettings.confirmEverySend) ?? false else { return false }
         let who = Self.recipientSummary(session.allRecipients)
         let when: String? = if case .schedule(let date) = kind { formatSendAt(date) } else { nil }
         let title = when == nil ? String(localized: "Send this message?") : String(localized: "Schedule this message?")
@@ -256,7 +242,7 @@ extension ComposeManager {
         session.sendConfirmation = nil
         session.sendConfirmed = true
         if stopAsking, let settings = environment.settings {
-            track(Task { try? await settings.set(WriteModeSession.confirmEverySend, false) })
+            track(Task { try? await settings.set(SendSettings.confirmEverySend, false) })
         }
         switch card.kind {
         case .send:
@@ -270,7 +256,7 @@ extension ComposeManager {
         guard session.isOpen else { return .notHandled }
         guard canSend else {
             session.notice = refusal(for: session)
-            environment.actions.refuse(.sendLater, .safeMode)
+            refuseRowAction(.sendLater)
             return .done
         }
         guard session.source == .user || session.review == .approved else {
@@ -301,7 +287,7 @@ extension ComposeManager {
             session.notice = ComposeSession.Notice(.error, Self.tooSoonText)
             return
         }
-        if await asksWriteModeConfirmation(session, .schedule(date)) {
+        if await asksSendConfirmation(session, .schedule(date)) {
             pendingSendConditions[session.id] = condition
             return
         }
@@ -385,7 +371,7 @@ extension ComposeManager {
     static let ifNoReplySuffix = String(localized: " if no reply")
 
     func cancelScheduledSend(in thread: ThreadKey) -> ActionPerformance {
-        guard environment.status.safeMode.allowsMailChanges, let commands = environment.commands else {
+        guard let commands = environment.commands else {
             refuseRowAction(.cancelScheduledSend)
             return .done
         }
@@ -399,8 +385,6 @@ extension ComposeManager {
                 try await commands.cancelScheduledSend(row.id)
                 self.forgetSending(draft: row.id)
                 self.push("Send later canceled", .reschedule(draft: row.id.rawValue, to: at), threads: [thread])
-            } catch MailPortError.blockedBySafeMode {
-                self.environment.actions.refuse(.cancelScheduledSend, .safeMode)
             } catch {
                 let detail = (error as? MailPortError)?.description ?? String(localized: "Try again.")
                 self.environment.notices.post(String(localized: "Couldn't cancel the scheduled send. \(detail)"),
@@ -425,8 +409,8 @@ extension ComposeManager {
                                               style: .info, duration: NoticeCenter.infoDuration)
                 return
             }
-            if self.environment.writeMode != nil,
-               await Self.read(self.environment.settings, WriteModeSession.confirmEverySend) ?? false {
+            if self.environment.isLiveAccount,
+               await Self.read(self.environment.settings, SendSettings.confirmEverySend) ?? false {
                 self.environment.notices.post(String(localized: "Confirm before sending is on: pick the new time in the draft (⇧⌘L)."),
                                               style: .info, duration: NoticeCenter.infoDuration)
                 _ = await self.resumeDraft(in: thread, scheduledFirst: true).value
@@ -451,9 +435,6 @@ extension ComposeManager {
         }
         do {
             try await commands.scheduleSend(key, at: date)
-        } catch MailPortError.blockedBySafeMode {
-            environment.actions.refuse(.rescheduleSend, .safeMode)
-            return
         } catch {
             let detail = (error as? MailPortError)?.description ?? String(localized: "Try again.")
             environment.notices.post(String(localized: "Couldn't reschedule. \(detail)"), style: .error)
@@ -465,7 +446,7 @@ extension ComposeManager {
 
     private func refuseRowAction(_ id: ActionID) {
         let title = environment.actions.descriptor(id)?.title ?? String(localized: "This action")
-        environment.actions.refuse(id, environment.commands == nil ? .unavailable(title) : .safeMode)
+        environment.actions.refuse(id, .unavailable(title))
     }
 
     private func nothingScheduled() {

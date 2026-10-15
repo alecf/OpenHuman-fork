@@ -13,11 +13,10 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct RealAccountAdapterWiringTests {
-    private func start(_ mode: SafeMode, gmail: FakeGmail,
+    private func start(gmail: FakeGmail,
                        unsubscribe: (any HTTPTransport)? = nil) async throws -> (FakeGmailLaunch.Running, MailStore, AppModel) {
         let store = try MailStore.openInMemoryForTesting()
-        let running = try FakeGmailLaunch.makeSession(safeMode: mode, store: store, gmail: gmail,
-                                                      unsubscribeTransport: unsubscribe)
+        let running = try FakeGmailLaunch.makeSession(store: store, gmail: gmail, unsubscribeTransport: unsubscribe)
         let app = AppModel(screen: .mail(running.session.environment), session: running.session)
         await running.session.start()
         let account = running.session.account
@@ -31,7 +30,7 @@ struct RealAccountAdapterWiringTests {
         let corpus = FakeCorpus.make(threadCount: 3, now: Date())
         let gmail = FakeGmail(accountEmail: corpus.account.email)
         await FakeGmailLaunch.seed(gmail, corpus: corpus)
-        let (running, store, app) = try await start(.normal, gmail: gmail)
+        let (running, store, app) = try await start(gmail: gmail)
         let session = running.session
         defer { Task { await session.stop() } }
         let environment = session.environment
@@ -69,7 +68,7 @@ struct RealAccountAdapterWiringTests {
         let trashed = await gmail.deliver(subject: "Synthetic trashed", labels: ["TRASH"])
         let spam = await gmail.deliver(subject: "Synthetic spam", labels: ["SPAM"])
         let draft = await gmail.deliver(subject: "Synthetic draft", labels: ["DRAFT"])
-        let (running, store, app) = try await start(.readOnly, gmail: gmail)
+        let (running, store, app) = try await start(gmail: gmail)
         let session = running.session
         defer { Task { await session.stop() } }
         let account = session.account
@@ -82,7 +81,7 @@ struct RealAccountAdapterWiringTests {
             }
             #expect(window.rows.count == 1, "\(folder)")
         }
-        #expect(running.wire.requests.allSatisfy(isReadOnlyOnTheWire))
+        #expect(running.wire.requests.allSatisfy(isReadOnTheWire))
         _ = app
     }
 
@@ -91,7 +90,7 @@ struct RealAccountAdapterWiringTests {
         let gmail = FakeGmail(accountEmail: corpus.account.email)
         await FakeGmailLaunch.seed(gmail, corpus: corpus)
         let starred = await gmail.deliver(subject: "Synthetic starred", labels: ["STARRED"])
-        let (running, _, app) = try await start(.readOnly, gmail: gmail)
+        let (running, _, app) = try await start(gmail: gmail)
         let session = running.session
         defer { Task { await session.stop() } }
         let adapter = try #require(session.environment.data as? MailStoreAdapter)
@@ -100,43 +99,36 @@ struct RealAccountAdapterWiringTests {
         #expect(refs.contains { $0.gmailThreadID.rawValue == starred.threadID })
         #expect(adapter.viewLoader != nil, "and the view loads")
         #expect(try await adapter.searchGmail("is:starred", account: session.account) >= 1)
-        #expect(running.wire.requests.allSatisfy(isReadOnlyOnTheWire))
+        #expect(running.wire.requests.allSatisfy(isReadOnTheWire))
         _ = app
     }
 
-    @Test(.timeLimit(.minutes(3))) func unsubscribeReadsSyncedHeadersAndPostsOnlyInNormalMode() async throws {
-        for mode in [SafeMode.readOnly, .normal] {
-            let corpus = FakeCorpus.make(threadCount: 2, now: Date())
-            let gmail = FakeGmail(accountEmail: corpus.account.email)
-            await FakeGmailLaunch.seed(gmail, corpus: corpus)
-            let news = await gmail.deliver(from: "Synthetic List <news@list.example>", subject: "Synthetic digest",
-                                           extraHeaders: [
-                                               GmailHeader(name: "List-Unsubscribe", value: "<https://list.example/u/synthetic-token>"),
-                                               GmailHeader(name: "List-Unsubscribe-Post", value: "List-Unsubscribe=One-Click"),
-                                           ])
-            let lists = FakeHTTPTransport()
-            lists.on("POST", "/u/") { _ in HTTPResponse(status: 200, headers: [:], body: Data()) }
-            let (running, store, app) = try await start(mode, gmail: gmail, unsubscribe: lists)
-            let session = running.session
-            let account = session.account
-            await eventually("the newsletter", timeout: .seconds(60)) {
-                (try? store.message(account: account, gmailMessageID: GmailMessageID(news.messageID))) != nil
-            }
-            let row = try #require(try store.message(account: account, gmailMessageID: GmailMessageID(news.messageID)))
-            let key = MessageKey(account: account, rowID: row.id.rawValue, gmailMessageID: GmailMessageID(news.messageID))
-            #expect(try await session.environment.data.unsubscribeInfo(key) == .oneClick(host: "list.example"), "\(mode)")
-            let commands = try #require(session.environment.commands)
-            if mode == .normal {
-                try await commands.unsubscribe(key)
-                #expect(lists.requests.map(\.url.absoluteString) == ["https://list.example/u/synthetic-token"])
-                #expect(lists.requests.allSatisfy { $0.method == "POST" })
-            } else {
-                await #expect(throws: MailPortError.blockedBySafeMode) { try await commands.unsubscribe(key) }
-                #expect(lists.requests.isEmpty, "nothing left the process")
-                #expect(running.wire.requests.allSatisfy(isReadOnlyOnTheWire))
-            }
-            await session.stop()
-            _ = app
+    @Test(.timeLimit(.minutes(3))) func unsubscribeReadsSyncedHeadersAndPostsToTheListOnly() async throws {
+        let corpus = FakeCorpus.make(threadCount: 2, now: Date())
+        let gmail = FakeGmail(accountEmail: corpus.account.email)
+        await FakeGmailLaunch.seed(gmail, corpus: corpus)
+        let news = await gmail.deliver(from: "Synthetic List <news@list.example>", subject: "Synthetic digest",
+                                       extraHeaders: [
+                                           GmailHeader(name: "List-Unsubscribe", value: "<https://list.example/u/synthetic-token>"),
+                                           GmailHeader(name: "List-Unsubscribe-Post", value: "List-Unsubscribe=One-Click"),
+                                       ])
+        let lists = FakeHTTPTransport()
+        lists.on("POST", "/u/") { _ in HTTPResponse(status: 200, headers: [:], body: Data()) }
+        let (running, store, app) = try await start(gmail: gmail, unsubscribe: lists)
+        let session = running.session
+        let account = session.account
+        await eventually("the newsletter", timeout: .seconds(60)) {
+            (try? store.message(account: account, gmailMessageID: GmailMessageID(news.messageID))) != nil
         }
+        let row = try #require(try store.message(account: account, gmailMessageID: GmailMessageID(news.messageID)))
+        let key = MessageKey(account: account, rowID: row.id.rawValue, gmailMessageID: GmailMessageID(news.messageID))
+        #expect(try await session.environment.data.unsubscribeInfo(key) == .oneClick(host: "list.example"))
+        let commands = try #require(session.environment.commands)
+        try await commands.unsubscribe(key)
+        #expect(lists.requests.map(\.url.absoluteString) == ["https://list.example/u/synthetic-token"])
+        #expect(lists.requests.allSatisfy { $0.method == "POST" })
+        #expect(running.wire.requests.allSatisfy(isReadOnTheWire), "the unsubscribe never touches Gmail")
+        await session.stop()
+        _ = app
     }
 }

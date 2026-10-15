@@ -87,10 +87,11 @@ private enum SignInSource {
         let code = try SignInSource.code()
         let main = try SignInSource.block("private var main: some View", in: code)
         let access = try SignInSource.block("private var accessInfo: some View", in: code)
-        for name in ["accessText", "calendarNote", "whatBreaksIfDenied", "modeText"] {
+        for name in ["accessText", "calendarNote", "whatBreaksIfDenied"] {
             #expect(access.contains(name), "\(name) under What does Mail ask for?")
             #expect(!main.contains(name), "\(name) not on the main screen")
         }
+        #expect(!code.contains("modeText") && !access.contains("lock.fill"), "no mode line under What does Mail ask for?")
         let options = try SignInSource.block("private func moreOption(", in: code)
         for flow in ["Use a specific account…", "Sign in from another device", "ownClientDisclosure", "clientChoice",
                      "I already have the file…", "accessInfo"] {
@@ -115,17 +116,15 @@ private enum SignInSource {
     }
 
     @Test func theMovedWordsAreStillTheUsers() {
-        for mode in [SafeModeInfo.readOnly, .writeAllowlist, .normal] {
-            let text = SignInView.accessText(mode)
-            #expect(!text.contains("gmail.") && !text.contains("Safe mode") && !text.contains("Write mode"), "\(mode)")
-            #expect(text.hasPrefix("Mail asks Gmail"), "it answers What does Mail ask for?: \(mode)")
-        }
+        let text = SignInView.accessText
+        #expect(!text.contains("gmail.") && !text.lowercased().contains("mode"), "no scope names and no mode")
+        #expect(text.hasPrefix("Mail asks Gmail"), "it answers What does Mail ask for?")
         #expect(SignInView.calendarNote.contains("isn't part of this sign-in"))
         #expect(SignInView.remoteText.contains("error page"), "the error page is expected")
     }
 
     @Test func theScreenLaysOutCollapsedAndExpanded() async throws {
-        let ready = SignInModel(accounts: FixedClient(status: .configured(source: .file)), safeMode: .normal)
+        let ready = SignInModel(accounts: FixedClient(status: .configured(source: .file)))
         await ready.run()
         #expect(ready.phase == .ready && !ready.showsMoreOptions)
         try layOut(ready, "signin-simple-ready")
@@ -134,13 +133,12 @@ private enum SignInSource {
         ready.toggleOwnClient()
         try layOut(ready, "signin-simple-more-options")
 
-        let none = SignInModel(accounts: FixedClient(status: .missing), safeMode: .normal)
+        let none = SignInModel(accounts: FixedClient(status: .missing))
         await none.run()
         #expect(none.screen.action == .setUpGoogle)
         try layOut(none, "signin-simple-no-client")
 
-        let waiting = SignInModel(accounts: FixedClient(status: .configured(source: .environment), waits: true),
-                                  safeMode: .normal)
+        let waiting = SignInModel(accounts: FixedClient(status: .configured(source: .environment), waits: true))
         await waiting.run()
         waiting.signIn()
         #expect(waiting.phase == .signingIn && waiting.screen.action == .cancel)

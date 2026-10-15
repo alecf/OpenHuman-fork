@@ -74,11 +74,11 @@ private let friday = utc("2026-10-16T10:00:00Z")
     }
 
     @Test func theGeneralPageOffersHalfHoursAndKeepsAnotherStoredTime() async throws {
-        let f = SettingsFixture(safeMode: .readOnly)
+        let f = SettingsFixture(writePort: false)
         let model = GeneralSettingsModel(environment: f.env)
         model.start()
         #expect(model.defaultReminderTime.value == 540 && !model.reminderWeekdaysOnly.value)
-        #expect(model.availability.canEditSettings, "local settings work in read-only safe mode")
+        #expect(model.availability.canEditSettings, "local settings need no write port")
         await model.defaultReminderTime.set(480)
         await model.reminderWeekdaysOnly.set(true)
         #expect(try await f.store.get(AppSettings.defaultReminderTime) == 480)

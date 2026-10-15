@@ -160,12 +160,11 @@ private struct SchedulingFixture {
     static let focus = CalendarEvent(id: "ev-focus", title: "Focus time", start: at(13, 13), end: at(13, 14),
                                      organizerIsMe: true)
 
-    init(safeMode: SafeModeInfo = .normal, events: [CalendarEvent] = [review],
+    init(events: [CalendarEvent] = [review],
          text: String = "Hi, no problem. How about 1pm tomorrow?",
          language: (any SchedulingLanguageModel)? = FakeSchedulingLanguage()) async throws {
         let corpus = FakeCorpus.make(threadCount: 6, now: fixedNow)
-        store = FakeMailStore(corpus: corpus, options: .init(remoteAck: .immediate, heldSends: .manual, safeMode: safeMode,
-                                                             now: { fixedNow }))
+        store = FakeMailStore(corpus: corpus, options: .init(remoteAck: .immediate, heldSends: .manual, now: { fixedNow }))
         calendar = FakeCalendar(events: events)
         env = AppEnvironment(data: store, commands: store, accounts: store, settings: store, isFake: true,
                              calendar: calendar)
@@ -308,24 +307,6 @@ private struct SchedulingFixture {
         #expect(calendar.deleted.count == 1, "and removes the accepted hold")
         if case .move(_, _, _, let updates) = calendar.calls.last(where: { if case .move = $0 { true } else { false } }) {
             #expect(updates == CalendarSendUpdates.none)
-        }
-    }
-
-    @Test func readOnlyAndTestWritesNeverTouchTheCalendar() async throws {
-        for mode in [SafeModeInfo.readOnly, .writeAllowlist] {
-            let f = try await SchedulingFixture(safeMode: mode)
-            f.assistant.sleep = { _ in }
-            await f.assistant.analyze(f.thread)
-            #expect(!f.assistant.suggestions(for: f.thread).isEmpty, "reading is allowed (\(mode))")
-            let moves = try #require(f.assistant.analyses[f.thread]?.moves)
-            let session = try #require(await f.assistant.draft(.acceptAndMove(moves), in: f.thread))
-            f.assistant.replySent(session)
-            await f.assistant.moveConflicts()
-            await f.assistant.acceptConflict()
-            #expect(f.assistant.followUp?.note != nil, "the card says why")
-            #expect(f.assistant.heldIDs.isEmpty)
-            try await Task.sleep(for: .milliseconds(50))
-            #expect(f.calendar.moveCalls == 0 && f.calendar.createCalls == 0, "\(mode)")
         }
     }
 

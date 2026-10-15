@@ -87,7 +87,7 @@ import Testing
 
     @Test func aRefusedActionStaysButIsMarkedDisabled() async {
         let hints = HintBar.hints(for: .list, descriptors: ActionCatalog.all) {
-            $0 == .markDone ? .disabled(.safeMode) : .enabled
+            $0 == .markDone ? .disabled(.unavailable("Mark done")) : .enabled
         }
         #expect(hints.first?.action == .markDone && hints.first?.isEnabled == false)
     }

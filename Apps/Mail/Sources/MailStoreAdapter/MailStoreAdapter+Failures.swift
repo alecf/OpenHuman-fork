@@ -5,12 +5,6 @@ import OpenHumanStore
 
 extension MailStoreAdapter {
     public func failedOperations(_ account: AccountID?) -> AsyncThrowingStream<[FailedOperationInfo], Error> {
-        guard safeModeValue != .readOnly else {
-            return AsyncThrowingStream { continuation in
-                continuation.yield([])
-                continuation.finish()
-            }
-        }
         let store = self.store
         return Self.map(store.observeFailedOperations().values()) { items in
             items.filter { account == nil || $0.accountID == account }.map { Self.failure($0, store: store) }

@@ -3,13 +3,13 @@
   "area": "Inbox",
   "title": "A conversation brought back by a reminder says Reminder returned (real Gmail)",
   "steps": [
-    "With a real Gmail test account in write mode, open a low-stakes Inbox conversation, set Remind me… two minutes ahead, then press E",
+    "With a real Gmail test account, open a low-stakes Inbox conversation, set Remind me… two minutes ahead, then press E",
     "Wait until it comes back to the top of the Inbox; look at the row, the line under the subject in the reader and a search for its subject",
     "With VoiceOver on, move to the row",
     "Press E on it, then Cmd-Z"
   ],
   "deepLink": null,
   "expected": "A grey chip reading exactly Reminder returned (not lowercase) leads the row and the search result; the reader line shows ● Reminder returned; VoiceOver says Reminder returned. Reading or starring keeps it. After E it is gone, and Cmd-Z brings the conversation back without it.",
-  "requires": "real-write",
+  "requires": "real",
   "addedIn": "2026-10-15"
 }

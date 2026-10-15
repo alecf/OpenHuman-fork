@@ -53,7 +53,7 @@ import Testing
     }
 
     @Test func hiddenWhenTheActionIsDisabledHiddenUnknownOrHasNoKey() throws {
-        #expect(decide(done, availability: .disabled(.safeMode)) == nil)
+        #expect(decide(done, availability: .disabled(.unavailable("Mark done"))) == nil)
         #expect(decide(done, availability: .disabled(.noSelection)) == nil)
         #expect(decide(done, availability: .hidden) == nil)
         #expect(decide(nil) == nil)
@@ -81,7 +81,7 @@ import Testing
         #expect(AppSettings.hintOnClick.name == "ui.hint_on_click" && AppSettings.hintOnClick.defaultValue)
         #expect(AppSettings.shortcutLearning.name == "ui.shortcut_learning" && AppSettings.shortcutLearning.defaultValue.isEmpty)
         let reset = try #require(ActionCatalog.descriptor(.resetShortcutHints))
-        #expect(reset.effect == .view, "local only: works in read-only")
+        #expect(reset.effect == .view, "local only")
         #expect(reset.appearsInPalette && !reset.appearsInMenu)
         #expect(PaletteController.symbol(for: .resetShortcutHints) != "")
     }
@@ -168,7 +168,7 @@ final class ShortcutCountingHandler: ActionHandler {
         await w.learning.start()
         let refused = w.handler
         w.registry.onRefused = { id, _ in refused.refused.append(id) }
-        w.host.context.safeMode = .readOnly
+        w.host.context.canWrite = false
         #expect(w.perform(.toolbar), "an announced refusal is handled")
         #expect(refused.refused == [.markDone] && w.handler.performed.isEmpty)
         #expect(w.notices.toasts.isEmpty && w.learning.counts.isEmpty)
@@ -251,7 +251,7 @@ final class ShortcutCountingHandler: ActionHandler {
         await w.learning.flush()?.value
         #expect(try await store.get(AppSettings.shortcutLearning) == [ActionID.markDone.rawValue: ShortcutUseCount(keyboard: 3)])
         #expect(w.learning.canReset)
-        let availability = SettingsAvailability(safeMode: .normal, hasCommands: true, hasSettings: true, hasAccounts: true)
+        let availability = SettingsAvailability(hasCommands: true, hasSettings: true, hasAccounts: true)
         let general = GeneralSettingsModel(settings: store, availability: availability, shortcutLearning: w.learning)
         #expect(general.canResetShortcutHints)
         await general.resetShortcutHints()
@@ -271,12 +271,12 @@ final class ShortcutCountingHandler: ActionHandler {
         #expect(w.notices.toasts.last?.message == ShortcutLearning.resetMessage)
     }
 
-    @Test func everyEnvironmentHasTheHintsAndTheResetWorksInReadOnly() async throws {
+    @Test func everyEnvironmentHasTheHintsAndTheResetIsAvailable() async throws {
         let env = AppEnvironment.fake(corpus: .make(threadCount: 2, now: Self.now),
-                                      options: .init(remoteAck: .immediate, safeMode: .readOnly))
+                                      options: .init(remoteAck: .immediate))
         let learning = try #require(env.actions.shortcutHints)
         #expect(!learning.isStarted, "silent until the launch tasks start it")
-        let context = ActionContext(scope: .list, safeMode: .readOnly)
+        let context = ActionContext(scope: .list)
         #expect(env.actions.availability(.resetShortcutHints, host: nil, context: context) == .enabled)
         #expect(GeneralSettingsModel(environment: env).shortcutLearning === learning)
     }

@@ -37,7 +37,7 @@ public struct StatusBanner: Hashable, Sendable {
     }
 
     public static func current(active: Account?, connectivity: [AccountID: ConnectivityState], now: Date,
-                               canReauthorize: Bool, readOnly: Bool = false) -> StatusBanner? {
+                               canReauthorize: Bool) -> StatusBanner? {
         var candidates: [StatusBanner] = []
         if let active {
             let state = connectivity[active.id]
@@ -61,9 +61,7 @@ public struct StatusBanner: Hashable, Sendable {
         }
         if connectivity.values.contains(where: { if case .offline = $0 { true } else { false } }) {
             candidates.append(StatusBanner(kind: .offline, account: nil,
-                                           message: readOnly
-                                               ? "Offline. Mail shows the mail on this Mac and syncs when you're back online."
-                                               : "Offline. Your changes are saved and will sync when you're back.",
+                                           message: "Offline. Your changes are saved and will sync when you're back.",
                                            symbol: "wifi.slash"))
         }
         return candidates.min { $0.kind < $1.kind }

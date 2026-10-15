@@ -74,8 +74,8 @@ struct EventsTabTests {
         await eventually { model.splits.first { $0.id == key }?.ruleText == "has:invite" }
     }
 
-    @Test func readOnlySafeModeMakesNoOfferButStillRescans() async throws {
-        let f = SettingsFixture(safeMode: .readOnly)
+    @Test func withoutAWritePortThereIsNoOfferButRescanStillWorks() async throws {
+        let f = SettingsFixture(writePort: false)
         let model = await model(f)
         #expect(model.eventsOffer == nil)
         let before = try await f.splits(f.work)

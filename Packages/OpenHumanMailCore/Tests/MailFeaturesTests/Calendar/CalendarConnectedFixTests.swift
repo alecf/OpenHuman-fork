@@ -24,7 +24,7 @@ private struct ConnectedFixFixture {
     let homeID: AccountID
     var workEmail: String { FakeCorpus.me.email }
 
-    static func make(connected: Set<String> = [], safeMode: SafeModeInfo = .normal) async throws -> ConnectedFixFixture {
+    static func make(connected: Set<String> = []) async throws -> ConnectedFixFixture {
         let corpus = FakeCorpus.make(threadCount: 3, now: at(10, 10, 9))
         let work = FakeCalendar(events: [CalendarEvent(id: "w1", title: "Work standup", start: at(10, 10, 10),
                                                        end: at(10, 10, 10, 30))],
@@ -35,7 +35,7 @@ private struct ConnectedFixFixture {
         let connections = FakeCalendarConnections(connected: connected,
                                                   providers: [FakeCorpus.me.email: work, Self.home: home],
                                                   followsConnection: true, windowAccount: FakeCorpus.me.email)
-        let env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate, safeMode: safeMode),
+        let env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate),
                                       featureFlags: FeatureFlags(), calendarConnections: connections)
         let store = try #require(env.data as? FakeMailStore)
         store.enqueueSignIn(.succeed(email: Self.home, displayName: nil))

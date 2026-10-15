@@ -115,23 +115,6 @@ struct NotificationResponseTests {
         #expect(after.first { $0.id == unread.id }?.isUnread == false)
     }
 
-    @Test func inReadOnlyModeAButtonChangesNothingAndSaysSoGently() async throws {
-        let f = await ready(options: .init(remoteAck: .immediate, safeMode: .readOnly))
-        let row = try await f.firstThread()
-        for action in [NotificationResponse.Action.markDone, .snooze, .remindIfNoReply] {
-            f.notifier.respond(NotificationResponse(identifier: "n3", action: action, userInfo: NotificationRouting.userInfo(for: row.id)))
-        }
-        await f.delivered(count: 1)
-        let note = try #require(f.notifier.delivered.first)
-        #expect(note.title == "Mail is read-only, so nothing changed.")
-        #expect(note.category == nil, "the notice itself offers no buttons")
-        let rows = try #require(await first(f.store.threadWindow(.system(.inbox), account: f.account, limit: 200))).rows
-        #expect(rows.contains { $0.id == row.id })
-        #expect(f.env.undo?.nextUndo == nil)
-        #expect(f.env.notices.toasts.isEmpty, "a notification button does not also raise a toast")
-        #expect(try await first(f.store.reminders(nil))?.isEmpty == true)
-    }
-
     @Test func snoozeFromANotificationUsesTheLaterTodayPresetAndCanBeUndone() async throws {
         let f = await ready()
         let row = try await f.firstThread()

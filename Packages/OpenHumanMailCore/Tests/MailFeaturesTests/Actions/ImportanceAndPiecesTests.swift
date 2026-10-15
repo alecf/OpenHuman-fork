@@ -83,14 +83,6 @@ import Testing
         #expect(rules(f).allRules.isEmpty, "both rules undone, newest first")
     }
 
-    @Test func neverFromTheDomainIsRefusedInReadOnly() async throws {
-        let readOnly = await fixture(options: .init(safeMode: .readOnly))
-        #expect(readOnly.registry.availability(.neverImportantDomain, host: readOnly.router) == .disabled(.safeMode))
-        #expect(await readOnly.run(.neverImportantDomain))
-        #expect(rules(readOnly).allRules.isEmpty)
-        #expect(readOnly.toastMessages == ["Read-only: Mail can't change your mail"])
-    }
-
     @Test func removeFromThisSplitOnlyOnASplit() async throws {
         let inbox = await fixture()
         #expect(inbox.registry.availability(.removeFromSplit, host: inbox.router) == .hidden)
@@ -106,7 +98,7 @@ import Testing
         #expect(rules(f).allRules.first?.split == split)
     }
 
-    @Test func hiddenWithoutThePortAndRefusedInReadOnly() async throws {
+    @Test func hiddenWithoutThePort() async throws {
         let store = FakeMailStore(corpus: .make(threadCount: 3, now: fixedNow))
         let env = AppEnvironment(data: store, commands: store, isFake: true, featureFlags: FeatureFlags())
         let router = AppRouter(environment: env)
@@ -114,18 +106,11 @@ import Testing
         await eventually { router.list?.rows.count == 3 }
         #expect(env.actions.contains(.alwaysImportantSender), "the module is on")
         #expect(env.actions.availability(.alwaysImportantSender, host: router) == .hidden, "but no port: hidden")
-
-        let readOnly = await fixture(options: .init(safeMode: .readOnly))
-        #expect(await readOnly.run(.alwaysImportantSender))
-        #expect(rules(readOnly).allRules.isEmpty)
-        #expect(readOnly.toastMessages == ["Read-only: Mail can't change your mail"])
     }
 
-    @Test func thePortItselfRefusesInReadOnly() async throws {
-        let port = FakeImportanceRules(safeMode: .readOnly)
+    @Test func importanceChangeValuesAreLowercased() {
         let change = ImportanceChange(kind: .alwaysSender, account: AccountID(1), value: "Dana@Acme.example")
-        #expect(change.value == "dana@acme.example", "values are lowercased")
-        await #expect(throws: MailPortError.blockedBySafeMode) { try await port.apply(change) }
+        #expect(change.value == "dana@acme.example")
     }
 
     @Test func rulesStreamFollowsChanges() async throws {
@@ -234,7 +219,7 @@ import Testing
         var announced: [String] = []
         notices.onPost = { announced.append($0.message) }
         notices.post("Marked done", style: .undo)
-        notices.post(StatusModel.blockedText, style: .info)
-        #expect(announced == ["Marked done", StatusModel.blockedText])
+        notices.post("Couldn't mark 1 conversation done", style: .error)
+        #expect(announced == ["Marked done", "Couldn't mark 1 conversation done"])
     }
 }

@@ -165,8 +165,7 @@ struct DevChecklistRow: View {
     static func requirementTitle(_ requirement: DevChecklistItem.Requirement) -> String {
         switch requirement {
         case .fake: "fake data"
-        case .realReadOnly: "real, read-only"
-        case .realWrite: "real, write mode"
+        case .real: "real account"
         }
     }
 }

@@ -169,57 +169,6 @@ func soon(_ condition: @MainActor () -> Bool, sourceLocation: SourceLocation = #
         #expect(session.from.email == "robin@example.com" && session.fromReason == .accountDefault)
     }
 
-    @Test func readOnlyRefusesSendVisiblyAndWritesNothing() async throws {
-        let f = ComposeFixture(safeMode: .readOnly)
-        await f.loaded()
-        #expect(f.env.status.safeMode == .readOnly)
-        #expect(await f.run(.compose), "composing opens: it is a view")
-        let session = try #require(f.compose.windowSession)
-        #expect(!session.canPersist)
-        session.to.text = "dana@acme.example,"
-        session.subject = "Hello"
-        session.updateBody(doc("Hi"))
-        await session.settle()
-        if case .localOnly(let why) = session.saveState { #expect(why.contains("read-only")) } else {
-            Issue.record("expected localOnly, got \(session.saveState)")
-        }
-        #expect(f.compose.perform(.send, in: session, source: .keyboard), "refused out loud")
-        #expect(session.notice?.kind == .error)
-        #expect(session.notice?.text == "Not sent: Mail is read-only, so nothing was saved or queued.")
-        #expect(f.env.status.blockedNotice == StatusModel.blockedText)
-        await f.toast(StatusModel.blockedText)
-        session.notice = nil
-        #expect(f.compose.perform(.sendLater, in: session, source: .keyboard))
-        #expect(session.notice?.kind == .error && f.timePicker == nil)
-        session.notice = nil
-        if case .done = f.compose.send(session) {} else { Issue.record("the handler should refuse at once") }
-        #expect(session.notice?.kind == .error)
-        let thread = try #require(f.router.list?.rows.first?.id)
-        let reply = try #require(f.compose.openReply(thread, mode: .reply))
-        await reply.settle()
-        #expect(reply.draftKey == nil && !reply.to.tokens.isEmpty && reply.subject.hasPrefix("Re: "))
-        #expect(QuoteSplit.quoteBlockCount(reply.quotedHTML) == 1 && reply.notice == nil)
-        if case .localOnly = reply.saveState {} else { Issue.record("the reply says it is not saved") }
-        f.compose.close(reply)
-        await f.compose.settle()
-        #expect(f.recorder.calls.isEmpty, "no draft, no save, no send: \(f.recorder.calls)")
-        #expect(f.store.pendingOperationCount == 0 && f.store.heldSendCount == 0 && f.store.sentMessages.isEmpty)
-    }
-
-    @Test func writeAllowlistSavesDraftsButNeverSends() async throws {
-        let f = ComposeFixture(safeMode: .writeAllowlist)
-        await f.loaded()
-        let session = try #require(f.compose.openNew(placement: .modal))
-        session.to.text = "dana@acme.example,"
-        session.updateBody(doc("Hi"))
-        await soon { session.saveState == .saved }
-        #expect(f.recorder.calls.contains("createDraft"))
-        #expect(f.compose.perform(.send, in: session, source: .keyboard))
-        #expect(session.notice?.text.contains("test-writes safe mode") == true)
-        #expect(!f.recorder.calls.contains("send") && f.store.heldSendCount == 0)
-        #expect(f.env.actions.availability(.sendLater, host: session) == .disabled(.safeMode))
-    }
-
     @Test func aSourceWithoutAWritePortComposesLocally() async throws {
         let f = ComposeFixture(writePort: false)
         await f.loaded()

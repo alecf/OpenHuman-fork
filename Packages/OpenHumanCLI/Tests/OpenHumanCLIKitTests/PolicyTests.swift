@@ -93,69 +93,69 @@ struct Snapshot: Equatable {
         let (h, draft) = try harnessWithDraft()
         let before = try Snapshot(h)
         for meta in Self.writing where !meta.network {
-            for env in [Harness.write, ["OPENHUMAN_SAFE_MODE": "normal"]] {
-                let r = await h.run(commandArguments(meta.path, draftID: draft) + ["--readonly", "--json"], environment: env)
-                #expect(r.code == 5 && r.errorCode == "readonly", "\(meta.path): \(r.code) \(r.err)")
-            }
+            let r = await h.run(commandArguments(meta.path, draftID: draft) + ["--readonly", "--json"])
+            #expect(r.code == 5 && r.errorCode == "readonly", "\(meta.path): \(r.code) \(r.err)")
         }
         #expect(try Snapshot(h) == before)
-        let viaEnv = await h.run(["gmail", "done", "t1", "--json"], environment: Harness.write.merging(["OPENHUMAN_READONLY": "1"]) { $1 })
-        #expect(viaEnv.code == 5)
+        let viaEnv = await h.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "hi", "--json"],
+                                 environment: ["OPENHUMAN_READONLY": "1"])
+        #expect(viaEnv.code == 5 && viaEnv.errorCode == "readonly")
         try h.store.setSetting(.cliReadonlyDefault, true, scope: .global)
-        let viaSetting = await h.run(["gmail", "done", "t1", "--json"], environment: Harness.write)
+        let viaSetting = await h.run(["gmail", "done", "t1", "--json"])
         #expect(viaSetting.code == 5 && viaSetting.errorCode == "readonly")
         #expect(try Snapshot(h).ops == before.ops)
         #expect((await h.run(["gmail", "inbox", "--json"])).code == 0)
     }
 
-    @Test func readOnlySafeModeIsTheDefaultAndBlocksEveryMailWrite() async throws {
+    @Test func mailChangesExit5InAppAndQueueNothing() async throws {
         let (h, draft) = try harnessWithDraft()
         let before = try Snapshot(h)
-        let blocked = Self.writing.filter { $0.writes == .mail && !$0.network }
-        #expect(blocked.count >= 15)
-        for meta in blocked {
-            for env: [String: String] in [[:], ["OPENHUMAN_SAFE_MODE": ""], ["OPENHUMAN_SAFE_MODE": "read-only"]] {
-                let r = await h.run(commandArguments(meta.path, draftID: draft) + ["--json"], environment: env)
-                #expect(r.code == 5 && r.errorCode == "blocked_by_safe_mode", "\(meta.path) under \(env): \(r.code) \(r.err)")
+        let changes = Self.writing.filter { $0.writes == .mailChange && $0.implemented }
+        #expect(Set(changes.map(\.path)) == ["gmail.done", "gmail.move-to-inbox", "gmail.read", "gmail.unread", "gmail.star", "gmail.unstar",
+                                             "gmail.snooze", "gmail.unsnooze", "gmail.remind", "gmail.unremind", "gmail.undo"])
+        for meta in changes {
+            for extra in [[], ["--no-wait"], ["--no-input"]] {
+                let r = await h.run(commandArguments(meta.path, draftID: draft) + extra + ["--json"])
+                #expect(r.code == 5 && r.errorCode == "mail_changes_in_app", "\(meta.path) \(extra): \(r.code) \(r.err)")
+                #expect(r.error["message"] as? String == "Make mail changes in OpenHuman Mail.", "\(meta.path)")
+                #expect(r.data.isEmpty, "\(meta.path)")
             }
         }
-        for typo in ["bogus", "Normal", "NORMAL", " normal", "normal ", "write_allowlist"] {
-            let r = await h.run(["gmail", "done", "t1", "--json"], environment: ["OPENHUMAN_SAFE_MODE": typo])
-            #expect(r.code == 5 && r.errorCode == "blocked_by_safe_mode", "\(typo): \(r.code) \(r.err)")
+        for argv in [["gmail", "archive", "t1", "t2"], ["gmail", "unarchive", "t1"], ["gmail", "done", "zzz"], ["gmail", "star", "bad id!"]] {
+            let r = await h.run(argv + ["--json"], stdinTTY: true)
+            #expect(r.code == 5 && r.errorCode == "mail_changes_in_app", "\(argv): \(r.code) \(r.err)")
         }
         #expect(try Snapshot(h) == before)
-        let read = await h.run(["gmail", "inbox", "--json"], environment: ["OPENHUMAN_SAFE_MODE": "bogus"])
-        #expect(read.code == 0, "reads still work: \(read.err)")
+        #expect(try h.operations().isEmpty)
     }
 
-    @Test func writeAllowlistBlocksEveryMailWriteAndQueuesNothing() async throws {
+    @Test func agentDraftsNeedNoVariable() async throws {
         let (h, draft) = try harnessWithDraft()
-        let before = try Snapshot(h)
-        let blocked = Self.writing.filter { $0.writes == .mail && !$0.network }
-        for meta in blocked {
-            let r = await h.run(commandArguments(meta.path, draftID: draft) + ["--json"],
-                                environment: ["OPENHUMAN_SAFE_MODE": "write-allowlist"])
-            #expect(r.code == 5 && r.errorCode == "blocked_by_safe_mode", "\(meta.path): \(r.code) \(r.err)")
-            #expect(!r.err.contains("OPENHUMAN_SAFE_MODE=") && !"\(r.error)".contains("OPENHUMAN_SAFE_MODE="), "\(meta.path)")
-        }
-        #expect(try Snapshot(h) == before)
-        let readOnly = await h.run(["gmail", "done", "t1", "--json"])
-        #expect(readOnly.errorCode == "blocked_by_safe_mode" && !"\(readOnly.error)".contains("OPENHUMAN_SAFE_MODE="))
+        let created = await h.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "hi", "--json"])
+        #expect(created.code == 6, "\(created.code) \(created.err)")
+        #expect(created.data["review"] as? String == "pending" && created.data["sent"] as? Bool == false)
+        let reply = await h.run(["gmail", "drafts", "reply", "m1", "--body", "Thanks", "--json"])
+        #expect(reply.code == 6, "\(reply.code) \(reply.err)")
+        let updated = await h.run(["gmail", "drafts", "update", draft, "--body", "Second", "--json"])
+        #expect(updated.code == 6, "\(updated.code) \(updated.err)")
+        let ops = try h.operations()
+        #expect(ops.count == 3 && ops.allSatisfy { $0.kind == .upsertDraft && $0.origin == .cli })
+        #expect((await h.run(["gmail", "review", "list", "--json"])).list("drafts").count == 3)
     }
 
-    @Test func dryRunNeverWritesAndNeverNeedsTheWriteMode() async throws {
+    @Test func dryRunNeverWrites() async throws {
         let (h, draft) = try harnessWithDraft()
         let before = try Snapshot(h)
-        for meta in Self.writing where meta.implemented && meta.writes == .mail {
-            for env in [[String: String](), Harness.write] {
-                let r = await h.run(commandArguments(meta.path, draftID: draft) + ["--dry-run", "--json"], environment: env)
-                #expect(r.code == 0, "\(meta.path) \(env): \(r.code) \(r.err)")
-                #expect(r.data["dryRun"] as? Bool == true, "\(meta.path)")
+        for meta in Self.writing where meta.implemented && (meta.writes == .agentDraft || meta.writes == .mailChange) {
+            let r = await h.run(commandArguments(meta.path, draftID: draft) + ["--dry-run", "--json"])
+            #expect(r.code == 0, "\(meta.path): \(r.code) \(r.err)")
+            #expect(r.data["dryRun"] as? Bool == true, "\(meta.path)")
+            if meta.writes == .mailChange {
+                #expect(r.data["status"] as? String == "dry_run" && (r.data["operationIds"] as? [Any])?.isEmpty == true, "\(meta.path)")
             }
         }
         for meta in Self.writing where !meta.implemented && !meta.network {
-            let r = await h.run(commandArguments(meta.path, draftID: draft) + (meta.confirm ? ["--yes"] : []) + ["--dry-run", "--json"],
-                                environment: Harness.write)
+            let r = await h.run(commandArguments(meta.path, draftID: draft) + (meta.confirm ? ["--yes"] : []) + ["--dry-run", "--json"])
             #expect(r.code == 13, "\(meta.path): \(r.code)")
         }
         #expect(try Snapshot(h) == before)
@@ -167,7 +167,7 @@ struct Snapshot: Equatable {
         let planned = CommandCatalog.entries.filter { !$0.implemented && !$0.network && $0.reserved == nil }
         #expect(planned.count >= 10)
         for meta in planned {
-            let r = await h.run(commandArguments(meta.path, draftID: draft) + (meta.confirm ? ["--yes"] : []) + ["--json"], environment: Harness.write)
+            let r = await h.run(commandArguments(meta.path, draftID: draft) + (meta.confirm ? ["--yes"] : []) + ["--json"])
             #expect(r.code == 13 && r.errorCode == "not_implemented", "\(meta.path): \(r.code) \(r.err)")
         }
         #expect(try Snapshot(h) == before)
@@ -178,10 +178,8 @@ struct Snapshot: Equatable {
         let before = try Snapshot(h)
         #expect(Self.network.count >= 7)
         for meta in Self.network {
-            for env in [[String: String](), Harness.write] {
-                let r = await h.run(commandArguments(meta.path, draftID: draft) + ["--json"], environment: env)
-                #expect(r.code == 12 && r.errorCode == "app_required", "\(meta.path): \(r.code)")
-            }
+            let r = await h.run(commandArguments(meta.path, draftID: draft) + ["--json"])
+            #expect(r.code == 12 && r.errorCode == "app_required", "\(meta.path): \(r.code)")
         }
         for flags in [["--sync"], ["--remote"]] {
             let r = await h.run(["gmail", "search", "x"] + flags + ["--json"])
@@ -201,11 +199,9 @@ struct Snapshot: Equatable {
             "gmail.filters": ["gmail", "filters", "create", "--from", "x"],
         ]
         for meta in Self.reserved {
-            for env in [[String: String](), Harness.write, ["OPENHUMAN_SAFE_MODE": "normal"]] {
-                let r = await h.run(argv[meta.path]! + ["--json"], environment: env)
-                let expected = meta.path == "gmail.filters" ? "not_supported" : "send_not_supported"
-                #expect(r.code == 5 && r.errorCode == expected, "\(meta.path): \(r.code) \(r.err)")
-            }
+            let r = await h.run(argv[meta.path]! + ["--json"])
+            let expected = meta.path == "gmail.filters" ? "not_supported" : "send_not_supported"
+            #expect(r.code == 5 && r.errorCode == expected, "\(meta.path): \(r.code) \(r.err)")
         }
         #expect((await h.run(["gmail", "send", "--json"])).error["message"] as? String != nil)
         #expect(try Snapshot(h) == before)
@@ -219,19 +215,20 @@ struct Snapshot: Equatable {
         let blocked = await h.run(["gmail", "inbox", "--json"])
         #expect(blocked.code == 5 && blocked.errorCode == "command_not_allowed")
         for meta in Self.writing where meta.implemented && meta.path != "gmail.drafts.create" {
-            let r = await h.run(commandArguments(meta.path, draftID: draft) + ["--json"], environment: Harness.write)
+            let r = await h.run(commandArguments(meta.path, draftID: draft) + ["--json"])
             #expect(r.code == 5 && r.errorCode == "command_not_allowed", "\(meta.path)")
         }
-        #expect((await h.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "hi", "--json"],
-                             environment: Harness.write)).code == 6)
+        #expect((await h.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "hi", "--json"])).code == 6)
         #expect(try Snapshot(h).ops == before.ops + 1)
         try h.store.setSetting(.cliAllowedCommands, ["gmail.done"], scope: .global)
-        #expect((await h.run(["gmail", "archive", "t2", "--json"], environment: Harness.write)).code == 6)
+        let alias = await h.run(["gmail", "archive", "t2", "--json"])
+        #expect(alias.code == 5 && alias.errorCode == "mail_changes_in_app")
+        #expect(try Snapshot(h).ops == before.ops + 1)
     }
 
     @Test func confirmationIsRequiredUnderNoInput() throws {
         let trash = try #require(CommandCatalog.meta(for: "gmail.trash"))
-        let inputs = PolicyInputs(readonly: false, safeMode: .normal, allowedCommands: nil, noInput: true, yes: false, dryRun: false)
+        let inputs = PolicyInputs(readonly: false, allowedCommands: nil, noInput: true, yes: false, dryRun: false)
         #expect(throws: CLIError.self) { try Policy.evaluate(trash, path: "gmail.trash", inputs) }
         do { try Policy.evaluate(trash, path: "gmail.trash", inputs) } catch let error as CLIError {
             #expect(error.status == .usage && error.code == "confirmation_required")
@@ -239,6 +236,27 @@ struct Snapshot: Equatable {
         var yes = inputs
         yes.yes = true
         do { try Policy.evaluate(trash, path: "gmail.trash", yes) } catch let error as CLIError { #expect(error.status == .notImplemented) }
+    }
+
+    @Test func aMailChangeIsAPreviewUnderDryRunAndRefusedOtherwise() throws {
+        let done = try #require(CommandCatalog.meta(for: "gmail.done"))
+        var inputs = PolicyInputs(readonly: false, allowedCommands: nil, noInput: true, yes: false, dryRun: true)
+        try Policy.evaluate(done, path: "gmail.done", inputs)
+        inputs.dryRun = false
+        do {
+            try Policy.evaluate(done, path: "gmail.done", inputs)
+            Issue.record("a mail change ran without --dry-run")
+        } catch let error as CLIError {
+            #expect(error.status == .policyBlocked && error.code == "mail_changes_in_app")
+        }
+        inputs.dryRun = true
+        inputs.readonly = true
+        do {
+            try Policy.evaluate(done, path: "gmail.done", inputs)
+            Issue.record("a read-only run allowed a mail change preview")
+        } catch let error as CLIError {
+            #expect(error.code == "readonly")
+        }
     }
 }
 
@@ -252,7 +270,7 @@ struct Snapshot: Equatable {
     ]
     static let engineErrors: [(EngineError, CLIStatus)] = [
         (.requiresApp("x"), .appRequired), (.sendNotAllowed, .policyBlocked), (.oauthClientMissing, .appRequired),
-        (.blockedBySafeMode("x"), .policyBlocked),
+        (.writeAccessMissing("x"), .authRequired),
     ]
 
     @Test(arguments: storeErrors) func storeErrorsMapToTheTable(_ error: StoreError, _ expected: CLIStatus) {
@@ -271,7 +289,7 @@ struct Snapshot: Equatable {
             let mapped = CLIError.map(error)
             #expect(!mapped.message.contains(secret) && !mapped.details.values.contains { $0 == .string(secret) })
         }
-        for error in [EngineError.requiresApp(secret), .blockedBySafeMode(secret)] {
+        for error in [EngineError.requiresApp(secret), .writeAccessMissing(secret)] {
             #expect(!CLIError.map(error).message.contains(secret))
         }
         struct Odd: Error {}

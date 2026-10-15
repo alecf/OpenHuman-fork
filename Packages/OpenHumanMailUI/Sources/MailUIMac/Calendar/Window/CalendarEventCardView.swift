@@ -64,7 +64,7 @@ struct CalendarEventCardView: View {
             Text(card.event.title).themeFont(theme.typeHeadline).foregroundStyle(theme.textPrimary.color)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
-                .readOnlyReason(card.reason)
+                .lockedReason(card.reason)
                 .accessibilityIdentifier("calendar.card.title")
         }
     }
@@ -89,7 +89,7 @@ struct CalendarEventCardView: View {
                         .themeFont(theme.typeMeta).foregroundStyle(theme.textPrimary.color)
                     Text(model.timeText(card.event)).themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
                 }
-                .readOnlyReason(card.reason)
+                .lockedReason(card.reason)
             }
         }
         .accessibilityIdentifier("calendar.card.time")
@@ -314,7 +314,7 @@ struct CalendarEventCardView: View {
 
 extension View {
     @ViewBuilder
-    func readOnlyReason(_ reason: String?) -> some View {
+    func lockedReason(_ reason: String?) -> some View {
         if let reason, !reason.isEmpty {
             self.help(reason).accessibilityHint(reason)
         } else {

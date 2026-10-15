@@ -76,8 +76,6 @@ final class Harness: @unchecked Sendable {
         return Run(code: code, out: out.text, err: err.text)
     }
 
-    static let write = ["OPENHUMAN_SAFE_MODE": "normal"]
-
     func operations(_ statuses: Set<OperationStatus> = [.pending, .inFlight, .succeeded, .failed, .cancelled]) throws -> [OperationItem] {
         try store.operations(account: account, statuses: statuses, limit: 500)
     }

@@ -127,8 +127,8 @@ import Testing
         await eventually { f.store.labelNames(of: role.id).contains("OpenHuman/Pitch") }
     }
 
-    @Test func inReadOnlyWrongLabelChangesOnlyThisMac() async throws {
-        let f = F(safeMode: .readOnly, writes: true, verdict: { _ in .pitch })
+    @Test func withGmailWritesOffWrongLabelChangesOnlyThisMac() async throws {
+        let f = F(writes: false, verdict: { _ in .pitch })
         f.store.deliverMessage(account: F.work, from: Self.recruiter, subject: Self.roleSubject, text: Self.roleText)
         await f.center.classifyRecent()
         let role = try await row(f, Self.roleSubject)
@@ -136,7 +136,7 @@ import Testing
         #expect(f.center.title(for: role, labels: labels) == "Pitch", "nothing is written, so the chip is local")
         #expect(try await f.center.markWrong(role.id, row: role, labels: labels) == "Pitch")
         #expect(f.center.title(for: role, labels: labels) == nil)
-        #expect(f.recorder.calls.isEmpty, "read-only: nothing reaches the mail port")
+        #expect(f.recorder.calls.isEmpty, "nothing reaches the mail port")
     }
 
     @Test func aFailedLabelWriteIsTriedAgainAndTheChipWaitsForGmail() async throws {

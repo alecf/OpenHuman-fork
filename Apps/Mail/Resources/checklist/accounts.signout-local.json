@@ -3,10 +3,10 @@
   "area": "Accounts",
   "title": "Sign out of one Mac only",
   "steps": [
-    "Sign in to the same test account on two Macs with iCloud Keychain on and OPENHUMAN_SAFE_MODE=read-only",
+    "Sign in to the same test account on two Macs with iCloud Keychain on",
     "On one Mac choose Settings › Accounts › Sign out… › Sign out of this Mac",
     "Quit and reopen Mail on the other Mac"
   ],
   "expected": "While the account's sign-in is shared (Settings › Accounts says so), the dialog offers Sign out and remove from iCloud Keychain as a separate button; after Sign out of this Mac the other Mac stays signed in. On a build that can't sync, the dialog offers only Sign out of this Mac.",
-  "requires": "real-readonly"
+  "requires": "real"
 }

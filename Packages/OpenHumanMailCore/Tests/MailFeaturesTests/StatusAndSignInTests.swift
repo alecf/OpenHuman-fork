@@ -7,14 +7,12 @@ import Synchronization
 import Testing
 @testable import MailFeatures
 
-private struct ModeFake: MailDataSource {
+private struct StatesFake: MailDataSource {
     let base: FakeMailStore
-    let mode: SafeModeInfo
     let states: [[AccountID: ConnectivityState]]
 
-    init(_ mode: SafeModeInfo, states: [[AccountID: ConnectivityState]] = [], corpus: FakeCorpus = .make(threadCount: 5, now: fixedNow)) {
+    init(states: [[AccountID: ConnectivityState]] = [], corpus: FakeCorpus = .make(threadCount: 5, now: fixedNow)) {
         base = FakeMailStore(corpus: corpus)
-        self.mode = mode
         self.states = states
     }
 
@@ -24,7 +22,6 @@ private struct ModeFake: MailDataSource {
     }
     func threadDetail(_ key: ThreadKey) -> AsyncThrowingStream<ConversationDetail?, Error> { base.threadDetail(key) }
     func body(_ key: MessageKey) -> AsyncThrowingStream<BodyLoadState, Error> { base.body(key) }
-    func safeMode() -> SafeModeInfo { mode }
     func connectivity() -> AsyncStream<[AccountID: ConnectivityState]> {
         let states = self.states
         return AsyncStream { continuation in
@@ -35,10 +32,8 @@ private struct ModeFake: MailDataSource {
 }
 
 @MainActor
-@Test func fakesRunInNormalModeWithoutSync() async {
+@Test func fakesRunWithoutSync() async {
     let env = AppEnvironment.fake(corpus: .make(threadCount: 3, now: fixedNow))
-    #expect(env.status.safeMode == .normal)
-    #expect(env.status.safeModeText == nil)
     await env.status.run()
     #expect(env.status.connectivity.isEmpty)
     #expect(!env.status.isVisible)
@@ -46,23 +41,10 @@ private struct ModeFake: MailDataSource {
 }
 
 @MainActor
-@Test func readOnlyStatusShowsTheModeAndWhatItTurnsOff() async throws {
-    let account = AccountID(1)
-    let synced = fixedNow.addingTimeInterval(-180)
-    let env = AppEnvironment(data: ModeFake(.readOnly, states: [
-        [account: .online(syncing: true, lastSyncAt: nil)],
-        [account: .online(syncing: false, lastSyncAt: synced)],
-    ]))
-    #expect(env.status.safeModeText == "Read-only")
-    #expect(env.status.safeModeDetail == "Mail can't change or send mail")
-    let help = try #require(env.status.safeModeHelp)
-    #expect(help.hasPrefix("Mail is connected with read-only access."))
-    #expect(help.contains("archive, label, star, snooze, trash or send") && help.contains("snoozed conversations"))
-    #expect(!help.contains("gmail.") && !help.contains("safe mode"))
-    #expect(env.status.isVisible)
-    await env.status.run()
-    #expect(env.status.connectivity == [account: .online(syncing: false, lastSyncAt: synced)])
-    #expect(env.status.syncText(now: fixedNow) == "Synced 3 min ago")
+@Test func onlyARealAccountSessionIsLive() {
+    #expect(!AppEnvironment(data: StatesFake(), isFake: true).isLiveAccount, "off unless the session says so")
+    #expect(!AppEnvironment.fake(corpus: .make(threadCount: 3, now: fixedNow)).isLiveAccount)
+    #expect(AppEnvironment(data: StatesFake(), isFake: true, isLiveAccount: true).isLiveAccount)
 }
 
 @Test func syncTextCoversEveryState() {
@@ -87,7 +69,7 @@ private struct ModeFake: MailDataSource {
     #expect(line("server_500") == "Gmail is having trouble. Retrying.")
     #expect(line("unauthorized") == "Gmail refused access to this account. Retrying.")
     #expect(line("forbidden:insufficientPermissions") == "Gmail refused access to this account. Retrying.")
-    for code in ["bad_request:invalid", "not_found", "decoding", "store", "mapping", "blocked_by_safe_mode", "error"] {
+    for code in ["bad_request:invalid", "not_found", "decoding", "store", "mapping", "refused_by_guard", "error"] {
         #expect(line(code) == "Couldn't sync. Retrying.", "\(code)")
     }
     #expect(StatusModel.syncFailureText("owned_elsewhere", account: "Work account")
@@ -98,8 +80,8 @@ private struct ModeFake: MailDataSource {
 @MainActor
 @Test func theFailingCodeIsKeptForTheTooltip() async {
     let account = AccountID(1)
-    let env = AppEnvironment(data: ModeFake(.readOnly, states: [[account: .syncFailing(code: "server_503", failures: 2,
-                                                                                         lastSyncAt: nil)]]))
+    let env = AppEnvironment(data: StatesFake(states: [[account: .syncFailing(code: "server_503", failures: 2,
+                                                                              lastSyncAt: nil)]]))
     #expect(env.status.syncFailureCode == nil)
     await env.status.run()
     #expect(env.status.syncFailureCode == "server_503")
@@ -107,39 +89,12 @@ private struct ModeFake: MailDataSource {
 }
 
 @MainActor
-@Test func readOnlyRefusesEveryNonViewActionAndSaysWhy() async {
-    let env = AppEnvironment(data: ModeFake(.readOnly), isFake: true)
-    let window = MailWindowModel(environment: env)
-    window.start()
-    await untilObserved { window.list?.rows.count == 5 }
-    #expect(window.perform(ActionID("thread.done")))
-    #expect(env.status.blockedNotice == StatusModel.blockedText)
-    #expect(env.status.isVisible)
-    #expect(window.perform(.nextThread))
-    #expect(window.list?.cursorIndex == 1)
-    #expect(window.perform(.openThread))
-    #expect(window.mode == .reader)
-    #expect(ActionID.viewOnly.isSuperset(of: [.nextThread, .previousThread, .openThread, .backToList, .nextSplit, .goInbox]))
-    #expect(!ActionID.viewOnly.contains(.markDone))
-    #expect(!ActionID("thread.somethingNew").isViewOnly)
-}
-
-@MainActor
-@Test func blockedNoticeClearsItself() async {
-    let model = StatusModel(data: ModeFake(.readOnly), noticeDuration: .milliseconds(50))
-    model.reportBlockedWrite(ActionID("thread.done"))
-    #expect(model.blockedNotice != nil)
-    await eventually { model.blockedNotice == nil }
-}
-
-@MainActor
-@Test func normalModeDoesNotGateActions() async {
-    let env = AppEnvironment(data: ModeFake(.normal), isFake: true)
+@Test func onlyAMissingWritePortGatesActions() async {
+    let env = AppEnvironment(data: StatesFake(), isFake: true)
     let window = MailWindowModel(environment: env)
     window.start()
     await untilObserved { window.list?.rows.count == 5 }
     #expect(window.perform(.markDone))
-    #expect(env.status.blockedNotice == nil)
     #expect(env.notices.toasts.map(\.message) == ["Mark done isn't available here"])
     #expect(!window.perform(ActionID("thread.unknown")), "an id nobody handles passes through")
 }
@@ -213,7 +168,7 @@ private final class FakeAccounts: AccountManaging {
 @MainActor
 @Test func signInWithAConfiguredClient() async throws {
     let accounts = FakeAccounts(status: .configured(source: .environment))
-    let model = SignInModel(accounts: accounts, safeMode: .readOnly, loginHint: " robin@example.com ")
+    let model = SignInModel(accounts: accounts, loginHint: " robin@example.com ")
     var signedIn: AccountID?
     model.onSignedIn = { signedIn = $0 }
     let runner = Task { await model.run() }
@@ -232,7 +187,7 @@ private final class FakeAccounts: AccountManaging {
 @MainActor
 @Test func missingClientIsImportedThenSignInFailsWithWords() async throws {
     let accounts = FakeAccounts(status: .missing)
-    let model = SignInModel(accounts: accounts, safeMode: .readOnly)
+    let model = SignInModel(accounts: accounts)
     let runner = Task { await model.run() }
     defer { runner.cancel() }
     await eventually { model.phase == .needsClient }
@@ -248,16 +203,16 @@ private final class FakeAccounts: AccountManaging {
 
     model.signIn()
     await eventually { accounts.isWaiting }
-    accounts.answer(.failure(AccountSetupError(.refused, "Google granted more than read-only access.")))
+    accounts.answer(.failure(AccountSetupError(.refused, "Google gave Mail more access than it asks for.")))
     await eventually { model.phase == .ready }
-    #expect(model.errorMessage == "Google granted more than read-only access.")
+    #expect(model.errorMessage == "Google gave Mail more access than it asks for.")
     #expect(accounts.hints == [nil])
 }
 
 @MainActor
 @Test func cancelStopsWaitingForTheBrowser() async throws {
     let accounts = FakeAccounts(status: .configured(source: .file))
-    let model = SignInModel(accounts: accounts, safeMode: .readOnly)
+    let model = SignInModel(accounts: accounts)
     let runner = Task { await model.run() }
     defer { runner.cancel() }
     await eventually { model.phase == .ready }
@@ -272,7 +227,7 @@ private final class FakeAccounts: AccountManaging {
 @MainActor
 @Test func aClientWithoutASecretIsFlaggedBeforeTheBrowserStep() async throws {
     let accounts = FakeAccounts(status: .configuredWithoutSecret(source: .file))
-    let model = SignInModel(accounts: accounts, safeMode: .readOnly)
+    let model = SignInModel(accounts: accounts)
     let runner = Task { await model.run() }
     defer { runner.cancel() }
     await eventually { model.phase == .ready }
@@ -287,7 +242,7 @@ private final class FakeAccounts: AccountManaging {
     await eventually { model.canSignIn }
     #expect(model.clientWarning == nil)
     #expect(!model.canImportClient)
-    let ok = SignInModel(accounts: FakeAccounts(status: .configured(source: .file)), safeMode: .readOnly)
+    let ok = SignInModel(accounts: FakeAccounts(status: .configured(source: .file)))
     let runner2 = Task { await ok.run() }
     defer { runner2.cancel() }
     await eventually { ok.phase == .ready }
@@ -296,7 +251,7 @@ private final class FakeAccounts: AccountManaging {
 
 @MainActor
 @Test func aSecretlessClientFromTheVariableSaysToFixTheVariable() async throws {
-    let model = SignInModel(accounts: FakeAccounts(status: .configuredWithoutSecret(source: .environment)), safeMode: .readOnly)
+    let model = SignInModel(accounts: FakeAccounts(status: .configuredWithoutSecret(source: .environment)))
     let runner = Task { await model.run() }
     defer { runner.cancel() }
     await eventually { model.phase == .ready }
@@ -309,7 +264,7 @@ private final class FakeAccounts: AccountManaging {
 @Test func anImportKeptOnThisMacOnlyShowsAOneLineNoteAndStillGoesToSignIn() async throws {
     let note = "Couldn't sync this client to iCloud. It's saved on this Mac, so you can sign in."
     let accounts = FakeAccounts(status: .missing, note: note)
-    let model = SignInModel(accounts: accounts, safeMode: .readOnly)
+    let model = SignInModel(accounts: accounts)
     let runner = Task { await model.run() }
     defer { runner.cancel() }
     await eventually { model.phase == .needsClient }

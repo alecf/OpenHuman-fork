@@ -21,11 +21,11 @@ private struct CalendarFixture {
     let corpus: FakeCorpus
     let thread: ThreadKey
 
-    init(safeMode: SafeModeInfo = .normal, provider: Bool = true, flags: FeatureFlags = FeatureFlags(),
+    init(provider: Bool = true, flags: FeatureFlags = FeatureFlags(),
          events: [CalendarEvent] = [], info: CalendarProviderInfo? = nil, connection: FakeCalendarConnection? = nil) {
         corpus = .make(threadCount: 6, now: fixedNow)
         calendar = info.map { FakeCalendar(events: events, info: $0) } ?? FakeCalendar(events: events)
-        env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate, safeMode: safeMode),
+        env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate),
                                   featureFlags: flags, calendar: provider ? calendar : nil, calendarConnection: connection)
         thread = corpus.threads[0].row.id
     }
@@ -93,16 +93,16 @@ private struct CalendarFixture {
         #expect(FeaturesSettingsModel(environment: f.env).rows.contains { $0.id == .calendar && !$0.isRunning })
     }
 
-    @Test func bothActionsAreViewOnlySoReadOnlyAllowsThem() {
+    @Test func bothActionsAreViewOnly() {
         for id in [ActionID.calendarToggleSidebar, .calendarCreateEvent] {
             let descriptor = ActionCatalog.descriptor(id)
             #expect(descriptor?.module == .calendar && descriptor?.changesMail == false, "\(id)")
         }
-        let f = CalendarFixture(safeMode: .readOnly)
-        let context = ActionContext(scope: .reader, focusedThread: f.thread, safeMode: .readOnly)
+        let f = CalendarFixture()
+        let context = ActionContext(scope: .reader, focusedThread: f.thread)
         #expect(f.env.actions.availability(.calendarCreateEvent, host: nil, context: context) == .enabled)
         #expect(f.env.actions.availability(.calendarCreateEvent, host: nil,
-                                           context: ActionContext(scope: .reader, safeMode: .readOnly)) == .disabled(.noSelection))
+                                           context: ActionContext(scope: .reader)) == .disabled(.noSelection))
     }
 }
 
@@ -200,23 +200,7 @@ private struct CalendarFixture {
         #expect(CalendarEventDraftBuilder.title("RE[3]: AW: Budget") == "Budget")
     }
 
-    @Test(arguments: [SafeModeInfo.readOnly, .writeAllowlist])
-    func restrictedSafeModesNeverCreateEvents(_ mode: SafeModeInfo) async throws {
-        let f = CalendarFixture(safeMode: mode)
-        let model = f.sidebar(f.text(["October 14, 2026 at 3:00 PM"], people: [EmailAddress(email: "alice@example.com")]))
-        #expect(await f.run(.calendarCreateEvent, context: ActionContext(scope: .reader, focusedThread: f.thread, safeMode: mode)))
-        await eventually { model.draft != nil }
-        #expect(model.createRefusal != nil && !model.canCreate)
-        model.draft?.sendUpdates = .all
-        #expect(await model.createEvent() == false)
-        #expect(await model.createEvent() == false)
-        #expect(f.calendar.createCalls == 0 && f.calendar.created.isEmpty, "the provider is never asked")
-        #expect(model.draftNote == model.createRefusal && model.draft != nil)
-        #expect(f.env.status.blockedNotice == StatusModel.blockedText)
-        #expect(f.env.notices.toasts.contains { $0.message == StatusModel.blockedText })
-    }
-
-    @Test func normalModeCreatesTheEventOnceAndShowsIt() async throws {
+    @Test func createsTheEventOnceAndShowsIt() async throws {
         let f = CalendarFixture()
         let model = f.sidebar(f.text(["How about October 15, 2026 at 12:30 PM?"], subject: "Lunch?"))
         await model.show(thread: f.thread)
@@ -304,8 +288,8 @@ private struct CalendarFixture {
 
 @MainActor
 @Suite struct CalendarSettingsTests {
-    @Test func theSecondTimeZoneIsALocalSettingThatWorksInReadOnly() async throws {
-        let f = CalendarFixture(safeMode: .readOnly, provider: false)
+    @Test func theSecondTimeZoneIsALocalSetting() async throws {
+        let f = CalendarFixture(provider: false)
         let model = CalendarSettingsModel(environment: f.env)
         model.start()
         #expect(model.canChangeZone && model.secondTimeZone.value == nil)
@@ -313,7 +297,6 @@ private struct CalendarFixture {
         #expect(model.secondTimeZone.errorMessage == nil)
         #expect(try await f.env.settings!.get(AppSettings.calendarSecondTimeZone) == "Asia/Kolkata")
         #expect(AppSettings.calendarSecondTimeZone.name == "calendar.second_time_zone")
-        #expect(model.createStatus == "Read-only safe mode: Mail never creates calendar events.")
         let choices = model.zoneChoices(now: fixedNow)
         #expect(choices.first?.identifier == nil && choices.first?.title == "None")
         #expect(choices.contains { $0.identifier == "Asia/Kolkata" && $0.title == "Asia/Kolkata — GMT+5:30" })
@@ -322,8 +305,8 @@ private struct CalendarFixture {
         #expect(try await f.env.settings!.get(AppSettings.calendarSecondTimeZone) == nil)
     }
 
-    @Test func theMeetDefaultIsALocalSettingThatWorksInReadOnly() async throws {
-        let f = CalendarFixture(safeMode: .readOnly, provider: false)
+    @Test func theMeetDefaultIsALocalSetting() async throws {
+        let f = CalendarFixture(provider: false)
         let model = CalendarSettingsModel(environment: f.env)
         model.start()
         #expect(model.addMeetLink.value && model.canChangeMeetDefault, "on by default")
@@ -546,7 +529,7 @@ private final class WakeCounter: Sendable {
     }
 
     @Test func aProviderThatCannotCreateIsNeverAsked() async throws {
-        let refusal = "Connected read-only. To create events, turn Connect Google Calendar off and on again."
+        let refusal = "Reconnect Google Calendar to create events: turn Connect Google Calendar off and on again."
         let f = CalendarFixture(info: CalendarProviderInfo(name: "Google Calendar", account: "robin@example.com",
                                                            createRefusal: refusal))
         let model = f.sidebar(f.text(["October 15, 2026 at 12:30 PM"]))
@@ -554,7 +537,6 @@ private final class WakeCounter: Sendable {
         #expect(model.createRefusal == refusal && !model.canCreate)
         #expect(await model.createEvent() == false)
         #expect(f.calendar.createCalls == 0 && model.draftNote == refusal && model.draft != nil)
-        #expect(f.env.status.blockedNotice == nil, "not a safe-mode refusal")
         #expect(CalendarSettingsModel(environment: f.env).createStatus == refusal)
     }
 

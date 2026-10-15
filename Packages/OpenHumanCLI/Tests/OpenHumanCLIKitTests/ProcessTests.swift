@@ -74,29 +74,24 @@ enum ChildProcess {
         #expect(send.code == 5 && send.out.contains("send_not_supported"))
         let usage = try ChildProcess.run(["gmail", "bogus"], environment: environment(h))
         #expect(usage.code == 2)
-        let blocked = try ChildProcess.run(["gmail", "done", "t1"], environment: environment(h))
-        #expect(blocked.code == 5 && blocked.out.contains("blocked_by_safe_mode"))
+        let refused = try ChildProcess.run(["gmail", "done", "t1"], environment: environment(h))
+        #expect(refused.code == 5 && refused.out.contains("mail_changes_in_app"))
         let missing = try ChildProcess.run(["gmail", "inbox", "--home", h.directory.appendingPathComponent("nope").path], environment: environment(h))
         #expect(missing.code == 4)
         let help = try ChildProcess.run(["--help"], environment: environment(h))
         #expect(help.code == 0 && help.out.contains("SUBCOMMANDS"))
-        let invalidMode = try ChildProcess.run(["gmail", "done", "t1"], environment: environment(h, ["OPENHUMAN_SAFE_MODE": "bogus"]))
-        #expect(invalidMode.code == 5 && invalidMode.out.contains("blocked_by_safe_mode"))
     }
 
     @Test func aLiveOwnerInAnotherProcessMeansWaitThenExit6() throws {
         let h = try Harness()
         try h.holdLease()
-        let write = environment(h, Harness.write)
-        let done = try ChildProcess.run(["gmail", "done", "t1", "--wait", "--timeout", "2s"], environment: write)
-        #expect(done.code == 6)
-        #expect(done.seconds >= 1.5, "it waited for the app: \(done.seconds)")
-        #expect(!done.err.contains("not running"))
         let draft = try ChildProcess.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "x",
-                                          "--wait", "--timeout", "2s"], environment: write)
+                                          "--wait", "--timeout", "2s"], environment: environment(h))
         #expect(draft.code == 6)
+        #expect(draft.seconds >= 1.5, "it waited for the app: \(draft.seconds)")
+        #expect(!draft.err.contains("not running"))
         let ops = try h.operations()
-        #expect(ops.map(\.kind).sorted { $0.rawValue < $1.rawValue } == [.modifyLabels, .upsertDraft])
+        #expect(ops.map(\.kind) == [.upsertDraft])
         #expect(try h.store.drafts(account: h.account, states: [], limit: 10).first?.origin == .cli)
         let json = try #require(JSONSerialization.jsonObject(with: Data(draft.out.utf8)) as? [String: Any])
         #expect((json["data"] as? [String: Any])?["status"] as? String == "queued")
@@ -104,17 +99,16 @@ enum ChildProcess {
 
     @Test func withNoOwnerWritesExit6AtOnceAndThereIsNoNetwork() throws {
         let h = try Harness()
-        let write = environment(h, Harness.write)
+        let write = environment(h)
         let done = try ChildProcess.run(["gmail", "archive", "t1", "--wait", "--timeout", "3600s"], environment: write)
-        #expect(done.code == 6)
-        #expect(done.err.contains("Queued locally. OpenHuman Mail applies changes queued by the CLI to Gmail only in a guarded test run"))
-        #expect(!done.err.contains("within the timeout"))
+        #expect(done.code == 5 && done.out.contains("mail_changes_in_app"))
+        #expect(done.err.contains("Make mail changes in OpenHuman Mail."))
         let draft = try ChildProcess.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "x",
                                           "--wait", "--timeout", "3600s"], environment: write)
         #expect(draft.code == 6)
         #expect(draft.err.contains("Saved locally. OpenHuman Mail uploads an agent draft to Gmail only after you approve it there."))
         #expect(!draft.err.contains("within the timeout"))
-        #expect(try h.operations().count == 2)
+        #expect(try h.operations().count == 1)
     }
 
     @Test func warmInboxStartupBudget() throws {

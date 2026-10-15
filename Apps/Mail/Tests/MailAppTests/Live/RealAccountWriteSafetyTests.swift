@@ -103,9 +103,6 @@ private let portCalls: [(name: String, call: @Sendable (any MailCommanding) asyn
     ("dismissFailedOperation", { try await $0.dismissFailedOperation(1) }),
 ]
 
-private let readThroughs: Set<String> = ["fetchDraftNow", "fetchThreadNow"]
-private let sends: Set<String> = ["send", "sendNow", "scheduleSend", "unsubscribe"]
-
 private func outcome(_ call: @Sendable (any MailCommanding) async throws -> Void,
                      on port: any MailCommanding) async -> MailPortError? {
     do {
@@ -118,52 +115,35 @@ private func outcome(_ call: @Sendable (any MailCommanding) async throws -> Void
     }
 }
 
-@Test func theWritePortRefusesEveryWriteInReadOnlyBeforeTheEngineIsReached() async {
-    let engine = RecordingEngine()
-    let lookups = Mutex(0)
-    let oneClicks = Mutex(0)
-    let port = MailStoreCommands(engine: { lookups.withLock { $0 += 1 }; return engine }, safeMode: .readOnly,
-                                 oneClick: { _ in oneClicks.withLock { $0 += 1 } })
-    for (name, call) in portCalls where !readThroughs.contains(name) {
-        #expect(await outcome(call, on: port) == .blockedBySafeMode, "\(name)")
+@MainActor
+private func refusedByTheDenyList(_ body: () async throws -> Void) async -> Bool {
+    do {
+        try await body()
+        return false
+    } catch GmailError.transport(.refusedByGuard) {
+        return true
+    } catch {
+        return false
     }
-    #expect(engine.calls.isEmpty, "nothing reached the engine (or the Store behind it)")
-    #expect(lookups.withLock { $0 } == 0, "the engine was not even looked up")
-    #expect(oneClicks.withLock { $0 } == 0, "no unsubscribe request was made")
-    for (name, call) in portCalls where readThroughs.contains(name) {
-        #expect(await outcome(call, on: port) == nil, "\(name)")
-    }
-    #expect(engine.calls == ["fetchDraft", "fetchThread"])
-    #expect(MailPortError.blockedBySafeMode.description == "Read-only: Mail can't change your mail")
 }
 
-@Test func theWritePortNeverSendsOutsideNormalMode() async {
+@Test func theWritePortPassesEveryCallToTheEngine() async {
     let engine = RecordingEngine()
     let oneClicks = Mutex(0)
-    let port = MailStoreCommands(engine: { engine }, safeMode: .writeAllowlist,
-                                 oneClick: { _ in oneClicks.withLock { $0 += 1 } })
+    let port = MailStoreCommands(engine: { engine }, oneClick: { _ in oneClicks.withLock { $0 += 1 } })
     for (name, call) in portCalls {
-        let result = await outcome(call, on: port)
-        #expect(sends.contains(name) ? result == .blockedBySafeMode : result == nil, "\(name)")
+        #expect(await outcome(call, on: port) == nil, "\(name)")
     }
-    #expect(Set(engine.calls).isDisjoint(with: ["send", "sendNow", "scheduleSend"]))
-    #expect(oneClicks.withLock { $0 } == 0, "no unsubscribe request outside normal")
-
-    let normalEngine = RecordingEngine()
-    let normal = MailStoreCommands(engine: { normalEngine }, safeMode: .normal, oneClick: { _ in oneClicks.withLock { $0 += 1 } })
-    for (name, call) in portCalls {
-        #expect(await outcome(call, on: normal) == nil, "\(name)")
-    }
-    #expect(normalEngine.calls.contains("send") && normalEngine.calls.contains("perform"))
+    #expect(engine.calls.contains("send") && engine.calls.contains("perform"))
     #expect(oneClicks.withLock { $0 } == 1)
-    let withoutRequest = MailStoreCommands(engine: { normalEngine }, safeMode: .normal)
+    let withoutRequest = MailStoreCommands(engine: { engine })
     #expect(await outcome({ try await $0.unsubscribe(message) }, on: withoutRequest) == .unsupported("one-click unsubscribe"))
 }
 
-@Test func theWritePortTakesAChangeOfAnySizeInNormalMode() async {
+@Test func theWritePortTakesAChangeOfAnySize() async {
     let many = (1...500).map { ThreadKey(account: account, rowID: Int64($0), gmailThreadID: GmailThreadID("t\($0)")) }
     let engine = RecordingEngine()
-    let port = MailStoreCommands(engine: { engine }, safeMode: .normal)
+    let port = MailStoreCommands(engine: { engine })
     #expect(await outcome({ _ = try await $0.apply(.star(many)) }, on: port) == nil)
     #expect(await outcome({ _ = try await $0.createLabel(account, name: "Synthetic", applyTo: many) }, on: port) == nil)
     for (name, call) in portCalls where ["send", "sendNow", "scheduleSend"].contains(name) {
@@ -172,124 +152,94 @@ private func outcome(_ call: @Sendable (any MailCommanding) async throws -> Void
     #expect(engine.calls == ["perform", "createLabel", "send", "sendNow", "scheduleSend"])
 }
 
+@Test func anAccountWithoutWriteAccessIsAskedToSignInAgain() async {
+    let missing = EngineError.writeAccessMissing("perform: account 1 has not granted gmail.modify")
+    let port = MailStoreCommands(engine: { throw missing })
+    #expect(await outcome({ _ = try await $0.apply(.markDone([thread])) }, on: port)
+        == .unavailable("the account needs to sign in again"))
+    let setup = LiveAccountManager.setupError(missing)
+    #expect(setup.kind == .refused && setup.message == LiveBackend.writeAccessNotice)
+}
+
 @MainActor
-@Test(.timeLimit(.minutes(2))) func aRealAccountSessionRefusesEveryWriteAtEveryLayer() async throws {
-    let corpus = FakeCorpus.make(threadCount: 5, now: Date())
-    let gmail = FakeGmail(accountEmail: corpus.account.email)
-    await FakeGmailLaunch.seed(gmail, corpus: corpus)
-    let google = FakeGoogle(gmail: gmail)
-    let email = corpus.account.email
+@Test func liveRefusesInsideATestRunBeforeAnythingOpens() throws {
+    let home = FileManager.default.temporaryDirectory.appendingPathComponent("oh-home-\(UUID().uuidString)")
+    let launches = [
+        CompositionRoot.live(environment: ["XCTestConfigurationFilePath": "x"]),
+        CompositionRoot.live(environment: ["XCTestConfigurationFilePath": "x", "OPENHUMAN_HOME": home.path], arguments: []),
+        CompositionRoot.makeApp(arguments: [], environment: ["OPENHUMAN_HOME": home.path]),
+    ]
+    for app in launches {
+        guard case .notice(let problem) = app.screen else {
+            Issue.record("expected the test-host notice")
+            continue
+        }
+        #expect(problem.title == CompositionRoot.testHostTitle && problem.message == CompositionRoot.testHostMessage)
+        #expect(problem.action == nil)
+        #expect(app.session == nil && app.liveAccounts == nil)
+    }
+    #expect(!FileManager.default.fileExists(atPath: home.path), "the store directory must not be created")
+}
+
+@MainActor
+private func realAccountBackend(scopes: [String], storedSwitch: ((MailStore) throws -> Void)? = nil) throws
+    -> (backend: LiveBackend, store: MailStore, google: FakeGoogle, corpus: FakeCorpus) {
+    let corpus = FakeCorpus.make(threadCount: 3, now: Date(timeIntervalSince1970: 1_790_000_000))
     let store = try MailStore.openInMemoryForTesting()
-    _ = try store.addAccount(email: email, displayName: nil, scopes: [GmailScope.readonly])
-    let tokens = InMemoryTokenStore([email: StoredToken(refreshToken: "synthetic-refresh", grantedScopes: [GmailScope.readonly],
-                                                        clientID: SyntheticClient.clientID)])
+    try FixtureStoreSeeder.seed(store, corpus: corpus)
+    _ = try store.addAccount(email: corpus.account.email, displayName: nil, scopes: scopes)
+    try storedSwitch?(store)
+    let tokens = InMemoryTokenStore([corpus.account.email: StoredToken(refreshToken: "synthetic-refresh", grantedScopes: scopes,
+                                                                       clientID: SyntheticClient.clientID)])
+    let google = FakeGoogle(gmail: FakeGmail(accountEmail: corpus.account.email), grantedScope: scopes.joined(separator: " "))
     let backend = liveBackend(google: google, store: store, tokens: tokens, browser: RecordingBrowser(),
                               clientPath: try SyntheticClient.writeJSON())
-    #expect(backend.safeMode == .readOnly)
-    let app = AppModel(live: backend)
-    guard case .mail(let environment) = app.screen, let session = app.session else {
-        Issue.record("expected the mail window")
-        return
-    }
-    defer { Task { await session.stop() } }
-    _ = try await firstValue(environment.data.threadWindow(.system(.inbox), account: session.account, limit: 20)) {
-        $0.rows.count == 5
-    }
-    let ref = try #require(try store.threadPage(view: .system(session.account, .inbox), after: nil, limit: 1).items.first?.ref)
-    let snippetsBefore = try store.snippets(account: nil)
-    let splitsBefore = try store.splits(account: session.account)
-
-    #expect(session.safeMode == .readOnly && environment.status.safeMode == .readOnly)
-    let port = try #require(environment.commands)
-    for (name, call) in portCalls where !readThroughs.contains(name) {
-        #expect(await outcome(call, on: port) == .blockedBySafeMode, "\(name)")
-    }
-    let key = MailStoreAdapter.threadKey(ref)
-    await #expect(throws: MailPortError.blockedBySafeMode) { _ = try await port.apply(.markDone([key])) }
-    #expect(try store.operations(account: session.account, statuses: [], limit: 50).isEmpty, "no op was queued")
-    #expect(try store.drafts(account: nil, states: [], limit: 50).isEmpty, "no draft was created")
-    #expect(try store.snippets(account: nil) == snippetsBefore && store.splits(account: session.account) == splitsBefore)
-
-    await #expect(throws: EngineError.self) { _ = try await session.engine.perform(.archive([ref]), origin: .app) }
-    await #expect(throws: EngineError.self) {
-        _ = try await session.engine.newDraft(account: session.account, mode: .new, replyTo: nil, origin: .user)
-    }
-    #expect(try store.operations(account: session.account, statuses: [], limit: 50).isEmpty)
-
-    let wire = google.api.requests.count
-    await #expect(throws: GmailError.self) {
-        try await session.api.batchModifyMessages(ids: ["m1"], add: [], remove: ["INBOX"])
-    }
-    await #expect(throws: GmailError.self) {
-        _ = try await session.api.sendMessage(rawRFC822: Data("Subject: synthetic\r\n\r\nx".utf8), threadID: nil)
-    }
-    await #expect(throws: GmailError.self) {
-        _ = try await session.api.createDraft(rawRFC822: Data("Subject: synthetic\r\n\r\nx".utf8), threadID: nil)
-    }
-    #expect(google.api.requests.dropFirst(wire).allSatisfy(isReadOnlyOnTheWire), "none of them reached Gmail")
-
-    #expect(environment.draftsDirectory == nil)
-    let window = environment.router
-    window.start()
-    await eventually("the window's account") { window.active != nil }
-    let compose = environment.compose
-    #expect(compose.recovery is InMemoryDraftRecovery)
-    let composer = try #require(compose.openNew(placement: .modal))
-    composer.to.text = "dana@example.org,"
-    composer.updateBody(RichTextDocument(blocks: [.paragraph([.text("Synthetic", [])])]))
-    await composer.settle()
-    #expect(!composer.canPersist && composer.draftKey == nil)
-    #expect(try store.drafts(account: nil, states: [], limit: 50).isEmpty)
-    #expect(google.api.requests.allSatisfy(isReadOnlyOnTheWire))
+    return (backend, store, google, corpus)
 }
 
 @MainActor
-@Test func everyOtherWriteModeIsRefusedAtLaunchForRealAccounts() throws {
-    let home = FileManager.default.temporaryDirectory.appendingPathComponent("oh-home-\(UUID().uuidString)")
-    let app = CompositionRoot.makeApp(arguments: [], environment: ["OPENHUMAN_SAFE_MODE": "write-allowlist",
-                                                                   "OPENHUMAN_HOME": home.path])
-    if case .notice(let problem) = app.screen {
-        #expect(problem.title == LaunchSafeMode.refusalTitle)
-    } else {
-        Issue.record("expected the refusal notice")
+@Test func aStoredWriteSwitchFromAnOlderVersionIsIgnored() async throws {
+    let leftovers: [(String, (MailStore) throws -> Void)] = [
+        ("saved off", { try $0.setSetting(SettingKey<Bool>(name: "write_mode.allow_changes", defaultValue: true, isSafetyKey: true),
+                                         false, scope: .global) }),
+        ("unreadable", { try $0.setSetting(SettingKey<String>(name: "write_mode.allow_changes", defaultValue: "",
+                                                              isSafetyKey: false), "yes", scope: .global) }),
+    ]
+    for (name, leftover) in leftovers {
+        let f = try realAccountBackend(scopes: [GmailScope.modify], storedSwitch: leftover)
+        guard case .session(let item) = f.backend.initialStep() else {
+            Issue.record("\(name): expected the account to open")
+            continue
+        }
+        let session = try f.backend.makeSession(for: item)
+        let environment = session.environment
+        #expect(environment.isLiveAccount && environment.draftsDirectory != nil, "\(name)")
+        #expect(await refusedByTheDenyList { try await session.api.deleteDraft(id: "../messages/m1") },
+                "\(name): the client is behind the deny list")
+        #expect(f.google.http.requests.allSatisfy { $0.url.path() == "/token" }, "\(name): nothing reached Gmail")
+
+        let ref = try #require(try f.store.threadPage(view: .system(item.id, .inbox), after: nil, limit: 1).items.first?.ref)
+        let port = try #require(environment.commands)
+        let token = try await port.apply(.markDone([MailStoreAdapter.threadKey(ref)]))
+        #expect(!token.changesNothing, "\(name)")
+        #expect(try !f.store.operations(account: item.id, statuses: [.pending], limit: 10).isEmpty, "\(name): queued for Gmail")
     }
-    #expect(app.session == nil)
-    #expect(!FileManager.default.fileExists(atPath: home.path), "the store directory must not be created")
-    #expect(throws: LaunchSafeMode.Refusal.self) { try LaunchSafeMode.environmentChoice(["OPENHUMAN_SAFE_MODE": "write-allowlist"]) }
-    for value in ["read-only", "READ-ONLY", " read-only", "readonly", "read_only", "Read_Only", "write_allowlist",
-                  "Write-Allowlist", "Normal", "NORMAL", " normal", "normal ", "garbage", " "] {
-        #expect(try LaunchSafeMode.environmentChoice(["OPENHUMAN_SAFE_MODE": value]) == .environmentReadOnly, "\(value)")
-        #expect(try LaunchSafeMode.forRealAccounts(environment: ["OPENHUMAN_SAFE_MODE": value], allowsChanges: true) == .readOnly,
-                "\(value): read-only whatever the switch says")
-    }
-    for value in [nil, ""] as [String?] {
-        let environment = value.map { ["OPENHUMAN_SAFE_MODE": $0] } ?? [:]
-        #expect(try LaunchSafeMode.environmentChoice(environment) == .setting, "\(value ?? "unset")")
-        #expect(try LaunchSafeMode.forRealAccounts(environment: environment) == .readOnly, "\(value ?? "unset"): switch off")
-        #expect(try LaunchSafeMode.forRealAccounts(environment: environment, allowsChanges: true) == .normal,
-                "\(value ?? "unset"): switch on")
-    }
-    #expect(try LaunchSafeMode.environmentChoice(["OPENHUMAN_SAFE_MODE": "normal"]) == .environmentNormal)
-    #expect(try LaunchSafeMode.forRealAccounts(environment: ["OPENHUMAN_SAFE_MODE": "normal"]) == .normal, "the variable alone")
-    #expect(LaunchSafeMode.forFakeGmail(environment: ["OPENHUMAN_SAFE_MODE": "normal"]) == .normal)
-    #expect(LaunchSafeMode.forFakeGmail(environment: [:]) == .readOnly)
-    #expect(SyncSession.draftsDirectory(URL(fileURLWithPath: "/tmp/x"), safeMode: .readOnly) == nil)
-    #expect(SyncSession.draftsDirectory(URL(fileURLWithPath: "/tmp/x"), safeMode: .normal) == URL(fileURLWithPath: "/tmp/x"))
 }
 
-@Test func theWriteModeSwitchIsOnByDefaultButOffWhenSavedOffUnreadableOrInATestHost() throws {
-    let store = try MailStore.openInMemoryForTesting()
-    #expect(LiveWriteModeSwitch.read(store) == true, "on by default (WRITE-MODE-DEFAULT)")
-    #expect(LiveWriteModeSwitch.atLaunch(store: store, environment: [:]) == false, "never under XCTest, default included")
-    try store.setSetting(LiveWriteModeSwitch.key, false, scope: .global)
-    #expect(LiveWriteModeSwitch.read(store) == false, "an explicitly saved off is kept")
-    try store.setSetting(LiveWriteModeSwitch.key, true, scope: .global)
-    #expect(LiveWriteModeSwitch.read(store) == true)
-    #expect(LiveWriteModeSwitch.atLaunch(store: store, environment: [:]) == false, "never under XCTest")
-    #expect(LiveWriteModeSwitch.key.name == "write_mode.allow_changes" && LiveWriteModeSwitch.key.isSafetyKey)
-    try store.setSetting(SettingKey<String>(name: "write_mode.allow_changes", defaultValue: "", isSafetyKey: false), "yes",
-                         scope: .global)
-    #expect(LiveWriteModeSwitch.read(store) == false, "an unreadable value counts as off")
+@MainActor
+@Test func aGrantWithoutModifyOnlyOffersSigningInAgain() async throws {
+    let f = try realAccountBackend(scopes: [GmailScope.readonly])
+    let item = try #require(try f.store.accounts().first)
+    #expect(f.backend.initialStep() == .needsWriteAccess(item))
+    #expect(throws: GmailError.self) { _ = try f.backend.makeSession(for: item) }
+    let app = AppModel(live: f.backend)
+    guard case .signIn(let signIn) = app.screen else {
+        Issue.record("expected the sign-in screen")
+        return
+    }
+    #expect(signIn.notice == LiveBackend.writeAccessNotice && signIn.loginHint == f.corpus.account.email)
+    #expect(app.session == nil)
+    #expect(f.google.http.requests.isEmpty, "nothing was asked of Google")
 }
 
 private enum AppSources {
@@ -341,7 +291,27 @@ private enum AppSources {
     }
 }
 
-@Test func noPathInTheAppLetsARealAccountReachAWrite() throws {
+private enum RepoSources {
+    static let root = AppSources.app.deletingLastPathComponent().deletingLastPathComponent()
+    static let textExtensions: Set<String> = ["swift", "json", "plist", "strings", "sh", "py", "txt", "md", "yml", "yaml",
+                                              "xcconfig"]
+
+    static func all() -> [String: String] {
+        var out: [String: String] = [:]
+        for top in ["Apps", "Packages"] {
+            let files = FileManager.default.enumerator(at: root.appendingPathComponent(top), includingPropertiesForKeys: nil,
+                                                       options: [.skipsHiddenFiles])?.compactMap { $0 as? URL } ?? []
+            for file in files where file.path.contains("/Sources/") && textExtensions.contains(file.pathExtension)
+                && !["/build/", "/DerivedData/", "/SourcePackages/"].contains(where: { file.path.contains($0) }) {
+                guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
+                out[String(file.path.dropFirst(root.path.count))] = text
+            }
+        }
+        return out
+    }
+}
+
+@Test func everyRealAccountGmailRequestGoesThroughTheDenyList() throws {
     let sources = try AppSources.all()
     #expect(sources.count > 15, "found the app's sources")
     func text(_ file: String) throws -> String { try #require(sources[file], "\(file)") }
@@ -350,95 +320,76 @@ private enum AppSources {
     }
 
     let live = try #require(AppSources.body(of: "static func live(", in: try text("CompositionRoot.swift")))
-    let check = try #require(live.range(of: "choice = try LaunchSafeMode.environmentChoice(environment)"))
-    let opened = try #require(live.range(of: "MailStore.open("))
-    #expect(check.lowerBound < opened.lowerBound, "the variable is checked before the Store opens")
-    #expect(codeLines(live, containing: "allowsChanges:") == [
-        "choice, allowsChanges: LiveWriteModeSwitch.atLaunch(store: store, environment: environment))",
+    let testHost = try #require(live.range(of: "environment[\"XCTestConfigurationFilePath\"] != nil"))
+    #expect(live.contains("|| ProcessInfo.processInfo.environment[\"XCTestConfigurationFilePath\"] != nil {"))
+    for later in ["StoreLocation.resolve(", "MailStore.open(", "Keychain", "URLSessionTransport(", "LiveBackend("] {
+        let at = try #require(live.range(of: later), "\(later)")
+        #expect(testHost.upperBound < at.lowerBound, "a test run is refused before \(later)")
+    }
+    #expect(codeLines(live, containing: "testHostTitle") == [
+        "return AppModel(screen: .notice(StartupProblem(title: testHostTitle, message: testHostMessage)))",
     ])
-    #expect(codeLines(live, containing: "LaunchSafeMode.forRealAccounts(") == ["let mode = LaunchSafeMode.forRealAccounts("])
-    #expect(!live.contains("forFakeGmail") && !live.contains(".normal") && !live.contains(".writeAllowlist"))
     let backends = AppSources.arguments(of: "LiveBackend", in: live)
-    #expect(backends.count == 1 && backends.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("safeMode: mode,") })
+    #expect(backends.count == 1 && backends.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("store: store,") })
     #expect(AppSources.files(sources, matching: #"LiveBackend\("#) == ["CompositionRoot.swift"])
-    #expect(AppSources.files(sources, matching: #"forFakeGmail\("#) == ["CompositionRoot.swift", "LaunchSafeMode.swift"])
-    let launchSource = try text("LaunchSafeMode.swift")
-    let choose = try #require(AppSources.body(of: "static func environmentChoice(", in: launchSource))
-    #expect(codeLines(choose, containing: ".environmentNormal") == ["if raw == SafeMode.normal.rawValue { return .environmentNormal }"])
-    #expect(codeLines(choose, containing: ".setting") == ["if raw.isEmpty { return .setting }"],
-            "only an absent or empty variable leaves it to the switch; anything unrecognised is read-only")
-    let launch = try #require(AppSources.body(of: "static func forRealAccounts(_ choice:", in: launchSource))
-    #expect(codeLines(launch, containing: ".normal") == ["return .normal", "return allowsChanges ? .normal : .readOnly"])
-    #expect(launch.contains("case .environmentNormal:\n            return .normal"))
-    #expect(launch.contains("case .setting:\n            return allowsChanges ? .normal : .readOnly"))
-    #expect(AppSources.files(sources, matching: #"atLaunch\("#) == ["CompositionRoot.swift", "WriteModeSwitch.swift"])
-    #expect(AppSources.files(sources, matching: #"LiveWriteModeSwitch\("#) == ["CompositionRoot.swift"])
-    #expect(AppSources.files(sources, matching: #"AppRelaunch\.relaunch\("#) == ["CompositionRoot.swift"])
-    #expect(AppSources.files(sources, matching: #"allowChanges"#) == ["WriteModeSwitch.swift"])
-    #expect(!(try text("FakeGmailLaunch.swift")).contains("WriteModeSwitch"), "FakeGmail never gets the switch")
-    let switchSource = try text("WriteModeSwitch.swift")
-    let atLaunch = try #require(AppSources.body(of: "nonisolated static func atLaunch(", in: switchSource))
-    #expect(atLaunch.contains("guard environment[\"XCTestConfigurationFilePath\"] == nil,\n              ProcessInfo.processInfo.environment[\"XCTestConfigurationFilePath\"] == nil else { return false }"))
-    #expect(codeLines(switchSource, containing: "?? false") == ["(try? store.setting(key, scope: .global)) ?? false"])
-    let modelSource = try String(contentsOf: AppSources.app.deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("Packages/OpenHumanMailCore/Sources/MailFeatures/Settings/WriteModeSettingModel.swift"), encoding: .utf8)
-    #expect(codeLines(modelSource, containing: "save(true)") == ["guard save(true) else { return }"])
-    let confirm = try #require(modelSource.range(of: "public func confirm() {"))
-    let cancel = try #require(modelSource.range(of: "public func cancel() {"))
-    let saveOn = try #require(modelSource.range(of: "guard save(true) else { return }"))
-    #expect(confirm.upperBound < saveOn.lowerBound && saveOn.upperBound < cancel.lowerBound, "on is saved by the sheet only")
-    #expect(modelSource.contains("public func confirm() {\n        guard isConfirming else { return }"))
+    #expect(AppSources.files(sources, matching: #"(?i)safe_?mode|write_?mode|OPENHUMAN_SAFE_MODE|AppRelaunch|allowChanges|write_mode\.allow_changes"#)
+        .isEmpty, "no launch mode, no saved switch")
+    #expect(AppSources.files(sources, matching: #"openedReadOnly|onOpenReadOnly|readOnlyFallback|writesNow"#).isEmpty)
 
     let backend = try text("LiveBackend.swift")
-    #expect(Set(codeLines(backend, containing: ".normal")) == [
-        "let sessionMode: SafeMode = mode == .normal && writes ? .normal : .readOnly",
-        "writeMode: sessionMode == .normal, accounts: accounts, writeModeSwitch: writeModeSwitch)",
-        "if safeMode == .normal, !token.grantedScopes.contains(GmailScope.modify) {",
+    #expect(codeLines(backend, containing: "grantedScopes.contains(GmailScope.modify)") == [
+        "if !token.grantedScopes.contains(GmailScope.modify) {",
     ])
-    #expect(!backend.contains(".writeAllowlist"))
-    #expect(backend.contains("let mode = safeMode"))
+    #expect(backend.contains("if !token.grantedScopes.contains(GmailScope.modify) {\n                refusal = refusal ?? .needsWriteAccess(account)"))
     #expect(AppSources.files(sources, matching: #"makeSession\(for:"#) == ["AppModel.swift"])
     let appModel = try text("AppModel.swift")
-    #expect(codeLines(appModel, containing: "makeSession(for:") == ["let session = try backend.makeSession(for: account, writes: writes)"])
-    #expect(codeLines(appModel, containing: ".normal") == [
-        "startSession(account, backend: backend, writes: backend.safeMode == .normal && !openedReadOnly)",
+    #expect(codeLines(appModel, containing: "makeSession(for:") == ["let session = try backend.makeSession(for: account)"])
+    #expect(codeLines(appModel, containing: "LiveBackend.writeAccessNotice") == [
+        "showSignIn(backend: live, loginHint: account.email, notice: LiveBackend.writeAccessNotice)",
     ])
-    #expect(codeLines(appModel, containing: "writes: false") == ["self?.startSession(account, backend: backend, writes: false)"])
-    #expect(AppSources.files(sources, matching: #"writes: true"#).isEmpty, "only the launch mode turns writes on")
-    #expect(AppSources.files(sources, matching: #"WriteModeSession\("#) == ["SyncSession.swift"])
-    #expect(AppSources.files(sources, matching: #"\.writesNow\s*="#) == ["LiveBackend.swift"])
-    #expect(codeLines(backend, containing: "writesNow") == ["writeModeSwitch?.writesNow = session.environment.writeMode != nil"])
 
-    #expect(AppSources.files(sources, matching: #"WriteAllowlistStore|WriteGuard\(|SafeModeTransport|allowlist:"#).isEmpty)
-    #expect(AppSources.files(sources, matching: #"DenyListTransport\("#).isEmpty)
+    #expect(AppSources.files(sources, matching: #"WriteAllowlistStore|WriteGuard\b|SafeModeTransport|allowlist:"#).isEmpty)
+    #expect(AppSources.files(sources, matching: #"DenyListTransport\(|ReadOnlyTransport\("#).isEmpty)
     #expect(AppSources.files(sources, matching: #"OneClickGuard\("#) == ["OneClickUnsubscribe.swift"])
     #expect(codeLines(try text("OneClickUnsubscribe.swift"), containing: "OneClickGuard(") == [
-        "mode == .normal ? OneClickGuard(wrapping: transport) : ReadOnlyTransport(wrapping: transport)",
+        "self.transport = OneClickGuard(wrapping: transport)",
     ])
     #expect(AppSources.files(sources, matching: #"DefaultGmailClientFactory\("#) == ["FakeGmailLaunch.swift", "LiveBackend.swift"])
     let liveFactory = AppSources.arguments(of: "DefaultGmailClientFactory", in: backend)
     #expect(liveFactory.count == 1 && liveFactory.allSatisfy {
-        $0.hasPrefix("safeMode: sessionMode,") && !$0.contains("storeDirectory") && !$0.contains("recipientGate")
+        $0.hasPrefix("apiTransport: transports.api,") && !$0.contains("storeDirectory") && !$0.contains("recipientGate")
     })
-    for args in AppSources.arguments(of: "DefaultGmailClientFactory", in: try text("FakeGmailLaunch.swift")) {
-        #expect(!args.contains("storeDirectory") && !args.contains("recipientGate"))
-    }
-    #expect(!(try text("FakeGmailLaunch.swift")).contains("writeMode"), "FakeGmail never gets the write-mode session")
+    let fakeFactory = AppSources.arguments(of: "DefaultGmailClientFactory", in: try text("FakeGmailLaunch.swift"))
+    #expect(fakeFactory.count == 1 && fakeFactory.allSatisfy {
+        $0.hasPrefix("apiTransport: wire,") && !$0.contains("storeDirectory") && !$0.contains("recipientGate")
+    })
 
     let packages = AppSources.app.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Packages")
     let gmailSources = packages.appendingPathComponent("OpenHumanGmail/Sources/OpenHumanGmail")
-    let wrap = try String(contentsOf: gmailSources.appendingPathComponent("SafeMode/SafeModeTransport.swift"), encoding: .utf8)
-    #expect(wrap.contains("""
-                case .normal:
-                    if let guarded = transport as? DenyListTransport, guarded.recipients === recipients { return guarded }
-                    return DenyListTransport(wrapping: transport, recipients: recipients)
-        """))
     let factorySource = try String(contentsOf: gmailSources.appendingPathComponent("Client/DefaultGmailClientFactory.swift"),
                                    encoding: .utf8)
-    #expect(factorySource.contains(
-        "let transport = SafeModeTransport.wrap(apiTransport, mode: safeMode, grantedScopes: scopes, allowlist: allowlist,"))
-    #expect(factorySource.contains("recipients: recipientGate)"))
+    #expect(factorySource.contains("private let apiTransport: DenyListTransport"))
+    #expect(factorySource.contains("self.apiTransport = DefaultGmailClientFactory.guarded(apiTransport, recipients: recipientGate)"))
+    #expect(factorySource.contains("return DenyListTransport(wrapping: transport, recipients: recipients)"))
     #expect(factorySource.components(separatedBy: "GmailClient(accountEmail:").count == 2, "one client construction")
+    #expect(factorySource.contains("transport: apiTransport, config: config"))
+    #expect(factorySource.contains("guard scopes.contains(GmailScope.modify) else {"))
+    let denyList = try String(contentsOf: gmailSources.appendingPathComponent("Guards/DenyListTransport.swift"), encoding: .utf8)
+    #expect(denyList.contains("public struct DenyListTransport: HTTPTransport"))
+
+    let repo = RepoSources.all()
+    #expect(repo.count > sources.count, "found the repository's sources")
+    #expect(repo.filter { $0.value.contains("OPENHUMAN_SAFE_MODE") }.keys.sorted() == [], "no Sources/ reads the old variable")
+    let factoryCall = try NSRegularExpression(pattern: #"\b(\w*Factory)\("#)
+    for (path, code) in repo where path.hasSuffix(".swift") {
+        let names = Set(factoryCall.matches(in: code, range: NSRange(code.startIndex..., in: code)).compactMap {
+            Range($0.range(at: 1), in: code).map { String(code[$0]) }
+        })
+        for name in names {
+            #expect(!AppSources.arguments(of: name, in: code).contains { $0.contains("safeMode") }, "\(path): \(name)(")
+        }
+        if (path as NSString).lastPathComponent.contains("Factory") { #expect(!code.contains("safeMode"), "\(path)") }
+    }
 
     let endpoints = try String(contentsOf: gmailSources.appendingPathComponent("Client/GmailEndpoints.swift"), encoding: .utf8)
     let entry = try NSRegularExpression(pattern: #"GmailEndpoint\(httpMethod: "(\w+)", template: (api|upload) \+ "([^"]+)"\)"#)
@@ -464,9 +415,8 @@ private enum AppSources {
             everything["\(package)/\(file.lastPathComponent)"] = code
         }
     }
-    let guards: Set<String> = ["OpenHumanGmail/DenyListTransport.swift", "OpenHumanGmail/WriteGuard.swift",
-                               "OpenHumanGmail/ReadOnlyTransport.swift", "OpenHumanGmail/GmailEndpoints.swift",
-                               "OpenHumanGmail/CalendarGuardTransport.swift"]
+    let guards: Set<String> = ["OpenHumanGmail/DenyListTransport.swift", "OpenHumanGmail/ReadOnlyTransport.swift",
+                               "OpenHumanGmail/GmailEndpoints.swift", "OpenHumanGmail/CalendarGuardTransport.swift"]
     let callers = AppSources.files(everything, matching: #""DELETE""#).subtracting(guards)
     #expect(callers == ["OpenHumanGmail/GmailClient.swift", "OpenHumanGmail/GoogleCalendarClient.swift"])
     let deletes = codeLines(try #require(everything["OpenHumanGmail/GmailClient.swift"]), containing: "\"DELETE\"")
@@ -478,7 +428,7 @@ private enum AppSources {
     #expect(guardedRemovals.count == 1, "only the card's Delete is a write that asks for the organizer rule")
     let deniedPath = #""[^"\n]*/?\b(batchDelete|emptyTrash|emptySpam|forwardingAddresses|autoForwarding|delegates|vacation|settings/filters|settings/imap|settings/pop|settings/language|messages/import)\b[^"\n]*""#
     #expect(AppSources.files(everything, matching: deniedPath).subtracting(guards).isEmpty)
-    #expect(AppSources.files(everything, matching: #"write_mode\.allow_changes"#).isEmpty)
+    #expect(AppSources.files(everything, matching: #"write_mode\.allow_changes"#).isEmpty, "the old switch is never read")
 
     let gmailWrites = #"\b(api|client|gmail|session\.api)\s*\.\s*(batchModifyMessages|modifyMessage|modifyThread|trashThread|untrashThread|trashMessage|untrashMessage|sendMessage|createDraft|updateDraft|deleteDraft|sendDraft|insertMessage|createLabel)\("#
     #expect(AppSources.files(sources, matching: gmailWrites).isEmpty)
@@ -491,14 +441,9 @@ private enum AppSources {
 
     let session = try text("SyncSession.swift")
     #expect(AppSources.files(sources, matching: #"MailStoreCommands\("#) == ["SyncSession.swift"])
-    #expect(session.contains("safeMode = try wiring.factory.effectiveMode(for: item.email)"))
-    #expect(session.contains("let mode = SafeModeInfo(safeMode)"))
-    #expect(session.contains("let writeMode = mode == .normal && wiring.writeMode ? WriteModeSession() : nil"))
-    #expect(session.contains("MailStoreCommands(engine: { try slot.engine() }, safeMode: mode, oneClick: oneClick)"))
-    #expect(session.contains("let effectiveMode: SafeMode = safeMode")
-            && session.contains("OneClickUnsubscribe(store: store, transport: transport, mode: effectiveMode)"),
-            "the one-click transport is guarded for the account's effective mode")
-    #expect(session.contains("safeMode: wiring.factory.safeMode)"), "the engine's policy is the factory's (session) mode")
+    #expect(session.contains("MailStoreCommands(engine: { try slot.engine() }, oneClick: oneClick)"))
+    #expect(session.contains("OneClickUnsubscribe(store: store, transport: transport)"))
+    #expect(session.contains("isFake: isFake, isLiveAccount: !isFake,"), "a real account is live, FakeGmail is not")
     #expect(AppSources.files(sources, matching: #"MailEngine\("#) == ["SyncSession.swift"])
 
     let model = AppSources.app.deletingLastPathComponent().deletingLastPathComponent()
@@ -511,41 +456,20 @@ private enum AppSources {
         }
     }
     #expect(Set(requirements) == Set(portCalls.map(\.name)), "the call table covers the whole port")
-    let port = try text("MailStoreCommands.swift")
-    var guarded: [String: String] = [:]
-    let lines = port.components(separatedBy: "\n")
-    let signature = try NSRegularExpression(pattern: #"^    public func (\w+)\("#)
-    for (index, line) in lines.enumerated() {
-        guard let match = signature.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
-              let range = Range(match.range(at: 1), in: line) else { continue }
-        let name = line[range]
-        guard let open = lines[index...].firstIndex(where: { $0.hasSuffix("{") }) else { continue }
-        let first = lines[(open + 1)...].first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }?
-            .trimmingCharacters(in: .whitespaces) ?? ""
-        guarded[String(name)] = first
-    }
-    for name in requirements {
-        let first = try #require(guarded[name], "MailStoreCommands implements \(name)")
-        if readThroughs.contains(name) {
-            #expect(!first.hasPrefix("try require"), "\(name) is a read-through")
-        } else if sends.contains(name) {
-            #expect(first.hasPrefix("try requireSending("), "\(name) refuses outside normal mode first")
-        } else {
-            #expect(first.hasPrefix("try requireChanges(") || first.hasPrefix("try requireSending("),
-                    "\(name) refuses in read-only first")
-        }
-    }
-    #expect(port.contains("guard safeMode != .readOnly else") && port.contains("guard safeMode == .normal else"))
 
     #expect(AppSources.files(sources, matching: #"GoogleCalendarSession\("#) == ["LiveBackend.swift"])
-    #expect(codeLines(backend, containing: "GoogleCalendarSession(").allSatisfy { $0.contains("mode: sessionMode,") })
     #expect(AppSources.files(sources, matching: #"GoogleCalendarClient\("#) == ["GoogleCalendarSession.swift"])
     #expect(AppSources.files(sources, matching: #"GoogleCalendarProvider\("#) == ["GoogleCalendarSession.swift"])
     #expect(AppSources.files(sources, matching: #"CalendarGuardTransport|CalendarScope\.|include_granted"#).isEmpty)
     #expect(!(try text("FakeGmailLaunch.swift")).contains("calendar"))
     #expect(try text("CompositionRoot.swift").contains("guard !arguments.contains(\"-UseFakeCalendar\") else { return nil }"))
     #expect(AppSources.files(sources, matching: #"calendarTokenStore: liveCalendarTokenStore\("#) == ["CompositionRoot.swift"])
-    #expect(codeLines(try text("LiveAccountManager.swift"), containing: "makeFlow(client, mode:").allSatisfy {
-        $0.contains("mode: session.safeMode)") || $0.contains("mode: safeMode)")
+    let manager = try text("LiveAccountManager.swift")
+    #expect(AppSources.files(sources, matching: #"OAuthFlow\("#) == ["LiveAccountManager.swift"])
+    #expect(codeLines(manager, containing: "OAuthFlow(") == [
+        "OAuthFlow(client: client, scopes: OAuthScopes.mailRequest, transport: dependencies.transport,",
+    ])
+    #expect(codeLines(manager, containing: "makeFlow(").allSatisfy {
+        $0.contains("makeFlow(client)") || $0.hasPrefix("private func makeFlow(_ client: OAuthClientConfig) -> OAuthFlow {")
     })
 }

@@ -22,13 +22,7 @@ public struct FooterView: View {
         let showsHints = hints?.isVisible == true
         HStack(spacing: theme.space5) {
             Spacer(minLength: 0)
-            if let notice = status?.blockedNotice {
-                Text(notice)
-                    .font(theme.typeLabel.swiftUIFont)
-                    .foregroundStyle(theme.textWarning.color)
-                    .lineLimit(1)
-                    .accessibilityAddTraits(.updatesFrequently)
-            } else if let hints, showsHints {
+            if let hints, showsHints {
                 HStack(spacing: theme.space2) {
                     HintBarView(model: hints, theme: theme)
                     closeButton(hints)

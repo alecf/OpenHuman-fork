@@ -25,7 +25,7 @@ MAX_STEPS = 12
 MAX_ID, MAX_AREA, MAX_TITLE, MAX_STEP, MAX_EXPECTED, MAX_ADDED_IN = 64, 60, 200, 300, 400, 32
 MAX_LINK_BYTES = 2048
 HOUSE_MAX_STEPS = 4
-REQUIRES = ("fake", "real-readonly", "real-write")
+REQUIRES = ("fake", "real")
 DEFAULT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                             "Apps", "Mail", "Resources", "dev-test-checklist.json")
 ID_RE = re.compile(r"\A[A-Za-z0-9._-]{1,64}\Z")
@@ -126,7 +126,7 @@ def check_item(raw, index, seen, errors, warnings):
         fail("missing expected")
         ok = False
     if not isinstance(raw.get("requires"), str) or raw.get("requires") not in REQUIRES:
-        fail('requires must be "fake", "real-readonly" or "real-write"')
+        fail('requires must be "fake" or "real"')
         ok = False
     added_in = raw.get("addedIn")
     if added_in is not None and text(added_in, MAX_ADDED_IN, item_id + " addedIn", warnings) is None:

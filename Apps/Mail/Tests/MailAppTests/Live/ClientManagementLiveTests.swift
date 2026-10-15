@@ -32,7 +32,7 @@ private final class MoveGoogle: Sendable {
         let next = self.next
         http.on("POST", "/token") { _ in
             FakeHTTPTransport.json(200, ["access_token": "synthetic-access", "refresh_token": "synthetic-refresh",
-                                         "expires_in": 3600, "scope": GmailScope.readonly, "token_type": "Bearer"])
+                                         "expires_in": 3600, "scope": GmailScope.modify, "token_type": "Bearer"])
         }
         http.on("GET", "/gmail/v1/users/me/profile") { _ in
             FakeHTTPTransport.json(200, ["emailAddress": next.value.withLock { $0 }, "messagesTotal": 0,
@@ -60,7 +60,7 @@ private func consentClientID(_ url: URL?) -> String? {
     let calendarTokens = InMemoryTokenStore()
     let browser = RecordingBrowser()
     let manager = LiveAccountManager(
-        safeMode: .readOnly, store: store,
+        store: store,
         dependencies: LiveAccountManager.Dependencies(
             environment: [:], storeDirectory: home, clientStore: clients, tokenStore: tokens, transport: google.http,
             makeReceiver: { AnsweringReceiver(browser: browser) }, browser: browser, clock: TestClock(),
@@ -72,11 +72,11 @@ private func consentClientID(_ url: URL?) -> String? {
     try await manager.importOAuthClient(json: ManagedClients.json(work, ManagedClients.secrets[0]))
     try await manager.importOAuthClient(json: ManagedClients.json(personal, ManagedClients.secrets[1]))
 
-    let robin = try store.addAccount(email: "robin@example.com", displayName: nil, scopes: [GmailScope.readonly])
-    let sam = try store.addAccount(email: "sam@example.com", displayName: nil, scopes: [GmailScope.readonly])
-    try tokens.save(StoredToken(refreshToken: "synthetic-robin", grantedScopes: [GmailScope.readonly], clientID: work),
+    let robin = try store.addAccount(email: "robin@example.com", displayName: nil, scopes: [GmailScope.modify])
+    let sam = try store.addAccount(email: "sam@example.com", displayName: nil, scopes: [GmailScope.modify])
+    try tokens.save(StoredToken(refreshToken: "synthetic-robin", grantedScopes: [GmailScope.modify], clientID: work),
                     account: "robin@example.com")
-    try tokens.save(StoredToken(refreshToken: "synthetic-sam", grantedScopes: [GmailScope.readonly], clientID: personal),
+    try tokens.save(StoredToken(refreshToken: "synthetic-sam", grantedScopes: [GmailScope.modify], clientID: personal),
                     account: "sam@example.com")
     try calendarTokens.save(StoredToken(refreshToken: "synthetic-cal", grantedScopes: ["calendar-scope"],
                                         clientID: personal), account: "robin@example.com")

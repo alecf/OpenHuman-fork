@@ -16,7 +16,7 @@ private func first<T: Sendable>(_ stream: AsyncThrowingStream<T, Error>, where p
 
 @Test(.timeLimit(.minutes(1))) func everyAccountGetsItsOwnStatusIncludingOneAddedLater() async throws {
     let store = try MailStore.openInMemoryForTesting()
-    let work = try store.addAccount(email: "work@example.com", displayName: nil, scopes: ["gmail.readonly"])
+    let work = try store.addAccount(email: "work@example.com", displayName: nil, scopes: ["gmail.modify"])
     let (engineStates, engine) = AsyncStream.makeStream(of: [AccountID: AccountConnectivity].self)
     var states = SyncSession.connectivity(engineStates, store: store).makeAsyncIterator()
     engine.yield([work: .online(syncing: false, lastSyncAt: nil)])
@@ -24,7 +24,7 @@ private func first<T: Sendable>(_ stream: AsyncThrowingStream<T, Error>, where p
     while value?[work] == nil { value = await states.next() }
     #expect(value?.count == 1)
 
-    let personal = try store.addAccount(email: "personal@example.com", displayName: nil, scopes: ["gmail.readonly"])
+    let personal = try store.addAccount(email: "personal@example.com", displayName: nil, scopes: ["gmail.modify"])
     engine.yield([work: .online(syncing: false, lastSyncAt: nil), personal: .needsReauth])
     while value?[personal] != .needsReauth { value = await states.next() }
     #expect(value?[work] != nil && value?.count == 2)
@@ -41,11 +41,16 @@ private func first<T: Sendable>(_ stream: AsyncThrowingStream<T, Error>, where p
 
 @Test(.timeLimit(.minutes(1))) func aRefusedChangeIsListedWithItsCommandAndConversation() async throws {
     let (store, account) = try FixtureStoreSeeder.makeStore(corpus: .make(threadCount: 3, now: now))
-    let adapter = MailStoreAdapter(store: store, safeMode: .normal)
+    let adapter = MailStoreAdapter(store: store)
+    func inbox() throws -> [Int64] {
+        try store.threadPage(view: .system(account, .inbox), after: nil, limit: 10).items.map(\.ref.rowID.rawValue)
+    }
     let row = try #require(try store.threadPage(view: .system(account, .inbox), after: nil, limit: 1).items.first)
     let receipt = try store.apply(.archive([row.ref]), origin: .app)
+    #expect(try !inbox().contains(row.ref.rowID.rawValue), "out of the inbox at once")
     let op = try #require(receipt.operationIDs.first)
     try store.fail(op, code: "server_500", message: "synthetic", retryAt: nil)
+    #expect(try inbox().contains(row.ref.rowID.rawValue), "the failure puts the conversation back")
 
     let failures = try await first(adapter.failedOperations(nil)) { !$0.isEmpty }
     let failure = try #require(failures.first)
@@ -54,9 +59,6 @@ private func first<T: Sendable>(_ stream: AsyncThrowingStream<T, Error>, where p
     #expect(failure.threads.map(\.rowID) == [row.id.rawValue])
     #expect(failure.errorCode == "server_500")
     #expect(try await first(adapter.failedOperations(AccountID(9_999))).isEmpty, "another account's are left out")
-
-    let readOnly = MailStoreAdapter(store: store, safeMode: .readOnly)
-    #expect(try await first(readOnly.failedOperations(nil)).isEmpty)
 
     try store.dismissFailedOperation(op)
     _ = try await first(adapter.failedOperations(nil)) { $0.isEmpty }

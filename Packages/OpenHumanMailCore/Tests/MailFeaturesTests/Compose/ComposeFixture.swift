@@ -19,15 +19,13 @@ final class ComposeFixture {
     private(set) var postedToasts: [String] = []
     static let utc = TimeZone(identifier: "UTC")!
 
-    init(corpus: FakeCorpus = .rich(threadCount: 60, now: fixedNow), safeMode: SafeModeInfo = .normal,
-         flags: FeatureFlags = FeatureFlags(), writePort: Bool = true, writeMode: WriteModeSession? = nil,
-         ai: AICenter? = nil, liveConnectivity: Bool = false) {
+    init(corpus: FakeCorpus = .rich(threadCount: 60, now: fixedNow), flags: FeatureFlags = FeatureFlags(),
+         writePort: Bool = true, isLiveAccount: Bool = false, ai: AICenter? = nil, liveConnectivity: Bool = false) {
         store = FakeMailStore(corpus: corpus, options: .init(remoteAck: .immediate, heldSends: .manual,
-                                                             liveConnectivity: liveConnectivity, safeMode: safeMode,
-                                                             now: { fixedNow }))
+                                                             liveConnectivity: liveConnectivity, now: { fixedNow }))
         recorder = RecordingCommands(store)
         env = AppEnvironment(data: store, commands: writePort ? recorder : nil, accounts: store, settings: store,
-                             isFake: true, featureFlags: flags, ai: ai, writeMode: writeMode)
+                             isFake: true, featureFlags: flags, ai: ai, isLiveAccount: isLiveAccount)
         router = env.router
         compose = env.compose
         let discard = discardGate

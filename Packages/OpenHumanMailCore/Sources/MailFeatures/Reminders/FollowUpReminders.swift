@@ -102,9 +102,7 @@ public final class FollowUpReminders {
         guard let environment, let center = environment.ai else { throw .unavailable(String(localized: "AI isn't set up")) }
         let rule = await SentMailReminderRule.load(from: environment.settings)
         guard rule.scope == .needsFollowUp else { throw .scopeOff }
-        guard environment.commands != nil, environment.status.safeMode.allowsMailChanges else {
-            throw .unavailable(String(localized: "Reminders can't be set in this safe mode"))
-        }
+        guard environment.commands != nil else { throw .unavailable(String(localized: "Reminders can't be set here")) }
         let status = await availability()
         guard status.available else { throw .unavailable(status.reason ?? "") }
         isCatchingUp = true

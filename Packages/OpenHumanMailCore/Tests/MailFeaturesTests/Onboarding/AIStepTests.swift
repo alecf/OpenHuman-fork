@@ -119,7 +119,7 @@ struct OAuthClientImportSendsNothingTests {
         let f = SettingsFixture()
         let secret = "SECRET-SENTINEL-9f8e7d"
         let json = Data(#"{"installed":{"client_id":"123-abc.apps.googleusercontent.com","client_secret":"\#(secret)"}}"#.utf8)
-        let model = SignInModel(accounts: f.store, safeMode: .readOnly)
+        let model = SignInModel(accounts: f.store)
         let runner = Task { await model.run() }
         defer { runner.cancel() }
         await model.importClient(json: json)

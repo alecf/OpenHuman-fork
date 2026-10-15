@@ -65,15 +65,6 @@ struct ShellSnapshotTests {
         }
     }
 
-    @Test func readOnlyRefusesMarkDone() async throws {
-        let environment = AppEnvironment.fake(corpus: .small, options: .init(safeMode: .readOnly))
-        try await render(environment, mode: .light, name: "shell-read-only") { router, _ in
-            router.perform(.markDone)
-            router.go(to: .system(.starred))
-            try await until { router.list?.state == .loaded }
-        }
-    }
-
     @Test func conversationWithTheSequenceHint() async throws {
         let environment = AppEnvironment.fake(corpus: .small)
         try await render(environment, mode: .light, name: "shell-reader-g-hint") { router, content in

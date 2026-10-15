@@ -13,9 +13,15 @@ struct SettingsFixture {
     let work: AccountID
     let personal: AccountID
 
-    init(safeMode: SafeModeInfo = .normal, flags: FeatureFlags = FeatureFlags(), corpus: FakeCorpus = .small) {
-        env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate, safeMode: safeMode), featureFlags: flags)
-        store = env.commands as! FakeMailStore
+    init(writePort: Bool = true, flags: FeatureFlags = FeatureFlags(), corpus: FakeCorpus = .small) {
+        if writePort {
+            env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate), featureFlags: flags)
+        } else {
+            let store = FakeMailStore(corpus: corpus, options: .init(remoteAck: .immediate))
+            env = AppEnvironment(data: store, accounts: store, settings: store, isFake: true,
+                                 importance: FakeImportanceRules(corpus: corpus), featureFlags: flags)
+        }
+        store = env.data as! FakeMailStore
         work = corpus.mailboxes[0].account.id
         personal = corpus.mailboxes[1].account.id
     }

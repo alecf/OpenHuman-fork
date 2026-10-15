@@ -47,20 +47,15 @@ final class BlockActionHandler: ActionHandler {
         default: return .notHandled
         }
         guard let rule else { return .notHandled }
-        let id = request.id
         let place = BlockedPlace(router: request.router, advances: request.source != .intent)
         return .started(Task { [weak self] in
-            await self?.begin(rule, account: account, thread: thread, id: id, place: place)
+            await self?.begin(rule, account: account, thread: thread, place: place)
         })
     }
 
 
-    func begin(_ rule: BlockRule, account: AccountID, thread: ThreadKey, id: ActionID, place: BlockedPlace) async {
+    func begin(_ rule: BlockRule, account: AccountID, thread: ThreadKey, place: BlockedPlace) async {
         guard let environment, let center else { return }
-        guard environment.status.safeMode.allowsMailChanges else {
-            feedback.refuse(id, .safeMode)
-            return
-        }
         if await center.rules(account).contains(where: { $0.id == rule.id }) {
             environment.notices.post("Already blocked: \(rule.value)", style: .info, duration: NoticeCenter.infoDuration)
             return
@@ -69,16 +64,16 @@ final class BlockActionHandler: ActionHandler {
             environment.notices.postChoice(
                 "You've written to \(rule.value). Block it anyway?",
                 NoticeCenter.Choice("Block anyway") { [weak self] in
-                    await self?.commit(rule, account: account, thread: thread, id: id, place: place)
+                    await self?.commit(rule, account: account, thread: thread, place: place)
                 },
                 NoticeCenter.Choice("Cancel") {},
                 duration: nil)
             return
         }
-        await commit(rule, account: account, thread: thread, id: id, place: place)
+        await commit(rule, account: account, thread: thread, place: place)
     }
 
-    func commit(_ rule: BlockRule, account: AccountID, thread: ThreadKey, id: ActionID, place: BlockedPlace) async {
+    func commit(_ rule: BlockRule, account: AccountID, thread: ThreadKey, place: BlockedPlace) async {
         guard let environment, let center, let undoer, let undo = environment.undo,
               let commands = environment.commands else { return }
         let fallback = await center.defaultDisposition()
@@ -98,10 +93,6 @@ final class BlockActionHandler: ActionHandler {
                     throw error
                 }
             }
-        } catch MailPortError.blockedBySafeMode {
-            hidden.restore()
-            feedback.refuse(id, .safeMode)
-            return
         } catch {
             hidden.restore()
             feedback.failed("Couldn't block \(rule.value)")
@@ -152,9 +143,6 @@ final class BlockActionHandler: ActionHandler {
         do {
             let cleanup = try await commands.apply(command)
             if !undoer.attach(cleanup: cleanup, to: token) { _ = try? await commands.undo(cleanup) }
-        } catch MailPortError.blockedBySafeMode {
-            feedback.refuse(.blockSender, .safeMode)
-            return
         } catch {
             feedback.failed("Couldn't clean up the mail from \(who)")
             return

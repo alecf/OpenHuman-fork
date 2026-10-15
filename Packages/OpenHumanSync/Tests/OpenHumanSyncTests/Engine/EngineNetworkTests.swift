@@ -107,7 +107,7 @@ import Testing
         try await eventually("the app's drainer claimed the CLI's op") {
             try h.store.operation(receipt.operationIDs[0])?.status == .failed
         }
-        #expect(try h.store.operation(receipt.operationIDs[0])?.lastErrorCode == "safe_mode_blocked")
+        #expect(try h.store.operation(receipt.operationIDs[0])?.lastErrorCode == "not_applied_outside_app")
         #expect(await h.serverLabels(ofThread: h.threads[0]).contains("INBOX"))
         await engine.stop()
     }

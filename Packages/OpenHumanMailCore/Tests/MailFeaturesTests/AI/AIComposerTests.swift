@@ -276,13 +276,12 @@ import Testing
         #expect(claude.requests.count == 1)
     }
 
-    @Test func readOnlySafeModeDraftsLocallyAndWritesNothing() async throws {
-        let f = AIFixture(safeMode: .readOnly)
+    @Test func aiOnAReplyDraftsAndSendsNothing() async throws {
+        let f = AIFixture()
         await f.loaded()
         let thread = try await f.thread(minimumMessages: 3)
         let (session, editor) = try await f.reply(thread)
-        #expect(!session.canPersist)
-        #expect(f.env.actions.availability(.aiRewrite, host: session) == .enabled, "AI reads and drafts locally")
+        #expect(f.env.actions.availability(.aiRewrite, host: session) == .enabled)
         #expect(await f.run(.aiRewrite, in: session))
         let panel = try #require(session.aiPanel)
         let replies = try #require(panel.quickReplies)
@@ -295,9 +294,8 @@ import Testing
         await eventually { rewrite.phase == .done }
         rewrite.replace()
         await session.settle()
-        #expect(f.recorder.calls.isEmpty, "no write port call at all: nothing saved, sent or written to Gmail")
-        #expect(f.store.sentMessages.isEmpty)
-        #expect(f.env.actions.availability(.send, host: session) == .disabled(.safeMode))
+        #expect(!f.recorder.calls.contains { ["send", "sendNow", "scheduleSend"].contains($0) }, "\(f.recorder.calls)")
+        #expect(f.store.sentMessages.isEmpty && f.store.heldSendCount == 0)
     }
 
     @Test func theModuleFlagOrAMissingAICenterRemovesEverything() async throws {

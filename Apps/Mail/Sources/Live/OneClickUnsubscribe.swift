@@ -8,15 +8,13 @@ struct OneClickUnsubscribe: Sendable {
     let store: any MailReading
     let transport: any HTTPTransport
 
-    init(store: any MailReading, transport: any HTTPTransport, mode: SafeMode) {
+    // Why: DenyListTransport only allows Gmail API hosts and would refuse every list host, so OneClickGuard is used here
+    init(store: any MailReading, transport: any HTTPTransport) {
         self.store = store
-        self.transport = Self.guarded(transport, mode: mode)
+        self.transport = OneClickGuard(wrapping: transport)
     }
 
-    // Why: DenyListTransport only allows Gmail API hosts and would refuse every list host, so it is not used here
-    static func guarded(_ transport: any HTTPTransport, mode: SafeMode) -> any HTTPTransport {
-        mode == .normal ? OneClickGuard(wrapping: transport) : ReadOnlyTransport(wrapping: transport)
-    }
+    static let refusal = "an unsubscribe request other than a one-click POST over HTTPS"
 
     func send(_ key: MessageKey) async throws {
         guard let message = try store.message(account: key.account, gmailMessageID: key.gmailMessageID) else {
@@ -31,8 +29,8 @@ struct OneClickUnsubscribe: Sendable {
         let response: HTTPResponse
         do {
             response = try await transport.send(request)
-        } catch TransportError.blockedBySafeMode {
-            throw MailPortError.blockedBySafeMode
+        } catch TransportError.refusedByGuard {
+            throw MailPortError.notAllowed(Self.refusal)
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -124,7 +122,7 @@ struct OneClickGuard: HTTPTransport {
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         guard Self.allows(method: request.method, url: request.url, headerNames: request.headers.keys) else {
-            throw TransportError.blockedBySafeMode("\(request.method) <list host>")
+            throw TransportError.refusedByGuard("\(request.method) <list host>")
         }
         return try await wrapped.send(request)
     }

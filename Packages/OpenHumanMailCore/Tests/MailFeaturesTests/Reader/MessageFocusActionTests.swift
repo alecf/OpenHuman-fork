@@ -18,7 +18,7 @@ import Testing
     }
 
     @Test func theMessageKeysAreActionsOfTheOpenConversation() async throws {
-        let f = ComposeFixture(safeMode: .readOnly)
+        let f = ComposeFixture()
         let (reader, messages) = try await open(f)
         let newest = try #require(messages.last?.id)
         let middle = messages[messages.count - 2].id

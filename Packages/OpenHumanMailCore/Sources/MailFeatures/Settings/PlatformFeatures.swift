@@ -181,7 +181,6 @@ public final class AppIntentsSettingsModel {
         + "name the sender and date only. Message text is never shared."
     public static let changesNote = "Mark done, snooze and remind me only. Sending, trashing and unsubscribing are never "
         + "available to Shortcuts."
-    public static let readOnlyNote = "Read-only safe mode: Shortcuts can't change mail in this session."
     public static let unconfirmedNote = "Whether Shortcuts lists actions from a build that is not notarized is not confirmed "
         + "yet. If Mail is missing from Shortcuts, that is the first thing to check. Whether Siri or Apple Intelligence "
         + "process what Mail returns on this Mac is not confirmed either."
@@ -190,7 +189,6 @@ public final class AppIntentsSettingsModel {
     public private(set) var shareSubjects: Bool
     public private(set) var allowMailChanges: Bool
     public private(set) var askBeforeChanges: Bool
-    public let isReadOnly: Bool
 
     @ObservationIgnored private let preferences: IntentPreferences
 
@@ -200,14 +198,11 @@ public final class AppIntentsSettingsModel {
         shareSubjects = preferences.shareSubjects
         allowMailChanges = preferences.allowMailChanges
         askBeforeChanges = preferences.askBeforeChanges
-        isReadOnly = !environment.status.safeMode.allowsMailChanges
     }
 
     public var status: String {
         isOn ? "On. Look for OpenHuman Mail in the Shortcuts app." : "Off. Shortcuts that use Mail stop with a message."
     }
-
-    public var changesStatus: String? { isReadOnly ? Self.readOnlyNote : nil }
 
     public func setOn(_ on: Bool) {
         preferences.isEnabled = on

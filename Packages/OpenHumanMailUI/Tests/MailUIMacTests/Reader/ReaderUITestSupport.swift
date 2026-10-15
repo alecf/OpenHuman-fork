@@ -13,13 +13,11 @@ final class UITestSource: MailDataSource, @unchecked Sendable {
     private let details: [ThreadKey: ConversationDetail]
     private let bodies: [MessageKey: MessageContent]
     private let files: [Int64: URL]
-    private let mode: SafeModeInfo
 
-    init(details: [ConversationDetail], bodies: [MessageKey: MessageContent], files: [Int64: URL] = [:], safeMode: SafeModeInfo = .normal) {
+    init(details: [ConversationDetail], bodies: [MessageKey: MessageContent], files: [Int64: URL] = [:]) {
         self.details = Dictionary(uniqueKeysWithValues: details.map { ($0.id, $0) })
         self.bodies = bodies
         self.files = files
-        mode = safeMode
     }
 
     func accounts() -> AsyncThrowingStream<[Account], Error> {
@@ -44,8 +42,6 @@ final class UITestSource: MailDataSource, @unchecked Sendable {
         guard let url = files[attachment.id] else { throw MailPortError.notFound("attachment") }
         return url
     }
-
-    func safeMode() -> SafeModeInfo { mode }
 }
 
 @MainActor
@@ -108,10 +104,9 @@ struct ReaderHarness {
     let host: StubHost
 
     static func make(_ source: UITestSource, thread: ThreadKey, theme: ThemeTokens = .light,
-                     webKit: ReaderWebKit = TestWebKit.noNetwork, safeMode: SafeModeInfo = .normal,
-                     windowRouter: Bool = false) async throws -> ReaderHarness {
+                     webKit: ReaderWebKit = TestWebKit.noNetwork, windowRouter: Bool = false) async throws -> ReaderHarness {
         await webKit.prepare()
-        let store = FakeMailStore(corpus: .make(threadCount: 3, now: Date()), options: .init(safeMode: safeMode))
+        let store = FakeMailStore(corpus: .make(threadCount: 3, now: Date()), options: .init())
         let environment = AppEnvironment(data: store, commands: store, accounts: store, settings: store, isFake: true)
         let router = windowRouter ? environment.router : AppRouter(environment: environment)
         router.start()

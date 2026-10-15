@@ -165,14 +165,4 @@ import Testing
         try await h.gmail.deleteDraft(id: gmailDraft)
         #expect(try await preflight.confirmScheduledSend(refreshed) == .stop("consumed elsewhere"))
     }
-
-    @Test func writeAllowlistNeverRunsSendLater() async throws {
-        let h = try await EngineHarness(safeMode: .writeAllowlist, stack: true)
-        defer { h.cleanup() }
-        let engine = h.engine(safeMode: .writeAllowlist)
-        await engine.start()
-        try await h.waitForSyncs(engine)
-        #expect(!(await engine.scheduler(for: h.account)?.kinds ?? []).contains(.sendLater))
-        await engine.stop()
-    }
 }

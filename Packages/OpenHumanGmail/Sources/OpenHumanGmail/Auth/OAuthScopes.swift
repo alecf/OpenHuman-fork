@@ -1,6 +1,8 @@
 import Foundation
 
 public enum OAuthScopes {
+    public static let mailRequest: [String] = [GmailScope.modify]
+
     public static let mailWrite: Set<String> = [
         "https://mail.google.com/",
         GmailScope.modify,

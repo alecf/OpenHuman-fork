@@ -44,7 +44,7 @@ import Testing
     }
 
     @Test func rowsHaveOneIdEachAndTheCursorSitsOnARowThatRuns() async throws {
-        let f = OverlayFixture(options: .init(safeMode: .readOnly))
+        let f = OverlayFixture(writePort: false)
         await f.loaded(10)
         await f.run(.commandPalette)
         let palette = try #require(f.palette)

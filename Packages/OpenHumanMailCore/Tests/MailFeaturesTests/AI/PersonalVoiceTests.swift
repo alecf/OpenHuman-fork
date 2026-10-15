@@ -63,12 +63,12 @@ import Testing
 
     @Test func personalInstructionsAreWholeLocalSettingsThatReachTheRewrite() async throws {
         let provider = ScriptedProvider()
-        let f = AIFixture(safeMode: .readOnly, providers: [provider])
+        let f = AIFixture(providers: [provider])
         await f.loaded()
         let page = AISettingsPageModel(center: f.center, environment: f.env)
         page.aboutMe = String(repeating: "a", count: 4_000)
         page.writingInstructions = "Short and warm."
-        #expect(page.error == nil, "a local setting: read-only allows it")
+        #expect(page.error == nil)
         #expect(page.aboutMe.count == 4_000, "kept whole")
         #expect(f.center.settings.writingInstructions == "Short and warm.")
         page.aboutMe = "I run a small studio."

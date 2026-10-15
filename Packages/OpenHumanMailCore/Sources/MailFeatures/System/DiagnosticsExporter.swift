@@ -135,14 +135,13 @@ public final class DiagnosticsExporter {
     static let readme = """
         OpenHuman Mail diagnostics
         Contains no email content: no subjects, snippets, message text, addresses, label names or attachment names.
-        Accounts are numbered. diagnostics.json has versions, module switches, safe mode, sync status and counts, and
+        Accounts are numbered. diagnostics.json has versions, module switches, sync status and counts, and
         error codes, and each numbered account's calendar connection state; log.txt is the app's recent log with
         anything that could be content removed.
         """
 
     static func sanitized(_ snapshot: DiagnosticsSnapshot) -> DiagnosticsSnapshot {
         var copy = snapshot
-        copy.safeMode = code(snapshot.safeMode)
         copy.accounts = snapshot.accounts.map { entry in
             var e = entry
             e.health = code(entry.health)

@@ -31,7 +31,7 @@ import Testing
         let credentials = AccountCredentials(store: tokenStore, client: Synthetic.client, transport: tokenEndpoint,
                                              clock: clock, onEvent: events.sink)
         let wire = api()
-        let factory = DefaultGmailClientFactory(safeMode: .normal, accountCredentials: credentials, apiTransport: wire,
+        let factory = DefaultGmailClientFactory(accountCredentials: credentials, apiTransport: wire,
                                                 config: GmailClientConfig(userAgent: "t"), clock: clock)
         let client = try factory.gmailClient(for: Self.me)
         _ = try await client.listLabels()
@@ -59,7 +59,7 @@ import Testing
     @Test func theFactoryNeverHandsOutAClientBuiltForAnotherGrant() async throws {
         let scopes = Mutex<[String]?>([GmailScope.modify])
         let wire = api()
-        let factory = DefaultGmailClientFactory(safeMode: .normal, apiTransport: wire,
+        let factory = DefaultGmailClientFactory(apiTransport: wire,
                                                 config: GmailClientConfig(userAgent: "t"), clock: InstantClock()) { _ in
             guard let granted = scopes.withLock({ $0 }) else { throw GmailError.reauthRequired }
             return (StaticTokenProvider(), granted)
@@ -68,18 +68,17 @@ import Testing
         _ = try await writer.trashThread(id: "t1")
         #expect(wire.requests.count == 1)
 
+        scopes.withLock { $0 = [GmailScope.modify, "openid"] }
+        let regranted = try factory.gmailClient(for: Self.me)
+        #expect(regranted !== writer)
+
         scopes.withLock { $0 = [GmailScope.readonly] }
-        let reader = try factory.gmailClient(for: Self.me)
-        #expect(reader !== writer)
-        #expect(try factory.effectiveMode(for: Self.me) == .readOnly)
-        await #expect(throws: GmailError.transport(.blockedBySafeMode("POST /gmail/v1/users/me/threads/t1/trash"))) {
-            _ = try await reader.trashThread(id: "t1")
-        }
+        #expect(throws: GmailError.reauthRequired) { _ = try factory.gmailClient(for: Self.me) }
         #expect(wire.requests.count == 1)
 
         scopes.withLock { $0 = nil }
         #expect(throws: GmailError.reauthRequired) { _ = try factory.client(for: Self.me) }
-        scopes.withLock { $0 = [GmailScope.readonly] }
-        #expect(try factory.gmailClient(for: Self.me) !== reader, "nothing was kept across the failure")
+        scopes.withLock { $0 = [GmailScope.modify, "openid"] }
+        #expect(try factory.gmailClient(for: Self.me) !== regranted, "nothing was kept across the failure")
     }
 }

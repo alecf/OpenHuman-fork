@@ -19,7 +19,7 @@ import Testing
 
 @Test(.timeLimit(.minutes(2))) func presetsPlaceTheirThreadsAndNothingElse() throws {
     let store = try MailStore.openInMemoryForTesting()
-    let account = try store.addAccount(email: "presets@example.com", displayName: nil, scopes: ["gmail.readonly"])
+    let account = try store.addAccount(email: "presets@example.com", displayName: nil, scopes: ["gmail.modify"])
     for split in try store.splits(account: account) where split.name == "Calendar" { try store.deleteSplit(split.id) }
     try store.upsertLabels(FixtureStoreSeeder.systemLabels, account: account, removeMissing: false)
     let rows: [(String, String, [String], Bool, String?)] = [

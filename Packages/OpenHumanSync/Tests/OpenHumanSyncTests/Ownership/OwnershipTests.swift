@@ -175,7 +175,7 @@ import Testing
                                                      changeNotificationName: "dev.openhuman.test.\(UUID().uuidString)"))
         let b = MailEngine(store: storeB, gmailFactory: h.factory, tokenStore: nil, oauthClient: nil,
                            configuration: EngineConfiguration(role: .app, appVersion: "0.0.0-test", gmail: engineGmailConfig,
-                                                              clock: late, schedulers: [], safeMode: .normal),
+                                                              clock: late, schedulers: []),
                            systemEvents: nil)
         await b.start()
         try await h.waitForSyncs(b)

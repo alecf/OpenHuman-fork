@@ -51,13 +51,9 @@ public final class BlockedSettingsModel {
         for task in tasks { task.cancel() }
     }
 
-    public var canEdit: Bool { center != nil && availability.safeMode.allowsMailChanges }
+    public var canEdit: Bool { center != nil }
 
-    public var editNote: String? {
-        if center == nil { return "Blocking isn't available here." }
-        if !availability.safeMode.allowsMailChanges { return "Read-only: blocking is off, because it changes how new mail is filed. The list still shows." }
-        return nil
-    }
+    public var editNote: String? { center == nil ? "Blocking isn't available here." : nil }
 
     public var visibleRules: [BlockRule] { BlockRuleList.filtered(rules, query: query) }
 

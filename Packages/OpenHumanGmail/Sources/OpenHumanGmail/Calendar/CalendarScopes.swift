@@ -18,13 +18,6 @@ public enum CalendarScopes {
 
     public static let all: Set<String> = Set(request.write + request.read)
 
-    public static func requested(for mode: SafeMode) -> [String] {
-        switch mode {
-        case .normal: return request.write
-        case .readOnly, .writeAllowlist: return request.read
-        }
-    }
-
     public static func beyondPinned(granted: [String], pinned: [String]) -> String? {
         let extra = Set(granted).subtracting(pinned).subtracting(tolerated(beyond: pinned)).sorted()
         return extra.isEmpty ? nil : extra.joined(separator: " ")
@@ -56,8 +49,8 @@ public enum CalendarScopes {
         return readsEvents && granted.contains(CalendarScope.freebusy) && onlyOurs
     }
 
-    public static func allowsWrites(mode: SafeMode, granted: [String]) -> Bool {
-        mode == .normal && granted.contains(CalendarScope.events) && isUsable(granted)
+    public static func allowsWrites(granted: [String]) -> Bool {
+        granted.contains(CalendarScope.events) && isUsable(granted)
     }
 
     static func isMailScope(_ scope: String) -> Bool {

@@ -403,17 +403,6 @@ import Testing
         await untilObserved { f.rows.contains { $0.id == thread } }
     }
 
-    @Test func readOnlyRefusesUnsubscribeAtOnceWithoutAWindow() async throws {
-        let f = ActionFixture(options: .init(safeMode: .readOnly))
-        let (handler, window) = try heldWindow(f)
-        defer { window.release() }
-        _ = try await letters(f)
-        let request = ActionRequest(id: .unsubscribe, context: f.router.actionContext(), source: .keyboard, host: f.router)
-        if case .started(let task) = handler.perform(request) { await task.value }
-        #expect(f.toastMessages == [StatusModel.blockedText])
-        #expect(handler.heldUnsubscribeCount == 0 && f.store.unsubscribeRequests.isEmpty)
-    }
-
     @Test func aFailedWriteReopensTheConversationTheReaderMovedOffFrom() async throws {
         let f = ActionFixture()
         await untilObserved { f.router.list?.state == .loaded && f.rows.count == 10 }
@@ -431,15 +420,19 @@ import Testing
         await untilObserved { f.rows.contains { $0.id == rows[3] } }
     }
 
-    @Test func unsubscribeChoicesAreRefusedInReadOnly() async throws {
-        let f = ActionFixture(corpus: .rich(threadCount: 60, now: fixedNow), options: .init(safeMode: .readOnly))
-        await f.loaded()
-        _ = try await newsletter(f, index: 5)
-        #expect(!f.registry.availability(.unsubscribeAndDone, host: f.router).isEnabled)
-        _ = await f.run(.unsubscribeAndDone)
-        _ = await f.run(.unsubscribeAndTrash)
-        #expect(f.store.unsubscribeRequests.isEmpty)
-        #expect(f.router.list?.rows.isEmpty == false)
+    @Test func anArchiveTheWritePortRefusesComesBackWithARetryAndNoUndoEntry() async throws {
+        let f = ActionFixture()
+        await untilObserved { f.router.list?.state == .loaded && f.rows.count == 10 }
+        let target = try #require(f.router.list?.cursor)
+        f.store.failNextCommand(.unavailable("Gmail can't be reached"))
+        #expect(await f.run(.markDone))
+        let message = "Couldn't mark 1 conversation done"
+        let toast = try #require(f.env.notices.toasts.first { $0.message == message })
+        #expect(toast.style == .error && toast.actionTitle == "Retry")
+        #expect(f.env.undo?.stack.isEmpty == true, "nothing to undo for a change that didn't happen")
+        #expect(f.router.list?.optimisticKeys.isEmpty == true)
+        #expect(f.store.pendingOperationCount == 0)
+        await untilObserved { f.rows.contains { $0.id == target } }
     }
 
     @Test func cleanupOfferTrashesEverythingFromTheSenderWithOneUndoEntry() async throws {
@@ -547,35 +540,12 @@ import Testing
         #expect(f.store.unsubscribeRequests.isEmpty, "Mail itself fetched and sent nothing")
     }
 
-    @Test func unsubscribeNeedsAnOpenConversationAndNormalMode() async throws {
+    @Test func unsubscribeNeedsAnOpenConversation() async throws {
         let f = ActionFixture(corpus: .rich(threadCount: 60, now: fixedNow))
         await f.loaded()
         #expect(f.registry.availability(.unsubscribe, host: f.router) == .disabled(.other("Open the conversation first")))
-        let allowlist = ActionFixture(corpus: .rich(threadCount: 60, now: fixedNow), options: .init(safeMode: .writeAllowlist))
-        await allowlist.loaded()
-        _ = try await newsletter(allowlist, index: 5)
-        #expect(allowlist.registry.availability(.unsubscribe, host: allowlist.router) == .disabled(.safeMode))
-        #expect(allowlist.registry.availability(.markDone, host: allowlist.router) == .enabled)
-    }
-
-    @Test func readOnlyRefusesEveryChangeBeforeThePort() async throws {
-        let f = ActionFixture(options: .init(safeMode: .readOnly))
-        await f.loaded(10)
-        let writes: [ActionID] = [.markDone, .trash, .spam, .toggleStar, .toggleRead, .label, .move, .snooze, .remind,
-                                  .alwaysImportantSender, .neverImportant, .undo]
-        for id in writes {
-            #expect(f.registry.availability(id, host: f.router) == .disabled(.safeMode), "\(id)")
-            #expect(await f.run(id), "\(id): consumed and refused out loud")
-        }
-        #expect(f.store.pendingOperationCount == 0)
-        #expect(f.presenter.shown.isEmpty, "no picker opens for a refused write")
-        #expect(f.toastMessages == ["Read-only: Mail can't change your mail"], "a repeat replaces the toast")
-        #expect(f.env.status.blockedNotice == StatusModel.blockedText)
-        #expect(await f.run(.nextThread), "moving around still works")
-        #expect(await f.run(.explainPlacement), "explaining only reads")
-        let key = try #require(f.router.list?.cursor)
-        #expect(f.registry.threadActions?.snooze([key], until: fixedNow.addingTimeInterval(86_400), host: f.router) == nil)
-        #expect(f.store.pendingOperationCount == 0)
+        _ = try await newsletter(f, index: 5)
+        #expect(f.registry.availability(.unsubscribe, host: f.router).isEnabled)
     }
 }
 

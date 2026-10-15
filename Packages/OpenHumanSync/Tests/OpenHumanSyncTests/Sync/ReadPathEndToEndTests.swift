@@ -7,7 +7,7 @@ import Testing
 @testable import OpenHumanSync
 
 @Suite struct ReadPathEndToEndTests {
-    @Test(.timeLimit(.minutes(1))) func syncListOpenAndBodyInReadOnlySendOnlyGETs() async throws {
+    @Test(.timeLimit(.minutes(1))) func syncListOpenAndBodySendOnlyGETs() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("oh-readpath-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: .test,
@@ -25,13 +25,13 @@ import Testing
         }
         let wire = FakeGmailTransport(gmail)
         let metrics = SyncMetricsCollector()
-        let factory = DefaultGmailClientFactory(safeMode: .readOnly, apiTransport: wire,
+        let factory = DefaultGmailClientFactory(apiTransport: wire,
                                                 config: GmailClientConfig(userAgent: "OpenHumanMail/test"),
                                                 clock: SystemClock(), metrics: { _ in metrics }) { _ in
-            (StaticTokenProvider(), [GmailScope.readonly])
+            (StaticTokenProvider(), [GmailScope.modify])
         }
         let api = try factory.client(for: "me@example.com")
-        let account = try store.addAccount(email: "me@example.com", displayName: nil, scopes: [GmailScope.readonly])
+        let account = try store.addAccount(email: "me@example.com", displayName: nil, scopes: [GmailScope.modify])
         let syncer = AccountSyncer(account: account, store: store, api: api, clock: SystemClock(), metrics: metrics)
         let loop = SyncLoop(syncer: syncer, store: store, clock: SystemClock(), interval: .seconds(3600))
         await loop.start()
@@ -70,11 +70,6 @@ import Testing
 
         #expect(!wire.requests.isEmpty)
         #expect(wire.nonGETRequests.isEmpty)
-        let count = wire.requests.count
-        await #expect(throws: GmailError.transport(.blockedBySafeMode("POST /gmail/v1/users/me/messages/batchModify"))) {
-            try await api.batchModifyMessages(ids: [last.gmailMessageID.rawValue], add: [], remove: ["INBOX"])
-        }
-        #expect(wire.requests.count == count)
         #expect(await gmail.labelIDs(ofMessage: last.gmailMessageID.rawValue)?.contains("INBOX") == true)
     }
 }

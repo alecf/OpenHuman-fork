@@ -26,8 +26,7 @@ public final class AppEnvironment {
     public let aiConnections: (any AIConnectionsPort)?
     public let secrets: (any SecretStoring)?
     public let onboardingProgress: any OnboardingProgressStoring
-    public let writeMode: WriteModeSession?
-    public let writeModeSwitch: (any WriteModeSwitching)?
+    public let isLiveAccount: Bool
     public let calendar: (any CalendarProviding)?
     public let calendarConnection: (any CalendarConnecting)?
     public let calendarConnections: (any CalendarConnectionsProviding)?
@@ -43,8 +42,7 @@ public final class AppEnvironment {
                 systemPreferences: SystemPreferences? = nil, draftsDirectory: URL? = nil,
                 aiOnboarding: (any AIOnboardingPort)? = nil, aiConnections: (any AIConnectionsPort)? = nil,
                 secrets: (any SecretStoring)? = nil, onboardingProgress: (any OnboardingProgressStoring)? = nil,
-                ai: AICenter? = nil, writeMode: WriteModeSession? = nil, calendar: (any CalendarProviding)? = nil,
-                writeModeSwitch: (any WriteModeSwitching)? = nil,
+                ai: AICenter? = nil, isLiveAccount: Bool = false, calendar: (any CalendarProviding)? = nil,
                 calendarConnection: (any CalendarConnecting)? = nil, keymapStore: (any KeymapStoring)? = nil,
                 calendarConnections: (any CalendarConnectionsProviding)? = nil,
                 autoLabelStore: (any AutoLabelStoring)? = nil,
@@ -57,13 +55,12 @@ public final class AppEnvironment {
         self.calendarConnections = calendarConnections
         self.autoLabelStore = autoLabelStore
         self.keymapStore = keymapStore ?? (isFake ? InMemoryKeymapStore() : UserDefaultsKeymapStore())
-        self.writeMode = writeMode
+        self.isLiveAccount = isLiveAccount
         var routed: (any CalendarProviding)?
         if let connections = calendarConnections, connections.routesByAccount {
             routed = RoutedCalendarProvider(connections: connections)
         }
         self.calendar = calendar ?? routed
-        self.writeModeSwitch = writeModeSwitch
         self.calendarConnection = calendarConnection
         self.aiOnboarding = aiOnboarding
         self.aiConnections = aiConnections
@@ -77,7 +74,7 @@ public final class AppEnvironment {
         self.renderQueue = RenderQueue(settings: settings)
         self.theme = theme
         self.isFake = isFake
-        self.status = StatusModel(data: data, isWriteMode: writeMode != nil, settings: settings)
+        self.status = StatusModel(data: data, settings: settings)
         let notices = notices ?? NoticeCenter()
         notices.timing = ToastTiming(theme: theme)
         self.notices = notices

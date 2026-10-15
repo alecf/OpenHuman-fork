@@ -157,7 +157,7 @@ public final class SettingsTransferModel {
         let byEmail = Dictionary(accounts.map { ($0.email.lowercased(), $0) }, uniquingKeysWith: { first, _ in first })
         var preview = SettingsImportPreview()
         preview.storedItemsNote = availability.storedItemsNote
-        let canStore = availability.canEditStoredItems
+        let canStore = availability.hasCommands
         if availability.canEditSettings {
             preview.settingsSkipped = skipped
             preview.settingsToApply += [bundle.global.undoSendSeconds != nil, bundle.global.snoozeMarkUnread != nil,
@@ -241,7 +241,7 @@ public final class SettingsTransferModel {
                     }
                 }
             }
-            guard let commands, availability.canEditStoredItems else { continue }
+            guard let commands, availability.hasCommands else { continue }
             let existing = (try? await first(data.splits(id))) ?? []
             for split in entry.splits {
                 let match = existing.first { $0.name.caseInsensitiveCompare(split.name) == .orderedSame }
@@ -251,7 +251,7 @@ public final class SettingsTransferModel {
                 }
             }
         }
-        if let commands, availability.canEditStoredItems {
+        if let commands, availability.hasCommands {
             let existing = (try? await first(data.snippets(nil))) ?? []
             for snippet in bundle.snippets {
                 let owner = snippet.accountEmail.flatMap { byEmail[$0.lowercased()]?.id }

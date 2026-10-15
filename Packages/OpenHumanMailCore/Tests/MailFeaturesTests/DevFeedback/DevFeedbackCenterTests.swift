@@ -11,7 +11,6 @@ final class FakeDevFeedbackHost: DevFeedbackHost {
     var appInfo = DevFeedbackSnapshot.AppInfo(version: "0.1.0", build: "1", gitCommit: "abc1234", configuration: "Debug",
                                               dataMode: "fake", devFeedbackEnabledBy: "debugBuild", os: "macOS 27")
     var screenName = "mail"
-    var safeMode: SafeModeInfo?
     var theme: DevFeedbackSnapshot.ThemeInfo? = .init(themeID: "openhuman.light", appearance: "light", mode: "system", accentID: "blue")
     var extraDenylist: [String] = []
     var screenshot: Data? = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
@@ -89,7 +88,6 @@ func contentStrings(_ corpus: FakeCorpus) -> [String] {
         #expect(snapshot.capturedAtLocal == "2026-10-03T06:00:00+02:00")
         #expect(snapshot.screen == "mail")
         #expect(snapshot.route == "mail/reader/inbox")
-        #expect(snapshot.safeMode == "normal")
         #expect(snapshot.list?.rows == 30)
         #expect(snapshot.list?.cursorIndex == 2)
         #expect(snapshot.reader?.threadID == corpus.threads[2].row.id.gmailThreadID.rawValue)
@@ -160,13 +158,13 @@ func contentStrings(_ corpus: FakeCorpus) -> [String] {
     @Test func submitWritesOneBundleWithNewAnswersAndTheCommands() async throws {
         defer { try? FileManager.default.removeItem(at: support) }
         let items = [DevChecklistItem(id: "inbox.jk", area: "Inbox", title: "j and k", steps: ["Press j"], expected: "Moves", requires: .fake),
-                     DevChecklistItem(id: "safe.banner", area: "Safe mode", title: "Banner", steps: ["Look"], expected: "Shown", requires: .realReadOnly)]
+                     DevChecklistItem(id: "status.sync", area: "Status", title: "Sync line", steps: ["Look"], expected: "Shown", requires: .real)]
         let center = try makeCenter(checklist: items)
         center.settings.taildropTarget = "mac-mini"
         _ = await openWindow(center)
         center.checklist.record(.worked, for: "inbox.jk")
-        center.checklist.record(.didNotWork, for: "safe.banner")
-        center.checklist.setNote("No banner under -UseFakeData", for: "safe.banner")
+        center.checklist.record(.didNotWork, for: "status.sync")
+        center.checklist.setNote("No sync line under -UseFakeData", for: "status.sync")
 
         let model = center.beginFeedback()
         #expect(model.pendingAnswerCount == 2)
@@ -191,9 +189,9 @@ func contentStrings(_ corpus: FakeCorpus) -> [String] {
         #expect(bundle.category == .bug)
         #expect(bundle.text == "The cursor jumped")
         #expect(bundle.screenshotFile == URL(fileURLWithPath: saved.screenshotPath ?? "").lastPathComponent)
-        #expect(bundle.checklist.answers.map(\.itemID) == ["inbox.jk", "safe.banner"])
+        #expect(bundle.checklist.answers.map(\.itemID) == ["inbox.jk", "status.sync"])
         #expect(bundle.checklist.answers.map(\.result) == ["worked", "didNotWork"])
-        #expect(bundle.checklist.answers[1].note == "No banner under -UseFakeData")
+        #expect(bundle.checklist.answers[1].note == "No sync line under -UseFakeData")
         let attributes = try FileManager.default.attributesOfItem(atPath: saved.bundlePath)
         #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600)
 
@@ -252,11 +250,9 @@ func contentStrings(_ corpus: FakeCorpus) -> [String] {
         defer { try? FileManager.default.removeItem(at: support) }
         let center = try makeCenter()
         host.screenName = "signIn/ready"
-        host.safeMode = .readOnly
         let snapshot = await center.snapshot()
         #expect(snapshot.screen == "signIn/ready")
         #expect(snapshot.route == "signIn/ready")
-        #expect(snapshot.safeMode == "readOnly")
         #expect(snapshot.list == nil && snapshot.reader == nil)
     }
 }

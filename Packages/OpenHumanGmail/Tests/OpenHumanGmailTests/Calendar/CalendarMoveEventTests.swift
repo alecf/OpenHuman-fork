@@ -21,26 +21,22 @@ private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
                     body: try! JSONSerialization.data(withJSONObject: body))
     }
 
-    private func guardFor(_ mode: SafeMode, scopes: [String]? = nil) -> CalendarGuardTransport {
-        CalendarGuardTransport(wrapping: ScriptedTransport(), calendarID: Self.me, mode: mode,
-                               grantedScopes: scopes ?? CalendarScopes.requested(for: mode))
+    private func guardFor(_ scopes: [String] = CalendarScopes.request.write) -> CalendarGuardTransport {
+        CalendarGuardTransport(wrapping: ScriptedTransport(), calendarID: Self.me, grantedScopes: scopes)
     }
 
     private let times: [String: Any] = ["start": ["dateTime": "2026-10-13T15:00:00-07:00"],
                                         "end": ["dateTime": "2026-10-13T15:30:00-07:00"]]
 
-    @Test func aTimeOnlyPatchPassesOnlyInWriteModeWithCalendarEvents() {
+    @Test func aTimeOnlyPatchPassesOnlyWithCalendarEvents() {
         let move = patch(Self.event + "?sendUpdates=all", times)
-        #expect(guardFor(.normal).refusalReason(for: move) == nil)
-        #expect(guardFor(.readOnly).refusalReason(for: move) != nil, "read-only never moves a meeting")
-        #expect(guardFor(.writeAllowlist).refusalReason(for: move) != nil, "test-writes never moves a meeting")
-        #expect(guardFor(.readOnly, scopes: CalendarScopes.requested(for: .normal)).refusalReason(for: move) != nil)
-        #expect(guardFor(.normal, scopes: CalendarScopes.requested(for: .readOnly)).refusalReason(for: move) != nil,
-                "a read-only grant in a write-mode run")
+        #expect(guardFor().refusalReason(for: move) == nil)
+        #expect(guardFor(CalendarScopes.request.read).refusalReason(for: move) == "moving events needs calendar.events",
+                "a read grant never moves a meeting")
     }
 
     @Test func anyOtherPatchIsRefused() {
-        let calendar = guardFor(.normal)
+        let calendar = guardFor()
         var withTitle = times
         withTitle["summary"] = "x"
         var withAttendees = times
@@ -71,8 +67,8 @@ private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
                                "start": ["dateTime": "2026-10-13T15:00:00-07:00"],
                                "end": ["dateTime": "2026-10-13T15:30:00-07:00"], "organizer": ["self": true]])
         }
-        let client = GoogleCalendarClient(calendarID: Self.me, mode: .normal,
-                                          grantedScopes: CalendarScopes.requested(for: .normal),
+        let client = GoogleCalendarClient(calendarID: Self.me,
+                                          grantedScopes: CalendarScopes.request.write,
                                           tokens: StaticTokenProvider(token: "synthetic-cal-access"), transport: http,
                                           clock: InstantClock(), timeZone: zone)
         let moved = try await client.moveEvent(id: "ev1", start: at(13, 15), end: at(13, 15, 30),
@@ -93,10 +89,10 @@ private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
                 "the undo puts the old start back")
     }
 
-    @Test func readOnlyNeverSendsAMove() async {
+    @Test func aReadGrantNeverSendsAMove() async {
         let http = FakeHTTPTransport()
-        let client = GoogleCalendarClient(calendarID: Self.me, mode: .readOnly,
-                                          grantedScopes: CalendarScopes.requested(for: .readOnly),
+        let client = GoogleCalendarClient(calendarID: Self.me,
+                                          grantedScopes: CalendarScopes.request.read,
                                           tokens: StaticTokenProvider(token: "synthetic-cal-access"), transport: http,
                                           clock: InstantClock(), timeZone: zone)
         await #expect(throws: GoogleCalendarError.self) {

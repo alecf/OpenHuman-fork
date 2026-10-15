@@ -32,12 +32,11 @@ struct SystemPlatformTests {
         #expect(SystemNotificationCenter.trigger(for: nil) == nil)
     }
 
-    @Test func threeCategoriesNewMailOffersMarkDoneSnoozeAndRemindIfNoReplyButNeverReply() {
+    @Test func twoCategoriesNewMailOffersMarkDoneSnoozeAndRemindIfNoReplyButNeverReply() {
         let categories = Dictionary(uniqueKeysWithValues: SystemNotificationCenter.categories().map { ($0.identifier, $0) })
         #expect(categories["newMail"]?.actions.map(\.title) == ["Mark done", "Snooze", "Remind if no reply"])
         #expect(categories["reminder"]?.actions.map(\.title) == ["Mark done", "Snooze"])
-        #expect(categories["readOnly"]?.actions.isEmpty == true)
-        #expect(categories.count == 3, "no reply, no send action")
+        #expect(categories.count == 2, "no reply, no send action")
         let titles = categories.values.flatMap(\.actions).map { $0.title.lowercased() }
         #expect(!titles.contains { $0.contains("reply") && !$0.contains("no reply") } && !titles.contains { $0.contains("send") })
         #expect(categories.values.flatMap(\.actions).allSatisfy { $0.options.isEmpty })

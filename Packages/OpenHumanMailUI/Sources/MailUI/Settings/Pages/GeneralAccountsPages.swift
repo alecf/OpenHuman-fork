@@ -10,7 +10,6 @@ struct GeneralSettingsPage: View {
     @State private var model: GeneralSettingsModel
     @State private var menuBar: MenuBarSettingsModel
     @State private var savedSearches: SavedSearchesModel
-    @State private var writeMode: WriteModeSettingModel?
     @State private var writing: ComposeTextSettings
     let modules: [FeatureModuleID]
     let extras: () -> AnyView
@@ -28,7 +27,6 @@ struct GeneralSettingsPage: View {
         _model = State(initialValue: GeneralSettingsModel(environment: environment))
         _menuBar = State(initialValue: MenuBarSettingsModel(system: environment.system))
         _savedSearches = State(initialValue: SavedSearchesModel(settings: environment.settings))
-        _writeMode = State(initialValue: environment.writeModeSwitch.map { WriteModeSettingModel(port: $0) })
         _writing = State(initialValue: environment.composeText)
         modules = environment.modules.modules
         self.extras = extras
@@ -39,13 +37,6 @@ struct GeneralSettingsPage: View {
 
     var body: some View {
         SettingsPageScaffold(title: "General") {
-            if let writeMode, writeMode.isShown {
-                SettingsSection(WriteModeSettingModel.sectionTitle) {
-                    SettingsRow(WriteModeSettingModel.title, detail: WriteModeSettingModel.detail, status: writeMode.status,
-                                isOn: Binding(get: { writeMode.isOn }, set: { writeMode.request($0) }))
-                }
-                SettingsErrorLine(text: writeMode.errorMessage)
-            }
             SettingsSection("Sending") {
                 SettingsRow("Undo send", detail: "How long a sent message can still be taken back.",
                             selection: binding(model.undoSend)) {
@@ -56,7 +47,7 @@ struct GeneralSettingsPage: View {
                           detail: "A sent reply, reply all or forward marks its conversation done and takes you back to the list; Undo puts it back.")
                 switchRow("Include signature on replies and forwards", model.signatureOnReplies,
                           detail: GeneralSettingsModel.signatureOnRepliesNote)
-                if model.showsWriteModeSending {
+                if model.showsConfirmBeforeSending {
                     switchRow(GeneralSettingsModel.confirmBeforeSendingTitle, model.confirmEverySend,
                               detail: GeneralSettingsModel.confirmEverySendNote)
                 }
@@ -173,9 +164,6 @@ struct GeneralSettingsPage: View {
             model.start()
             savedSearches.follow(savedSearchAccount)
         }
-        .sheet(isPresented: Binding(get: { writeMode?.isConfirming == true }, set: { if !$0 { writeMode?.cancel() } })) {
-            if let writeMode { WriteModeConfirmationSheet(model: writeMode) }
-        }
     }
 
     private func binding<Value>(_ setting: StoredSetting<Value>) -> Binding<Value> {
@@ -185,37 +173,6 @@ struct GeneralSettingsPage: View {
     private func switchRow(_ title: String, _ setting: StoredSetting<Bool>, detail: String? = nil) -> some View {
         SettingsRow(title, detail: detail, isOn: binding(setting))
             .disabled(!model.availability.canEditSettings)
-    }
-}
-
-struct WriteModeConfirmationSheet: View {
-    let model: WriteModeSettingModel
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: theme.space4) {
-            Text(WriteModeSettingModel.sheetTitle).themeFont(theme.typeHeadline).foregroundStyle(theme.textPrimary.color)
-                .accessibilityAddTraits(.isHeader)
-            VStack(alignment: .leading, spacing: theme.space3) {
-                ForEach(WriteModeSettingModel.sheetPoints, id: \.self) { point in
-                    HStack(alignment: .firstTextBaseline, spacing: theme.space2) {
-                        Text("•").accessibilityHidden(true)
-                        Text(point).fixedSize(horizontal: false, vertical: true)
-                    }
-                    .themeFont(theme.typeBody).foregroundStyle(theme.textPrimary.color)
-                    .accessibilityElement(children: .combine)
-                }
-            }
-            HStack(spacing: theme.space3) {
-                Spacer()
-                Button(WriteModeSettingModel.cancelTitle, role: .cancel) { model.cancel() }
-                    .keyboardShortcut(.cancelAction)
-                Button(WriteModeSettingModel.confirmTitle) { model.confirm() }
-            }
-        }
-        .padding(theme.space6)
-        .frame(width: 440)
-        .background(theme.bgWindow.color)
     }
 }
 
@@ -384,10 +341,8 @@ struct AccountsSettingsPage: View {
     }
 
     private var addAccountNote: String {
-        !model.availability.hasAccounts ? "Adding another account isn't available yet."
-            : model.availability.safeMode == .readOnly
-            ? "New accounts are asked for read-only access, like the first one."
-            : "A new account is asked for the same access as the first one."
+        model.availability.hasAccounts ? "A new account is asked for the same access as the first one."
+            : "Adding another account isn't available yet."
     }
 
     private func accountSection(_ row: AccountsSettingsModel.Row) -> some View {

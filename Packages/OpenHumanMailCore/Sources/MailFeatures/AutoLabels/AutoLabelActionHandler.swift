@@ -29,8 +29,6 @@ public final class AutoLabelActionHandler: ActionHandler {
                 if try await center.markWrong(thread, row: row, labels: labels) == nil {
                     feedback.failed("This conversation has no auto label")
                 }
-            } catch MailPortError.blockedBySafeMode {
-                feedback.refuse(.autoLabelWrong, .safeMode)
             } catch {
                 feedback.failed("Couldn't take the label off")
             }

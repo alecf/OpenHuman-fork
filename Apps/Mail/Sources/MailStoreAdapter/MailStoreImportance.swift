@@ -5,20 +5,16 @@ import OpenHumanStore
 
 public final class MailStoreImportance: ImportanceRulesPort, Sendable {
     private let store: any ImportanceRulesStoring
-    private let allowsChanges: Bool
 
-    public init(store: any ImportanceRulesStoring, safeMode: SafeModeInfo) {
+    public init(store: any ImportanceRulesStoring) {
         self.store = store
-        self.allowsChanges = safeMode != .readOnly
     }
 
     public func apply(_ change: ImportanceChange) async throws -> UndoToken {
-        guard allowsChanges else { throw MailPortError.blockedBySafeMode }
         return try Self.token(Self.mapping { try store.addImportanceRule(Self.definition(change, store: store)) })
     }
 
     public func update(_ id: String, to change: ImportanceChange) async throws -> UndoToken {
-        guard allowsChanges else { throw MailPortError.blockedBySafeMode }
         guard let raw = Int64(id) else { throw MailPortError.notFound("rule") }
         let ruleID = ImportanceRuleID(rawValue: raw)
         return try Self.token(Self.mapping {
@@ -32,13 +28,11 @@ public final class MailStoreImportance: ImportanceRulesPort, Sendable {
     }
 
     public func delete(_ ids: [String]) async throws -> UndoToken {
-        guard allowsChanges else { throw MailPortError.blockedBySafeMode }
         let ruleIDs = ids.compactMap { Int64($0) }.map { ImportanceRuleID(rawValue: $0) }
         return try Self.token(Self.mapping { try store.deleteImportanceRules(ruleIDs) })
     }
 
     public func undo(_ token: UndoToken) async throws -> UndoToken? {
-        guard allowsChanges else { throw MailPortError.blockedBySafeMode }
         let receipt: ImportanceRuleReceipt
         do { receipt = try JSONDecoder().decode(ImportanceRuleReceipt.self, from: token.payload) } catch {
             throw MailPortError.conflict("not an importance receipt")

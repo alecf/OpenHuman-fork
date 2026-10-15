@@ -153,18 +153,6 @@ struct MenuBarItemTests {
         #expect(f.env.undo?.nextUndo == nil, "nothing was sent or changed")
     }
 
-    @Test func aNewMessageFromTheMenuBarOpensInReadOnlySafeModeAndTheCountStillShows() async throws {
-        let f = SystemFixture(options: .init(remoteAck: .immediate, safeMode: .readOnly),
-                              flags: FeatureFlags().with(.menuBarExtra, true))
-        await ready(f)
-        let model = try #require(f.env.system.menuBar)
-        await eventually(timeout: .seconds(15)) { model.total > 0 }
-        await eventually(timeout: .seconds(15)) { f.menuBar.count == DockBadgeModel.text(for: model.total) }
-        f.menuBar.choose(.compose)
-        #expect(f.env.composeIfStarted?.sessions.count == 1)
-        #expect(f.env.undo?.nextUndo == nil)
-    }
-
     @Test func theMenuTitlesComeFromTheCatalog() {
         #expect(MenuBarModel.title(.openMail) == "Open Mail")
         #expect(MenuBarModel.title(.compose) == ActionCatalog.descriptor(.compose)?.title)

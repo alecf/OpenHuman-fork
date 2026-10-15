@@ -29,15 +29,6 @@ struct PrivacySettingsTests {
         #expect(try await f.store.get(AppSettings.remoteImageSenders(f.work)) == ["news@example.com"])
         #expect(PrivacySettingsModel.normalizedSender("@x") == nil && PrivacySettingsModel.normalizedSender("a@b") == nil)
     }
-
-    @Test func privacyChoicesStillWorkInReadOnlySafeMode() async throws {
-        let f = SettingsFixture(safeMode: .readOnly)
-        let model = PrivacySettingsModel(environment: f.env)
-        model.start()
-        await eventually { model.policy != nil }
-        await model.setPolicy(.allow)
-        #expect(try await f.store.get(AppSettings.remoteImages(f.work)) == .allow)
-    }
 }
 
 @MainActor
@@ -149,18 +140,18 @@ struct SettingsTransferTests {
         #expect(exported.global.undoSendSeconds == nil)
     }
 
-    @Test func accountsThisMacDoesNotHaveAreSkippedAndReadOnlySkipsStoredItems() async throws {
+    @Test func accountsThisMacDoesNotHaveAreSkippedAndWithoutAWritePortStoredItemsAre() async throws {
         let a = SettingsFixture()
         try await configure(a)
         let file = try await SettingsTransferModel(environment: a.env).export()
-        let readOnly = SettingsFixture(safeMode: .readOnly)
-        let model = SettingsTransferModel(environment: readOnly.env)
+        let noPort = SettingsFixture(writePort: false)
+        let model = SettingsTransferModel(environment: noPort.env)
         let preview = try await model.prepareImport(file)
         #expect(preview.splitsToAdd == 0 && preview.snippetsToAdd == 0 && preview.storedItemsNote != nil)
         #expect(preview.settingsToApply > 0, "local settings still import")
         await model.applyImport()
-        #expect(try await readOnly.store.get(AppSettings.undoSendSeconds) == 30)
-        #expect(try await readOnly.splits(readOnly.work).allSatisfy { $0.name != "Clients" })
+        #expect(try await noPort.store.get(AppSettings.undoSendSeconds) == 30)
+        #expect(try await noPort.splits(noPort.work).allSatisfy { $0.name != "Clients" })
         var json = try #require(String(data: file, encoding: .utf8))
         for account in try await a.accounts() { json = json.replacingOccurrences(of: account.email, with: "someone.else@elsewhere.example") }
         let other = SettingsTransferModel(environment: SettingsFixture().env)

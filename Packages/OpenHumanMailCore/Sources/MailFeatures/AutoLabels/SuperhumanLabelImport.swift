@@ -99,19 +99,13 @@ public final class SuperhumanLabelImportModel {
 
     public var writeBlockedReason: String? {
         guard let environment else { return String(localized: "Mail isn't ready.") }
-        if !environment.status.safeMode.allowsMailChanges {
-            return String(localized: """
-                Read-only: Mail can't change your mailbox in this session. Superhuman's categories show in grey until \
-                you import them in write mode.
-                """)
-        }
         guard environment.commands != nil else { return String(localized: "This copy of Mail can't change labels.") }
         if let forced = options.writesToGmail { return forced ? nil : String(localized: "Mail may not change labels here.") }
         if environment.isFake {
             return String(localized: "Sample data: nothing is written. Superhuman's categories show in grey.")
         }
-        if environment.writeMode == nil {
-            return String(localized: "Turn on write mode to import. Until then Superhuman's categories show in grey.")
+        if !environment.isLiveAccount {
+            return String(localized: "Mail can't change labels in this session. Superhuman's categories show in grey.")
         }
         return nil
     }
@@ -215,9 +209,6 @@ public final class SuperhumanLabelImportModel {
             } else {
                 _ = try await apply(plan, commands: commands, run: run)
             }
-        } catch MailPortError.blockedBySafeMode {
-            phase = .failed(String(localized: "Read-only: Mail can't change your mailbox in this session."))
-            return false
         } catch {
             phase = .failed(String(localized: "Couldn't import. Nothing was changed; try again."))
             return false

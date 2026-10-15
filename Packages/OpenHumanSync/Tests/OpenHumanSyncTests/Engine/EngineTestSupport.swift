@@ -37,7 +37,7 @@ struct EngineHarness {
     let threads: [String]
     let directory: URL?
 
-    init(safeMode: SafeMode = .normal, scopes: [String] = [GmailScope.modify], stack: Bool = false,
+    init(scopes: [String] = [GmailScope.modify], stack: Bool = false,
          onDisk: Bool = false, threads count: Int = 3, clock: TestClock? = nil, gmail: FakeGmail? = nil,
          email: String = "me@example.com") async throws {
         let clock = clock ?? TestClock(now: currentMinute())
@@ -59,8 +59,7 @@ struct EngineHarness {
         if stack {
             let wire = FakeGmailTransport(gmail)
             self.wire = wire
-            factory = DefaultGmailClientFactory(safeMode: safeMode, apiTransport: wire, config: engineGmailConfig,
-                                                clock: clock, storeDirectory: directory) { _ in
+            factory = DefaultGmailClientFactory(apiTransport: wire, config: engineGmailConfig, clock: clock) { _ in
                 (StaticTokenProvider(), scopes)
             }
         } else {
@@ -70,14 +69,14 @@ struct EngineHarness {
         threads = count > 0 ? await gmail.seedInbox(count: count) : []
     }
 
-    func engine(role: EngineRole = .app, safeMode: SafeMode = .normal,
+    func engine(role: EngineRole = .app,
                 schedulers: Set<ScheduleKind> = Set(ScheduleKind.allCases), factory: GmailClientFactory?? = nil,
                 tokenStore: TokenStore? = nil, systemEvents: SystemEventsSource? = nil,
                 store: MailStore? = nil) -> MailEngine {
         MailEngine(store: store ?? self.store, gmailFactory: factory ?? self.factory, tokenStore: tokenStore,
                    oauthClient: nil,
                    configuration: EngineConfiguration(role: role, appVersion: "0.0.0-test", gmail: engineGmailConfig,
-                                                      clock: clock, schedulers: schedulers, safeMode: safeMode),
+                                                      clock: clock, schedulers: schedulers),
                    systemEvents: systemEvents)
     }
 
@@ -246,9 +245,9 @@ final class FakeGoogleSignIn: Sendable {
         }
     }
 
-    func flow(_ mode: SafeMode) -> OAuthFlow {
-        OAuthFlow(client: Self.client, mode: mode, transport: transport, receiver: ImmediateReceiver(),
-                  browser: NoBrowser(), clock: clock)
+    func flow(scopes: [String] = OAuthScopes.mailRequest, browser: any ExternalBrowser = NoBrowser()) -> OAuthFlow {
+        OAuthFlow(client: Self.client, scopes: scopes, transport: transport, receiver: ImmediateReceiver(),
+                  browser: browser, clock: clock)
     }
 }
 
@@ -267,4 +266,10 @@ final class ImmediateReceiver: LoopbackRedirectReceiver {
 
 struct NoBrowser: ExternalBrowser {
     func open(_ url: URL) async throws {}
+}
+
+final class RecordingBrowser: ExternalBrowser {
+    private let log = Mutex<[URL]>([])
+    var opened: [URL] { log.withLock { $0 } }
+    func open(_ url: URL) async throws { log.withLock { $0.append(url) } }
 }

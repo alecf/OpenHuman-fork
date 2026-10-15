@@ -24,7 +24,7 @@ private func onDiskStore() throws -> (MailStore, URL) {
 
 private func isGET(_ request: HTTPRequest) -> Bool { request.method == "GET" }
 
-func isReadOnlyOnTheWire(_ request: HTTPRequest) -> Bool {
+func isReadOnTheWire(_ request: HTTPRequest) -> Bool {
     if request.method == "GET" { return true }
     guard request.method == "POST", request.url.path(percentEncoded: false) == "/batch/gmail/v1",
           let contentType = request.headers["Content-Type"],
@@ -36,50 +36,6 @@ func isReadOnlyOnTheWire(_ request: HTTPRequest) -> Bool {
         guard let first = lines.first(where: { $0.contains(" /gmail/v1/") }) else { return false }
         return first.hasPrefix("GET ")
     }
-}
-
-@Test func realAccountsRunReadOnlyUnlessNormalIsSetExactly() throws {
-    let key = "OPENHUMAN_SAFE_MODE"
-    #expect(try LaunchSafeMode.forRealAccounts(environment: [:]) == .readOnly)
-    #expect(try LaunchSafeMode.forRealAccounts(environment: [key: ""]) == .readOnly)
-    #expect(try LaunchSafeMode.forRealAccounts(environment: [key: "read-only"]) == .readOnly)
-    #expect(try LaunchSafeMode.forRealAccounts(environment: [key: "normal"]) == .normal)
-    #expect(throws: LaunchSafeMode.Refusal.self) { try LaunchSafeMode.forRealAccounts(environment: [key: "write-allowlist"]) }
-    for typo in ["readonly", "READ-ONLY", " read-only", "Normal", "NORMAL", " normal", "normal ", "write_allowlist", "bogus"] {
-        #expect(try LaunchSafeMode.forRealAccounts(environment: [key: typo]) == .readOnly, "\(typo)")
-        #expect(LaunchSafeMode.forFakeGmail(environment: [key: typo]) == .readOnly, "\(typo)")
-    }
-    #expect(LaunchSafeMode.forFakeGmail(environment: [:]) == .readOnly)
-    #expect(LaunchSafeMode.forFakeGmail(environment: [key: "normal"]) == .normal)
-    #expect(LaunchSafeMode.forFakeGmail(environment: [key: "write-allowlist"]) == .writeAllowlist)
-}
-
-@Test func theRefusalSaysWhatToDoInOneWording() {
-    let text = LaunchSafeMode.writeAllowlistRefusal
-    #expect(text == "Test writes (OPENHUMAN_SAFE_MODE=write-allowlist) aren't available in this build. Quit and open Mail "
-        + "without the variable, or with OPENHUMAN_SAFE_MODE=read-only to keep it read-only.")
-    #expect(!text.contains("normal") && !text.contains("WriteGuard") && !text.contains("rung") && !text.contains("author"))
-    do {
-        _ = try LaunchSafeMode.forRealAccounts(environment: ["OPENHUMAN_SAFE_MODE": "write-allowlist"])
-        Issue.record("write-allowlist is refused for a real account")
-    } catch {
-        #expect("\(error)" == text)
-    }
-}
-
-@MainActor
-@Test func aRefusedSafeModeNeverOpensTheStore() throws {
-    let home = FileManager.default.temporaryDirectory.appendingPathComponent("oh-home-\(UUID().uuidString)")
-    let app = CompositionRoot.makeApp(arguments: [], environment: ["OPENHUMAN_SAFE_MODE": "write-allowlist",
-                                                                   "OPENHUMAN_HOME": home.path])
-    guard case .notice(let problem) = app.screen else {
-        Issue.record("expected the refusal notice")
-        return
-    }
-    #expect(problem.title == LaunchSafeMode.refusalTitle && problem.title == "Mail didn't start")
-    #expect(problem.message == LaunchSafeMode.writeAllowlistRefusal && problem.message.contains("read-only"))
-    #expect(problem.details == "OPENHUMAN_SAFE_MODE=write-allowlist", "the value it was given goes behind Details")
-    #expect(!FileManager.default.fileExists(atPath: home.path), "the store directory must not be created")
 }
 
 @Test func connectivityMapsEngineStateSyncStateAndErrors() {
@@ -119,11 +75,9 @@ func isReadOnlyOnTheWire(_ request: HTTPRequest) -> Bool {
     await FakeGmailLaunch.seed(gmail, corpus: corpus)
     let (store, directory) = try onDiskStore()
     defer { try? FileManager.default.removeItem(at: directory) }
-    let running = try FakeGmailLaunch.makeSession(safeMode: .readOnly, store: store, gmail: gmail)
+    let running = try FakeGmailLaunch.makeSession(store: store, gmail: gmail)
     let session = running.session
-    #expect(session.safeMode == .readOnly)
     let environment = session.environment
-    #expect(environment.status.safeMode == .readOnly)
     await session.start()
     defer { Task { await session.stop() } }
 
@@ -154,16 +108,8 @@ func isReadOnlyOnTheWire(_ request: HTTPRequest) -> Bool {
     await eventually("synced status") { status.syncText(now: Date())?.hasPrefix("Synced") == true }
 
     #expect(!running.wire.requests.isEmpty)
-    #expect(running.wire.requests.allSatisfy(isReadOnlyOnTheWire))
-    let writes = running.wire.requests.filter { !isReadOnlyOnTheWire($0) }.count
-    await #expect(throws: GmailError.self) {
-        try await session.api.batchModifyMessages(ids: [message.id.gmailMessageID.rawValue], add: [], remove: ["INBOX"])
-    }
-    let ref = try #require(try store.thread(account: session.account, gmailThreadID: window.rows[index].id.gmailThreadID))
-    await #expect(throws: EngineError.self) { try await session.engine.perform(.archive([ref]), origin: .app) }
+    #expect(running.wire.requests.allSatisfy(isReadOnTheWire), "reading never writes")
     #expect(try store.operations(account: session.account, statuses: [], limit: 10).isEmpty)
-    #expect(running.wire.requests.filter { !isReadOnlyOnTheWire($0) }.count == writes)
-    #expect(running.wire.requests.allSatisfy(isReadOnlyOnTheWire))
 }
 
 private func isContentFetch(_ request: HTTPRequest) -> Bool {
@@ -179,7 +125,7 @@ private func isContentFetch(_ request: HTTPRequest) -> Bool {
     let (store, directory) = try onDiskStore()
     defer { try? FileManager.default.removeItem(at: directory) }
 
-    let first = try FakeGmailLaunch.makeSession(safeMode: .readOnly, store: store, gmail: gmail)
+    let first = try FakeGmailLaunch.makeSession(store: store, gmail: gmail)
     let lines = first.session.environment.data.syncProgress()
     let seen = Task { () -> [String] in
         var all: [String] = []
@@ -198,9 +144,9 @@ private func isContentFetch(_ request: HTTPRequest) -> Bool {
     #expect(!(await seen.value).isEmpty, "the status area's stream carried the backfill line")
     #expect(try store.threadPage(view: .system(first.session.account, .inbox), after: nil, limit: 100).items.count == 60)
     #expect(first.wire.requests.contains(where: isContentFetch))
-    #expect(first.wire.requests.allSatisfy(isReadOnlyOnTheWire))
+    #expect(first.wire.requests.allSatisfy(isReadOnTheWire))
 
-    let second = try FakeGmailLaunch.makeSession(safeMode: .readOnly, store: store, gmail: gmail)
+    let second = try FakeGmailLaunch.makeSession(store: store, gmail: gmail)
     #expect(second.session.account == first.session.account)
     await second.session.start()
     await eventually("second launch ran", timeout: .seconds(60)) {
@@ -209,7 +155,7 @@ private func isContentFetch(_ request: HTTPRequest) -> Bool {
     }
     await second.session.stop()
     #expect(second.wire.requests.filter(isContentFetch).isEmpty)
-    #expect(second.wire.requests.allSatisfy(isReadOnlyOnTheWire))
+    #expect(second.wire.requests.allSatisfy(isReadOnTheWire))
     #expect(try store.threadPage(view: .system(second.session.account, .inbox), after: nil, limit: 100).items.count == 60)
 }
 
@@ -218,7 +164,7 @@ private func isContentFetch(_ request: HTTPRequest) -> Bool {
     let account = AccountID(1)
     func model(_ state: ConnectivityState, _ line: String) throws -> StatusModel {
         let source = MailStoreAdapter(
-            store: try MailStore.openInMemoryForTesting(), safeMode: .readOnly,
+            store: try MailStore.openInMemoryForTesting(),
             connectivity: { AsyncStream { $0.yield([account: state]); $0.finish() } },
             syncProgress: { AsyncStream { $0.yield([account: line]); $0.finish() } })
         return StatusModel(data: source)
@@ -227,7 +173,6 @@ private func isContentFetch(_ request: HTTPRequest) -> Bool {
     let followHealthy = Task { await healthy.run() }
     defer { followHealthy.cancel() }
     await eventually("progress line") { healthy.syncText(now: now) == "Syncing 1,240 of 4,707" }
-    #expect(healthy.safeModeText == "Read-only")
     let offline = try model(.offline(since: nil), "Syncing 1 of 2")
     let followOffline = Task { await offline.run() }
     defer { followOffline.cancel() }
@@ -239,8 +184,7 @@ private func isContentFetch(_ request: HTTPRequest) -> Bool {
     let corpus = FakeCorpus.make(threadCount: 30, now: now)
     let gmail = FakeGmail(accountEmail: corpus.account.email)
     await FakeGmailLaunch.seed(gmail, corpus: corpus)
-    let running = try FakeGmailLaunch.makeSession(safeMode: .readOnly, store: try MailStore.openInMemoryForTesting(),
-                                                  gmail: gmail)
+    let running = try FakeGmailLaunch.makeSession(store: try MailStore.openInMemoryForTesting(), gmail: gmail)
     let environment = running.session.environment
     await running.session.start()
     defer { Task { await running.session.stop() } }
@@ -248,16 +192,14 @@ private func isContentFetch(_ request: HTTPRequest) -> Bool {
     let window = MailWindowModel(environment: environment)
     window.start()
     await eventually("list rows") { window.list?.rows.count == 30 }
-    let target = try #require(window.list?.rows.dropFirst(15).first)
+    let target = try #require(window.list?.rows.dropFirst(15).first { !$0.isUnread }, "a read conversation: opening it changes nothing")
     window.open(target.id)
     #expect(window.mode == .reader)
     await eventually("rendered body") {
         if case .rendered = window.reader?.messages.last?.body { return true }
         return false
     }
-    #expect(window.perform(ActionID("thread.done")))
-    #expect(environment.status.blockedNotice == StatusModel.blockedText)
-    #expect(running.wire.requests.allSatisfy(isReadOnlyOnTheWire))
+    #expect(running.wire.requests.allSatisfy(isReadOnTheWire), "reading never writes")
 }
 
 @MainActor
@@ -265,7 +207,7 @@ func liveBackend(google: FakeGoogle, store: MailStore, tokens: InMemoryTokenStor
                  browser: RecordingBrowser, clientPath: String,
                  systemEvents: AppSystemEvents? = AppSystemEvents.quiet()) -> LiveBackend {
     LiveBackend(
-        safeMode: .readOnly, store: store,
+        store: store,
         accountDependencies: LiveAccountManager.Dependencies(
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": clientPath],
             storeDirectory: FileManager.default.temporaryDirectory.appendingPathComponent("oh-none-\(UUID().uuidString)"), tokenStore: tokens, transport: google.http,
@@ -283,7 +225,7 @@ extension AppSystemEvents {
 }
 
 @MainActor
-@Test(.timeLimit(.minutes(2))) func signInStartsTheReadOnlySessionAndSyncs() async throws {
+@Test(.timeLimit(.minutes(2))) func signInStartsTheSessionAndSyncsByReadingOnly() async throws {
     let corpus = FakeCorpus.make(threadCount: 20, now: now)
     let gmail = FakeGmail(accountEmail: corpus.account.email)
     await FakeGmailLaunch.seed(gmail, corpus: corpus)
@@ -299,7 +241,6 @@ extension AppSystemEvents {
         Issue.record("expected the sign-in screen")
         return
     }
-    #expect(signIn.safeMode == .readOnly)
     let runner = Task { await signIn.run() }
     defer { runner.cancel() }
     await eventually("client configured") { signIn.phase == .ready }
@@ -312,12 +253,11 @@ extension AppSystemEvents {
 
     let consent = try #require(browser.urls.first)
     let query = URLComponents(url: consent, resolvingAgainstBaseURL: false)?.queryItems ?? []
-    #expect(query.first { $0.name == "scope" }?.value == GmailScope.readonly)
+    #expect(query.first { $0.name == "scope" }?.value == GmailScope.modify)
     #expect(!query.contains { $0.name == "include_granted_scopes" })
     #expect(query.first { $0.name == "login_hint" }?.value == corpus.account.email)
-    #expect(try tokens.load(account: corpus.account.email)?.grantedScopes == [GmailScope.readonly])
-    #expect(environment.status.safeMode == .readOnly)
-    #expect(!environment.isFake)
+    #expect(try tokens.load(account: corpus.account.email)?.grantedScopes == [GmailScope.modify])
+    #expect(!environment.isFake && environment.isLiveAccount)
 
     struct SyncFailed: Error, CustomStringConvertible { var description: String }
     let rows = try await withThrowingTaskGroup(of: ThreadListWindow?.self) { group in
@@ -342,11 +282,11 @@ extension AppSystemEvents {
     #expect(backend.initialStep() == .session(try #require(backend.account(session.account))))
 
     #expect(google.http.requests.filter { !isGET($0) }.map(\.url.path).filter { $0 != "/batch/gmail/v1" } == ["/token"])
-    #expect(google.api.requests.allSatisfy(isReadOnlyOnTheWire))
+    #expect(google.api.requests.allSatisfy(isReadOnTheWire))
 }
 
 @MainActor
-@Test func aTokenBroaderThanModifyIsNotUsedInReadOnly() async throws {
+@Test func aTokenBroaderThanModifyIsNotUsedAtLaunch() async throws {
     let store = try MailStore.openInMemoryForTesting()
     let email = "robin@example.com"
     _ = try store.addAccount(email: email, displayName: nil, scopes: ["https://mail.google.com/"])
@@ -360,7 +300,7 @@ extension AppSystemEvents {
         return
     }
     #expect(hint == email)
-    #expect(notice?.contains("read-only") == true)
+    #expect(notice == LiveBackend.broadAccessNotice && notice?.hasSuffix("only for what it uses.") == true)
 
     try tokens.save(StoredToken(refreshToken: "synthetic-refresh", grantedScopes: [GmailScope.modify],
                                 clientID: SyntheticClient.clientID), account: email)
@@ -368,22 +308,9 @@ extension AppSystemEvents {
     #expect(backend.initialStep() == .session(try #require(backend.account(id))))
 }
 
-@MainActor
-@Test func aReadOnlySignInThatComesBackWithWriteScopesIsRefusedAndNothingIsStored() async throws {
-    let gmail = FakeGmail(accountEmail: "robin@example.com")
-    let google = FakeGoogle(gmail: gmail, grantedScope: "\(GmailScope.readonly) \(GmailScope.modify)")
-    let tokens = InMemoryTokenStore()
-    let store = try MailStore.openInMemoryForTesting()
-    let backend = liveBackend(google: google, store: store, tokens: tokens, browser: RecordingBrowser(),
-                              clientPath: try SyntheticClient.writeJSON())
-    await #expect(throws: AccountSetupError.self) { _ = try await backend.accounts.addAccount(loginHint: nil) }
-    #expect(try tokens.allAccounts().isEmpty)
-    #expect(try store.accounts().isEmpty)
-}
-
 @Test func setupErrorsCarryWordsNotSecrets() {
     #expect(LiveAccountManager.setupError(OAuthError.cancelled).kind == .cancelled)
-    #expect(LiveAccountManager.setupError(OAuthError.denied("read-only sign-in refused: x")).kind == .refused)
+    #expect(LiveAccountManager.setupError(OAuthError.denied("write sign-in refused: x")).kind == .refused)
     #expect(LiveAccountManager.setupError(OAuthError.insufficientScopes(missing: [GmailScope.readonly])).kind == .refused)
     #expect(LiveAccountManager.setupError(OAuthError.tokenEndpoint(status: 401, error: "invalid_client", description: "d"))
         .message == "Google refused the sign-in. Try again.\nDetails: while exchanging the code, HTTP 401, invalid_client: d")
@@ -461,7 +388,7 @@ extension AppSystemEvents {
     let file = directory.appendingPathComponent("client.json")
     try Data(#"{"installed":{"client_id":"1234-synthetic.apps.googleusercontent.com"}}"#.utf8).write(to: file)
     let manager = LiveAccountManager(
-        safeMode: .readOnly, store: try MailStore.openInMemoryForTesting(),
+        store: try MailStore.openInMemoryForTesting(),
         dependencies: LiveAccountManager.Dependencies(
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": file.path],
             storeDirectory: directory.appendingPathComponent("none"),
@@ -471,7 +398,7 @@ extension AppSystemEvents {
     #expect(manager.currentClientStatus() == .configuredWithoutSecret(source: .environment))
     let withSecret = try SyntheticClient.writeJSON()
     let other = LiveAccountManager(
-        safeMode: .readOnly, store: try MailStore.openInMemoryForTesting(),
+        store: try MailStore.openInMemoryForTesting(),
         dependencies: LiveAccountManager.Dependencies(
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": withSecret],
             storeDirectory: directory.appendingPathComponent("none"),
@@ -485,7 +412,7 @@ extension AppSystemEvents {
 @Test(.timeLimit(.minutes(3))) func theWholeInboxPagesPastTheLiveWindow() async throws {
     let store = try MailStore.openInMemoryForTesting()
     let account = try FixtureStoreSeeder.seedLargeInbox(store, count: 5_000, now: now)
-    let data = MailStoreAdapter(store: store, safeMode: .readOnly)
+    let data = MailStoreAdapter(store: store)
 
     var paged: [ThreadRow] = []
     var cursor: PageCursor?
@@ -530,8 +457,7 @@ extension AppSystemEvents {
     await gmail.deliver(subject: "Personal note", labels: ["INBOX", "CATEGORY_PERSONAL"])
     await gmail.deliver(subject: "Weekly offers", labels: ["INBOX", "UNREAD", "CATEGORY_PROMOTIONS"])
     await gmail.deliver(subject: "Build finished", labels: ["INBOX", "UNREAD", "IMPORTANT", "CATEGORY_UPDATES"])
-    let running = try FakeGmailLaunch.makeSession(safeMode: .readOnly, store: try MailStore.openInMemoryForTesting(),
-                                                  gmail: gmail)
+    let running = try FakeGmailLaunch.makeSession(store: try MailStore.openInMemoryForTesting(), gmail: gmail)
     let environment = running.session.environment
     await running.session.start()
     defer { Task { await running.session.stop() } }
@@ -550,11 +476,11 @@ extension AppSystemEvents {
 
     let counts = try await firstValue(environment.data.counts(running.session.account)) { $0.inboxUnread == 2 }
     #expect(counts.importantUnread == 1)
-    #expect(running.wire.requests.allSatisfy(isReadOnlyOnTheWire))
+    #expect(running.wire.requests.allSatisfy(isReadOnTheWire))
 }
 
 @MainActor
-@Test(.timeLimit(.minutes(2))) func attachmentsAndInlineImagesThroughReadOnlyGETs() async throws {
+@Test(.timeLimit(.minutes(2))) func attachmentsAndInlineImagesThroughGETsOnly() async throws {
     let pdf = Data("%PDF-1.4 synthetic quarterly report".utf8)
     let gmail = FakeGmail(accountEmail: "robin@example.com")
     await gmail.deliver(
@@ -565,7 +491,7 @@ extension AppSystemEvents {
                                           contentID: "chart@fake")])
     let (store, directory) = try onDiskStore()
     defer { try? FileManager.default.removeItem(at: directory) }
-    let running = try FakeGmailLaunch.makeSession(safeMode: .readOnly, store: store, gmail: gmail)
+    let running = try FakeGmailLaunch.makeSession(store: store, gmail: gmail)
     let environment = running.session.environment
     await running.session.start()
     defer { Task { await running.session.stop() } }
@@ -610,7 +536,7 @@ extension AppSystemEvents {
     #expect(try await reader.attachmentFile(file, of: message.id) == opened)
     #expect(attachmentRequests() == requests)
     #expect(running.wire.requests.contains { $0.url.path(percentEncoded: false).contains("/attachments/") })
-    #expect(running.wire.requests.allSatisfy(isReadOnlyOnTheWire))
+    #expect(running.wire.requests.allSatisfy(isReadOnTheWire))
 }
 
 @MainActor
@@ -696,15 +622,11 @@ extension AppSystemEvents {
     let row = try #require(window.rows.first { !$0.isImportant && !$0.participants.allSatisfy(\.isMe) })
     let sender = try #require(row.participants.first { !$0.isMe }?.email.lowercased())
 
-    let readOnly = MailStoreImportance(store: store, safeMode: .readOnly)
-    let before = try await readOnly.explain(row.id)
+    let port = MailStoreImportance(store: store)
+    let before = try await port.explain(row.id)
     #expect(!before.isImportant && !before.reason.isEmpty)
-    await #expect(throws: MailPortError.blockedBySafeMode) {
-        _ = try await readOnly.apply(ImportanceChange(kind: .alwaysSender, account: account, value: sender, thread: row.id))
-    }
     #expect(try store.importanceRules(account: account).isEmpty)
 
-    let port = MailStoreImportance(store: store, safeMode: .normal)
     let token = try await port.apply(ImportanceChange(kind: .alwaysSender, account: account, value: sender, thread: row.id))
     let after = try await port.explain(row.id)
     #expect(after.isImportant && after.ruleID != nil)
@@ -797,7 +719,7 @@ final class GatedCommands: MailCommanding, @unchecked Sendable {
 @MainActor
 @Test func anAccountWhoseSignInIsMissingAsksToSignInAgain() throws {
     let store = try MailStore.openInMemoryForTesting()
-    _ = try store.addAccount(email: "robin@example.com", displayName: nil, scopes: [GmailScope.readonly])
+    _ = try store.addAccount(email: "robin@example.com", displayName: nil, scopes: [GmailScope.modify])
     let backend = liveBackend(google: FakeGoogle(gmail: FakeGmail(accountEmail: "robin@example.com")), store: store,
                               tokens: InMemoryTokenStore(), browser: RecordingBrowser(),
                               clientPath: try SyntheticClient.writeJSON())

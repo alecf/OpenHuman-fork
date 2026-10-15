@@ -8,9 +8,9 @@ import Testing
 
 @Suite struct EngineWiringTests {
     @Test func maintenanceIsThrottledAndRunsAGarbageCollectingPass() async throws {
-        let h = try await EngineHarness(safeMode: .readOnly, scopes: [GmailScope.readonly], stack: false)
+        let h = try await EngineHarness(stack: false)
         defer { h.cleanup() }
-        let engine = h.engine(safeMode: .readOnly)
+        let engine = h.engine()
         let t0 = Date(timeIntervalSince1970: 1_790_000_000)
         #expect(await engine.maintenanceDue(now: t0))
         #expect(await engine.maintenanceDue(now: t0.addingTimeInterval(MailEngine.maintenanceEvery - 1)) == false)
@@ -20,13 +20,13 @@ import Testing
     }
 
     @Test func concurrentBodyAsksForOneConversationShareOneThreadFetch() async throws {
-        let h = try await EngineHarness(safeMode: .readOnly, scopes: [GmailScope.readonly], stack: false, threads: 0)
+        let h = try await EngineHarness(stack: false, threads: 0)
         defer { h.cleanup() }
         let first = await h.gmail.deliver(subject: "Long thread", body: "Text one")
         var ids = [first.messageID]
         for index in 2...5 { ids.append(await h.gmail.deliver(subject: "Re: Long thread", body: "Text \(index)", threadID: first.threadID).0) }
         let solo = await h.gmail.deliver(subject: "Solo", body: "Alone")
-        let engine = h.engine(safeMode: .readOnly)
+        let engine = h.engine()
         _ = try await engine.fetchThread(account: h.account, gmailThreadID: GmailThreadID(first.threadID))
         _ = try await engine.fetchThread(account: h.account, gmailThreadID: GmailThreadID(solo.threadID))
         for id in ids { #expect(try h.store.message(account: h.account, gmailMessageID: GmailMessageID(id))?.bodyState != .stored) }
@@ -49,13 +49,13 @@ import Testing
     }
 
     @Test func theRowIDFormsFetchABodyAndAnAttachmentWithGETsOnly() async throws {
-        let h = try await EngineHarness(safeMode: .readOnly, scopes: [GmailScope.readonly], stack: true)
+        let h = try await EngineHarness(stack: true)
         defer { h.cleanup() }
         let pdf = Data("%PDF-1.4 synthetic attachment bytes".utf8)
         let delivered = await h.gmail.deliver(
             subject: "Report", body: "Synthetic report body.",
             attachments: [FakeGmailAttachment(filename: "report.pdf", mimeType: "application/pdf", data: pdf)])
-        let engine = h.engine(safeMode: .readOnly)
+        let engine = h.engine()
 
         let ref = try #require(try await engine.fetchThread(account: h.account,
                                                              gmailThreadID: GmailThreadID(delivered.threadID)))

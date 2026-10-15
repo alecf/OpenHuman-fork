@@ -16,9 +16,8 @@ private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
     private static let me = "robin@example.com"
     private static let event = "https://www.googleapis.com/calendar/v3/calendars/robin@example.com/events/ev1"
 
-    private func guardFor(_ mode: SafeMode) -> CalendarGuardTransport {
-        CalendarGuardTransport(wrapping: ScriptedTransport(), calendarID: Self.me, mode: mode,
-                               grantedScopes: CalendarScopes.requested(for: mode))
+    private func guardFor(_ scopes: [String] = CalendarScopes.request.write) -> CalendarGuardTransport {
+        CalendarGuardTransport(wrapping: ScriptedTransport(), calendarID: Self.me, grantedScopes: scopes)
     }
 
     private func patch(_ query: String, _ body: [String: Any], marked: Bool = true) -> HTTPRequest {
@@ -28,18 +27,17 @@ private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
     }
 
 
-    @Test func theEditListPassesOnlyMarkedInWriteModeWithSendUpdates() {
+    @Test func theEditListPassesOnlyMarkedWithAWriteGrantAndSendUpdates() {
         let body: [String: Any] = ["summary": "Planning", "location": "Room 4", "transparency": "transparent"]
-        #expect(guardFor(.normal).refusalReason(for: patch("?sendUpdates=none", body)) == nil)
-        #expect(guardFor(.normal).refusalReason(for: patch("?sendUpdates=none", body, marked: false)) != nil,
+        #expect(guardFor().refusalReason(for: patch("?sendUpdates=none", body)) == nil)
+        #expect(guardFor().refusalReason(for: patch("?sendUpdates=none", body, marked: false)) != nil,
                 "without the edit header the earlier rule (times or own answer only) still refuses a title")
-        #expect(guardFor(.normal).refusalReason(for: patch("", body)) != nil, "no sendUpdates")
-        #expect(guardFor(.readOnly).refusalReason(for: patch("?sendUpdates=none", body)) != nil)
-        #expect(guardFor(.writeAllowlist).refusalReason(for: patch("?sendUpdates=none", body)) != nil)
+        #expect(guardFor().refusalReason(for: patch("", body)) != nil, "no sendUpdates")
+        #expect(guardFor(CalendarScopes.request.read).refusalReason(for: patch("?sendUpdates=none", body)) != nil)
     }
 
     @Test func keysOffTheListAndUnsafeShapesAreRefusedEvenWhenMarked() {
-        let calendar = guardFor(.normal)
+        let calendar = guardFor()
         let refused: [[String: Any]] = [
             [:],
             ["organizer": ["email": "x@example.org"]],
@@ -67,7 +65,7 @@ private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
     }
 
     @Test func aMeetCreateRequestARemovalAndRulesPass() {
-        let calendar = guardFor(.normal)
+        let calendar = guardFor()
         let meet: [String: Any] = ["conferenceData": ["createRequest": ["requestId": "r1",
                                                                          "conferenceSolutionKey": ["type": "hangoutsMeet"]]]]
         #expect(calendar.refusalReason(for: patch("?sendUpdates=none&conferenceDataVersion=1", meet)) == nil)
@@ -180,7 +178,7 @@ private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
             jsonResponse(200, ["id": "ev1", "status": "confirmed", "summary": "Planning",
                                "start": ["dateTime": "2026-10-13T15:00:00-07:00"], "end": ["dateTime": "2026-10-13T15:30:00-07:00"]])
         }
-        let client = GoogleCalendarClient(calendarID: Self.me, mode: .normal, grantedScopes: CalendarScopes.requested(for: .normal),
+        let client = GoogleCalendarClient(calendarID: Self.me, grantedScopes: CalendarScopes.request.write,
                                           tokens: StaticTokenProvider(token: "synthetic-cal-access"), transport: http,
                                           clock: InstantClock(), timeZone: zone)
         var change = GoogleEventPatch()
@@ -194,9 +192,9 @@ private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
         #expect(sent.headers[CalendarGuardTransport.editRuleHeader] == nil, "the marker never leaves the process")
     }
 
-    @Test func readOnlyNeverSendsAnEdit() async {
+    @Test func aReadGrantNeverSendsAnEdit() async {
         let http = FakeHTTPTransport()
-        let client = GoogleCalendarClient(calendarID: Self.me, mode: .readOnly, grantedScopes: CalendarScopes.requested(for: .readOnly),
+        let client = GoogleCalendarClient(calendarID: Self.me, grantedScopes: CalendarScopes.request.read,
                                           tokens: StaticTokenProvider(token: "synthetic-cal-access"), transport: http,
                                           clock: InstantClock(), timeZone: zone)
         var change = GoogleEventPatch()

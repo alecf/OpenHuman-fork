@@ -396,7 +396,7 @@ extension GmailError {
         case .unauthorized, .reauthRequired, .cancelled, .dailyLimitExceeded: return true
         case .transport(let t):
             switch t {
-            case .notConnected, .cannotConnect, .blockedBySafeMode, .cancelled: return true
+            case .notConnected, .cannotConnect, .refusedByGuard, .cancelled: return true
             default: return false
             }
         default: return false

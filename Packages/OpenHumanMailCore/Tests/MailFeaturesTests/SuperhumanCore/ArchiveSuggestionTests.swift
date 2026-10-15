@@ -155,19 +155,6 @@ private struct CleanupSource: MailDataSource {
         await eventually { f.rows.count == before }
     }
 
-    @Test func readOnlyRefusesTheArchiveAndChangesNothing() async throws {
-        let f = OverlayFixture(corpus: .rich(threadCount: 20, now: fixedNow), options: .init(safeMode: .readOnly))
-        await f.loaded()
-        let model = try #require(f.env.archiveSuggestion)
-        model.show(try suggestion(f, count: 2))
-        #expect(model.isReadOnly)
-        #expect(f.registry.availability(.archiveSuggested, host: f.router) == .disabled(.safeMode))
-        let before = f.rows.count
-        _ = await f.run(.archiveSuggested)
-        #expect(f.rows.count == before)
-        #expect(model.suggestion != nil, "it keeps asking; nothing was archived")
-    }
-
     @Test func notNowStoresAWeekAndTheAutomaticCheckThenStaysQuiet() async throws {
         let f = OverlayFixture(corpus: .rich(threadCount: 20, now: fixedNow))
         await f.loaded()

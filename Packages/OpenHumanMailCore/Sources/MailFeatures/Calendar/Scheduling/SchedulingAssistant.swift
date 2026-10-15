@@ -113,15 +113,7 @@ public final class SchedulingAssistant {
         if let center = environment.ai { language = AISchedulingLanguage(features: center.features) }
     }
 
-    public var safeMode: SafeModeInfo { environment.status.safeMode }
-
-    public var writeRefusal: String? {
-        switch safeMode {
-        case .readOnly: return String(localized: "Read-only safe mode: Mail never changes your calendar.")
-        case .writeAllowlist: return String(localized: "Test-writes safe mode: calendar changes are off.")
-        case .normal: return provider.info.createRefusal
-        }
-    }
+    public var writeRefusal: String? { provider.info.createRefusal }
 
     public func analyze(_ thread: ThreadKey, force: Bool = false) async {
         if !force, let at = analyzedAt[thread], now().timeIntervalSince(at) < Self.freshFor, status[thread] != nil { return }

@@ -88,8 +88,6 @@ public final class SystemNotificationCenter: NSObject, SystemNotifying, UNUserNo
                                    intentIdentifiers: [], options: []),
             UNNotificationCategory(identifier: SystemNotification.Category.reminder.rawValue, actions: [done, snooze],
                                    intentIdentifiers: [], options: []),
-            UNNotificationCategory(identifier: SystemNotification.Category.readOnly.rawValue, actions: [],
-                                   intentIdentifiers: [], options: []),
         ]
     }
 

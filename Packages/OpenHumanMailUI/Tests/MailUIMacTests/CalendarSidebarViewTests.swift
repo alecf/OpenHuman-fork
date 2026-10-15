@@ -20,8 +20,8 @@ struct CalendarSidebarViewTests {
 
     init() { window.isReleasedWhenClosed = false }
 
-    func environment(calendar: Bool, safeMode: SafeModeInfo = .normal) -> AppEnvironment {
-        AppEnvironment.fake(corpus: .rich(threadCount: 20, now: now), options: .init(remoteAck: .immediate, safeMode: safeMode),
+    func environment(calendar: Bool) -> AppEnvironment {
+        AppEnvironment.fake(corpus: .rich(threadCount: 20, now: now), options: .init(remoteAck: .immediate),
                             featureFlags: FeatureFlags(), calendar: calendar ? FakeCalendar.sample(now: now) : nil)
     }
 
@@ -48,25 +48,23 @@ struct CalendarSidebarViewTests {
     }
 
     @Test func theSidebarAndItsDraftLayOutAtTheSidebarWidth() async throws {
-        for safeMode in [SafeModeInfo.normal, .readOnly] {
-            let env = environment(calendar: true, safeMode: safeMode)
-            let model = try #require(env.calendarSidebar)
-            model.now = { now }
-            model.setVisible(true)
-            await model.show(thread: nil)
-            #expect(model.days.count == 1 && !(model.days.first?.events.isEmpty ?? true))
-            await model.beginDraft(for: nil)
-            #expect(model.draft != nil)
-            for theme in [ResolvedTheme.light, .dark] {
-                let hosting = NSHostingView(rootView: CalendarSidebarView(model: model, router: env.router)
-                    .environment(\.theme, theme).frame(height: 700))
-                hosting.frame = NSRect(x: 0, y: 0, width: 300, height: 700)
-                hosting.layoutSubtreeIfNeeded()
-                #expect(hosting.fittingSize.width == CGFloat(theme.component.sidebar.width))
-                snapshot(hosting, name: "calendar-sidebar-\(safeMode)-\(theme.appearance)")
-            }
-            #expect(model.canCreate == (safeMode == .normal))
+        let env = environment(calendar: true)
+        let model = try #require(env.calendarSidebar)
+        model.now = { now }
+        model.setVisible(true)
+        await model.show(thread: nil)
+        #expect(model.days.count == 1 && !(model.days.first?.events.isEmpty ?? true))
+        await model.beginDraft(for: nil)
+        #expect(model.draft != nil)
+        for theme in [ResolvedTheme.light, .dark] {
+            let hosting = NSHostingView(rootView: CalendarSidebarView(model: model, router: env.router)
+                .environment(\.theme, theme).frame(height: 700))
+            hosting.frame = NSRect(x: 0, y: 0, width: 300, height: 700)
+            hosting.layoutSubtreeIfNeeded()
+            #expect(hosting.fittingSize.width == CGFloat(theme.component.sidebar.width))
+            snapshot(hosting, name: "calendar-sidebar-\(theme.appearance)")
         }
+        #expect(model.canCreate)
     }
 
     @Test func theWindowRootHostsTheSidebarAndItFollowsTheOpenConversation() async throws {

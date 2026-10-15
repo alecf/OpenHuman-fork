@@ -24,7 +24,7 @@ private struct ParityFixture {
     let homeID: AccountID
     var workEmail: String { FakeCorpus.me.email }
 
-    static func make(safeMode: SafeModeInfo = .normal, homeConnected: Bool = true) async throws -> ParityFixture {
+    static func make(homeConnected: Bool = true) async throws -> ParityFixture {
         let corpus = FakeCorpus.make(threadCount: 3, now: at(10, 10, 9))
         let work = FakeCalendar(events: [CalendarEvent(id: "w1", title: "Work standup", start: at(10, 10, 10),
                                                        end: at(10, 10, 10, 30))],
@@ -35,7 +35,7 @@ private struct ParityFixture {
         var providers: [String: any CalendarProviding] = [FakeCorpus.me.email: work]
         if homeConnected { providers[Self.home] = home }
         let connections = FakeCalendarConnections(connected: Set(providers.keys), providers: providers)
-        let env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate, safeMode: safeMode),
+        let env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate),
                                       calendar: work, calendarConnections: connections)
         let store = try #require(env.data as? FakeMailStore)
         store.enqueueSignIn(.succeed(email: Self.home, displayName: nil))
@@ -121,16 +121,6 @@ private struct ParityFixture {
         _ = await model.suggestTimes(account: f.homeID)
         #expect(f.homeCalendar.calls.contains { if case .freeBusy = $0 { true } else { false } })
         #expect(!f.work.calls.contains { if case .freeBusy = $0 { true } else { false } })
-    }
-
-    @Test func readOnlyNeverCreatesOnAnyCalendar() async throws {
-        let f = try await ParityFixture.make(safeMode: .readOnly)
-        let model = f.sidebar()
-        await model.show(thread: f.thread(f.homeID))
-        await model.beginDraft(for: f.thread(f.homeID))
-        #expect(model.createRefusal == "Read-only safe mode: Mail never creates calendar events.")
-        #expect(await model.createEvent() == false)
-        #expect(f.work.createCalls == 0 && f.homeCalendar.createCalls == 0)
     }
 
     @Test func aHeldInviteWaitsAndGoesToItsOwnAccountsCalendar() async throws {

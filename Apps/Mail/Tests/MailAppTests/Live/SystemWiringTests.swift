@@ -52,7 +52,7 @@ struct SystemWiringTests {
         let gmail = FakeGmail(accountEmail: corpus.account.email)
         await FakeGmailLaunch.seed(gmail, corpus: corpus)
         let (tokens, continuation) = AsyncStream.makeStream(of: TokenEvent.self)
-        let running = try FakeGmailLaunch.makeSession(safeMode: .readOnly, store: try MailStore.openInMemoryForTesting(),
+        let running = try FakeGmailLaunch.makeSession(store: try MailStore.openInMemoryForTesting(),
                                                       gmail: gmail, tokenEvents: tokens)
         let session = running.session
         let app = AppModel(screen: .mail(session.environment), session: session)
@@ -62,7 +62,7 @@ struct SystemWiringTests {
         await eventually("the system features started", timeout: .seconds(30)) { session.environment.system.notifications != nil }
         continuation.yield(.needsReauth(account: AccountCredentials.accountKey(corpus.account.email), reason: .invalidGrant))
         await eventually("the notification", timeout: .seconds(60)) { notifier.delivered.contains { $0.title == "Sign in to Mail again" } }
-        #expect(running.wire.requests.allSatisfy(isReadOnlyOnTheWire))
+        #expect(running.wire.requests.allSatisfy(isReadOnTheWire))
         _ = app
     }
 

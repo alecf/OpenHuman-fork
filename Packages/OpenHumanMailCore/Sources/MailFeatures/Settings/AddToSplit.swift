@@ -214,10 +214,6 @@ extension SuperhumanCoreActionHandler {
     func editSplit(_ before: SplitEdit?, title: LocalizedStringResource,
                            _ write: (any MailCommanding) async throws -> SplitEdit?) async -> Bool {
         guard let environment, let commands = environment.commands else { return false }
-        guard environment.status.safeMode.allowsMailChanges else {
-            feedback.refuse(.addToSplit, .safeMode)
-            return false
-        }
         do {
             let undo = try await write(commands) ?? before
             if let undo, let payload = try? JSONEncoder().encode(undo) {
@@ -227,8 +223,6 @@ extension SuperhumanCoreActionHandler {
                 environment.notices.post(String(localized: title), style: .info, duration: NoticeCenter.infoDuration)
             }
             return true
-        } catch MailPortError.blockedBySafeMode {
-            feedback.refuse(.addToSplit, .safeMode)
         } catch {
             feedback.failed((error as? MailPortError)?.description ?? "Couldn't change the split")
         }

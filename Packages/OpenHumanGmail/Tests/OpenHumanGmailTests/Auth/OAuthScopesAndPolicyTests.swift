@@ -10,20 +10,24 @@ import Testing
                 == [GmailScope.modify, GmailScope.readonly])
     }
 
-    @Test func mailWriteDetectionAndModeChecks() {
+    @Test func theMailRequestIsExactlyGmailModify() {
+        #expect(OAuthScopes.mailRequest == [GmailScope.modify])
+        #expect(OAuthScopes.mailRequest == ["https://www.googleapis.com/auth/gmail.modify"])
+        #expect(OAuthScopes.carriesMailWrite(OAuthScopes.mailRequest))
+    }
+
+    @Test func mailWriteDetectionAndScopeChecks() {
         #expect(!OAuthScopes.carriesMailWrite([GmailScope.readonly, "openid", "email"]))
         for scope in OAuthScopes.mailWrite { #expect(OAuthScopes.carriesMailWrite([GmailScope.readonly, scope])) }
         #expect(OAuthScopes.mailWrite.contains("https://mail.google.com/"))
-        #expect(OAuthScopes.missing(SafeMode.normal.oauthScopes, in: [GmailScope.readonly]) == [GmailScope.modify])
-        #expect(OAuthScopes.missing(SafeMode.readOnly.oauthScopes, in: [GmailScope.readonly]).isEmpty)
+        #expect(OAuthScopes.missing(OAuthScopes.mailRequest, in: [GmailScope.readonly]) == [GmailScope.modify])
+        #expect(OAuthScopes.missing(OAuthScopes.mailRequest, in: [GmailScope.modify, "openid"]).isEmpty)
         #expect(OAuthScopes.extra(["openid", GmailScope.readonly, "https://www.googleapis.com/auth/userinfo.email"],
                                   beyond: [GmailScope.readonly]).isEmpty)
         #expect(OAuthScopes.extra([GmailScope.readonly, GmailScope.modify], beyond: [GmailScope.readonly])
                 == [GmailScope.modify])
         #expect(!OAuthScopes.differ([GmailScope.modify, GmailScope.readonly], [GmailScope.readonly, GmailScope.modify]))
         #expect(OAuthScopes.differ([GmailScope.readonly], [GmailScope.readonly, GmailScope.modify]))
-        #expect(SafeMode.normal.effective(grantedScopes: [GmailScope.readonly]) == .readOnly)
-        #expect(SafeMode.writeAllowlist.effective(grantedScopes: [GmailScope.modify]) == .writeAllowlist)
     }
 
     // Why: the OAuth client is shared with other tools, so revoking a grant at Google would sign them out too

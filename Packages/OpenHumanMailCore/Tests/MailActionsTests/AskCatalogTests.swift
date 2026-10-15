@@ -8,7 +8,7 @@ import Testing
     #expect(ask.scopes == [.list, .reader] && rewrite.scopes == [.composer])
     #expect(ask.scopes.isDisjoint(with: rewrite.scopes))
     #expect(!ask.scopes.contains(.global) && !rewrite.scopes.contains(.global), "a global ⌘J would overlap every scope")
-    #expect(ask.module == .ai && ask.effect == .view && !ask.changesMail, "read-only safe mode allows it")
+    #expect(ask.module == .ai && ask.effect == .view && !ask.changesMail, "asking only reads")
     #expect(ask.appearsInPalette && !ask.appearsInMenu && ask.cliCommand == nil)
     #expect(!ask.activeWhileTyping, "the search field and the Ask field handle ⌘J themselves")
     #expect(KeyBindingConflicts.find(in: ActionCatalog.all).isEmpty)

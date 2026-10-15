@@ -13,6 +13,5 @@ public enum ShellMetrics {
     public static let composePaddingX: CGFloat = 10
     public static let rowIconSize: CGFloat = 14
     public static let statusIconSize: CGFloat = 12
-    public static let modePopoverWidth: CGFloat = 300
     public static let narrowHintCount = 2
 }

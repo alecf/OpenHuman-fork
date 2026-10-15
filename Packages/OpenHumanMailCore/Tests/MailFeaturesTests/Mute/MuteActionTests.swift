@@ -131,14 +131,9 @@ import Testing
         #expect(!inInbox(f, key))
     }
 
-    @Test func readOnlyRefusesMuteBeforeThePortAndTheMutedListStillOpens() async throws {
-        let f = ActionFixture(options: .init(safeMode: .readOnly))
+    @Test func theMutedListOpensWithNothingMuted() async throws {
+        let f = ActionFixture()
         await f.loaded(10)
-        #expect(f.registry.availability(.toggleMute, host: f.router) == .disabled(.safeMode))
-        #expect(await f.run(.toggleMute), "consumed and refused out loud")
-        #expect(f.store.pendingOperationCount == 0)
-        #expect(f.toastMessages == ["Read-only: Mail can't change your mail"])
-        #expect(f.env.undo?.stack.isEmpty != false)
         #expect(f.registry.availability(.goMuted, host: f.router) == .enabled)
         #expect(await f.run(.goMuted))
         await f.toast("Nothing is muted yet. Press ⇧M on a conversation to mute it.")

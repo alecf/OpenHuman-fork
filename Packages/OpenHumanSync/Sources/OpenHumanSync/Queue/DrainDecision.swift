@@ -69,8 +69,8 @@ extension OperationDrainer {
             return Decision(.release(at: now), stopPass: true)
         case .unauthorized, .reauthRequired:
             return Decision(.release(at: now), stopPass: true, pauseForReauth: true)
-        case .transport(.blockedBySafeMode(let what)):
-            return Decision(.fail(code: "safe_mode_blocked", message: what))
+        case .transport(.refusedByGuard(let what)):
+            return Decision(.fail(code: "refused_by_guard", message: what))
         case .badRequest(_, let message):
             return Decision(.fail(code: "bad_request", message: message))
         case .forbidden(let reason, let message):
@@ -88,7 +88,7 @@ extension OperationDrainer {
         guard let gmail = error as? GmailError else { return false }
         switch gmail {
         case .transport(.notConnected), .transport(.cannotConnect), .rateLimited, .dailyLimitExceeded,
-             .quotaBudgetExhausted, .unauthorized, .reauthRequired, .transport(.blockedBySafeMode):
+             .quotaBudgetExhausted, .unauthorized, .reauthRequired, .transport(.refusedByGuard):
             return true
         default:
             return false
@@ -99,7 +99,7 @@ extension OperationDrainer {
         guard let gmail = error as? GmailError else { return error is CancellationError ? "cancelled" : "error" }
         switch gmail {
         case .server: return "server"
-        case .transport(.blockedBySafeMode): return "safe_mode_blocked"
+        case .transport(.refusedByGuard): return "refused_by_guard"
         case .transport: return "transport"
         case .notFound: return "not_found"
         case .decoding: return "decoding"

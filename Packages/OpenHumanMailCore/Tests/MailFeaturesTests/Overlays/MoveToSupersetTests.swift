@@ -195,8 +195,6 @@ private func picker(_ recorder: PickerRecorder, move: MoveOptions? = MoveOptions
         let other = ThreadKey(account: account, rowID: 2, gmailThreadID: GmailThreadID("t2"))
         let two = MoveToSuperset.places(targets: [key, other], availability: all)
         #expect(two.map(\.disabledReason) == [nil, MoveToSuperset.oneConversationReason, MoveToSuperset.oneConversationReason])
-        let readOnly = MoveToSuperset.places(targets: [key]) { _ in .disabled(.safeMode) }
-        #expect(readOnly.allSatisfy { $0.disabledReason == nil }, "read-only: offered, and refused out loud when chosen")
         let noPort = MoveToSuperset.places(targets: [key]) { $0 == .moveToInbox ? .disabled(.unavailable("Move to Inbox")) : .hidden }
         #expect(noPort == [MovePlaceOption(place: .inbox, disabledReason: "Move to Inbox isn't available here")])
     }
@@ -236,12 +234,11 @@ private final class PostedNotices {
 @Suite struct MoveToSupersetHandlerTests {
     let corpus = FakeCorpus.rich(threadCount: 40, now: fixedNow)
 
-    private func make(readOnly: Bool = false) -> (AppEnvironment, FakeMailStore, RecordingCommands, PostedNotices) {
-        let options = FakeMailStore.Options(remoteAck: .immediate, safeMode: readOnly ? .readOnly : .normal,
-                                            now: { fixedNow })
+    private func make() -> (AppEnvironment, FakeMailStore, RecordingCommands, PostedNotices) {
+        let options = FakeMailStore.Options(remoteAck: .immediate, now: { fixedNow })
         let store = FakeMailStore(corpus: corpus, options: options)
         let recorder = RecordingCommands(store)
-        let rules = FakeImportanceRules(corpus: corpus, safeMode: options.safeMode, now: { fixedNow })
+        let rules = FakeImportanceRules(corpus: corpus, now: { fixedNow })
         let env = AppEnvironment(data: store, commands: recorder, accounts: store, settings: store, isFake: true,
                                  importance: rules, featureFlags: FeatureFlags())
         return (env, store, recorder, PostedNotices(env.notices))
@@ -265,7 +262,7 @@ private final class PostedNotices {
 
     private func context(_ target: ThreadKey, location: MailLocation, env: AppEnvironment) -> ActionContext {
         ActionContext(scope: .list, account: target.account, accountCount: 1, location: location, selection: [target],
-                      focusedThread: target, hasRows: true, safeMode: env.status.safeMode)
+                      focusedThread: target, hasRows: true)
     }
 
     @Test func aLabelSplitIsOneModifyLabelsWithOneUndoThatPutsInboxBack() async throws {
@@ -323,21 +320,5 @@ private final class PostedNotices {
         #expect(posted.messages.contains("Moved to Inbox"))
         await env.undo?.undoLast()
         #expect(!store.labelNames(of: target).contains(inboxName))
-    }
-
-    @Test func readOnlyRefusesEveryKindWithTheBlockedNotice() async throws {
-        let (env, store, recorder, posted) = make(readOnly: true)
-        let handler = try #require(env.actions.threadActions)
-        let clients = try clientsLabel()
-        let target = try inboxThread(without: clients)
-        let tab = SplitInfo(id: SplitKey("tab"), account: target.account, name: "Client tab", position: 1,
-                            ruleText: "label:\"Clients\"")
-        #expect(handler.moveToSplit([target], split: tab, label: clients, host: nil) == nil)
-        #expect(posted.messages.contains(StatusModel.blockedText))
-        #expect(handler.moveToPlace(.other, context: context(target, location: .system(.inbox), env: env), host: nil) == nil)
-        #expect((env.importance as? FakeImportanceRules)?.allRules.isEmpty == true)
-        #expect(recorder.calls.isEmpty, "nothing reached the write port")
-        #expect(!store.labelNames(of: target).contains("Clients"))
-        #expect(env.undo?.stack.isEmpty == true)
     }
 }

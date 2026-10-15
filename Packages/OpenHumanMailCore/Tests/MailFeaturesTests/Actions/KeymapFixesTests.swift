@@ -25,7 +25,7 @@ import Testing
     static let fieldKeys: [ActionID] = [.showCc, .showBcc, .focusTo, .closeComposer]
 
     @Test func theComposerFieldKeysShowFocusAndClose() async throws {
-        let f = ComposeFixture(safeMode: .readOnly)
+        let f = ComposeFixture()
         await f.loaded()
         let registry = f.env.actions
         for id in Self.fieldKeys {
@@ -33,7 +33,7 @@ import Testing
         }
         let session = try #require(f.compose.openNew(placement: .modal))
         for id in Self.fieldKeys {
-            #expect(registry.availability(id, host: session) == .enabled, "\(id), also in read-only: nothing is written")
+            #expect(registry.availability(id, host: session) == .enabled, "\(id)")
             #expect(registry.availability(id, host: f.router) == .enabled, "\(id): the window's keys are the composer's")
         }
         #expect(await f.run(.showCc, in: session))
@@ -82,7 +82,7 @@ import Testing
     }
 
     @Test func commandFInAConversationOpensItsFindBar() async throws {
-        let f = ComposeFixture(safeMode: .readOnly)
+        let f = ComposeFixture()
         await f.loaded()
         let registry = f.env.actions
         #expect(registry.availability(.findInConversation, host: f.router) == .hidden, "in the list ⌘F is Search")

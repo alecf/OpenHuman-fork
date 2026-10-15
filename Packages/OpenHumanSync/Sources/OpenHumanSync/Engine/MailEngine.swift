@@ -31,7 +31,6 @@ public actor MailEngine {
 
     var jitterOverride: Duration?
     var runnerOverride: (@Sendable (ScheduleKind, RunnerContext) -> (any ScheduleRunner)?)?
-    var drainsExternalOpsOverride: Bool?
 
     public init(store: MailStore, gmailFactory: GmailClientFactory?, tokenStore: TokenStore?,
                 oauthClient: OAuthClientConfig?, configuration: EngineConfiguration,
@@ -50,7 +49,6 @@ public actor MailEngine {
     public func start() async {
         guard configuration.role == .app, !started else { return }
         started = true
-        if configuration.safeMode == .readOnly { log.notice("read-only safe mode: no drainer, no schedulers") }
         let identity = ProcessIdentity(writerID: store.writerID, pid: ProcessInfo.processInfo.processIdentifier,
                                        host: ProcessIdentity.localHostName)
         let ownership = OwnershipManager(store: store, identity: identity, kind: "app", clock: configuration.clock)
@@ -128,8 +126,7 @@ public actor MailEngine {
 
     func launchRuntime(_ account: AccountItem) async {
         guard runtimes[account.id] == nil else { return }
-        let mode = configuration.safeMode
-        let writable = EnginePolicy.runsDrainer(safeMode: mode, account: account)
+        let writable = EnginePolicy.runsDrainer(account: account)
         if writable {
             let now = configuration.clock.now
             do {
@@ -156,13 +153,11 @@ public actor MailEngine {
             }
             return
         }
-        let kinds = EnginePolicy.schedulerKinds(safeMode: mode, configured: configuration.schedulers, account: account)
-        let external = writable && (drainsExternalOpsOverride
-            ?? EnginePolicy.drainsExternalOps(safeMode: mode, factory: gmailFactory, account: account))
-        let runtime = AccountRuntime(account: account, api: api, writable: writable, drainsExternalOps: external,
-                                     schedulerKinds: kinds, env: runtimeEnvironment())
+        let kinds = EnginePolicy.schedulerKinds(configured: configuration.schedulers, account: account)
+        let runtime = AccountRuntime(account: account, api: api, writable: writable, schedulerKinds: kinds,
+                                     env: runtimeEnvironment())
         runtimes[account.id] = runtime
-        log.notice("account \(account.id.rawValue): owned (safe mode \(mode.rawValue), drainer \(writable), schedulers \(kinds.map(\.rawValue).sorted()))")
+        log.notice("account \(account.id.rawValue): owned (drainer \(writable), schedulers \(kinds.map(\.rawValue).sorted()))")
         if !isActive { await runtime.setActive(false) }
         await runtime.start()
     }
@@ -397,10 +392,6 @@ public actor MailEngine {
         self.runnerOverride = runnerOverride
     }
 
-    func setDrainsExternalOpsForTesting(_ value: Bool) {
-        drainsExternalOpsOverride = value
-    }
-
     func runtime(for account: AccountID) -> AccountRuntime? { runtimes[account] }
 
     func drainer(for account: AccountID) async -> OperationDrainer? { await runtimes[account]?.drainer }
@@ -418,7 +409,7 @@ public actor MailEngine {
     }
 
     func checkMailWrite(_ accounts: Set<AccountID>, what: String) throws {
-        try EnginePolicy.checkMailWrite(role: configuration.role, safeMode: configuration.safeMode, what: what)
+        try EnginePolicy.checkMailWrite(role: configuration.role, what: what)
         try checkGrants(accounts, what: what)
     }
 
@@ -428,7 +419,7 @@ public actor MailEngine {
         for id in accounts.sorted() {
             guard let item = items.first(where: { $0.id == id }) else { throw StoreError.notFound("account \(id.rawValue)") }
             if !EnginePolicy.grantAllowsWrites(item) {
-                throw EngineError.blockedBySafeMode("\(what): account \(id.rawValue) was granted read-only access")
+                throw EngineError.writeAccessMissing("\(what): account \(id.rawValue) has not granted gmail.modify")
             }
         }
     }

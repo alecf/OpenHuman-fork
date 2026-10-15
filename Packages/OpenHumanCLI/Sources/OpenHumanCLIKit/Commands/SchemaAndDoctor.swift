@@ -1,7 +1,6 @@
 import ArgumentParser
 import Foundation
 import OpenHumanCore
-import OpenHumanGmail
 import OpenHumanStore
 
 enum SchemaBuilder {
@@ -156,8 +155,6 @@ struct DoctorCommand: CLICommand {
         func add(_ name: String, _ status: String, _ detail: String) { checks.append((name, status, detail)) }
 
         add("cli", "ok", "openhuman \(OpenHumanCLIVersion.current)")
-        add("safe-mode", ctx.safeMode == .readOnly ? "ok" : "warn",
-            "\(ctx.safeMode.rawValue) (OPENHUMAN_SAFE_MODE; unset or unrecognised means read-only)")
         add("store.location", "ok", ctx.location.directory.path)
         do {
             let store = try ctx.store()

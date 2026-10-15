@@ -272,7 +272,7 @@ public final class PaletteController {
         var scored: [PaletteEntry] = []
         for descriptor in registry.descriptors where descriptor.appearsInPalette {
             guard let reason = registry.availability(descriptor.id, host: router, context: context).reason,
-                  let text = Self.unavailableText(reason, safeMode: context.safeMode) else { continue }
+                  let text = Self.unavailableText(reason) else { continue }
             let title = ActionRules.title(for: descriptor, in: context)
             guard let match = matcher.match(title: title, keywords: descriptor.paletteKeywords + [descriptor.title]) else {
                 continue
@@ -287,9 +287,8 @@ public final class PaletteController {
         }.prefix(Self.maxUnavailable).map(\.element)
     }
 
-    public static func unavailableText(_ reason: DisabledReason, safeMode: SafeModeInfo) -> String? {
+    public static func unavailableText(_ reason: DisabledReason) -> String? {
         switch reason {
-        case .safeMode: safeMode == .readOnly ? "Off in read-only mode" : "Off in safe mode"
         case .unavailable: "Not available with this mail source yet"
         case .noSelection: "Select a conversation first"
         case .needs(_, let context): "Only works when \(context)"

@@ -76,12 +76,12 @@ import Testing
         for id in [ActionID.alwaysImportantSender, .alwaysImportantDomain, .neverImportant, .neverImportantDomain,
                    .removeFromSplit, .notAPitch] {
             #expect(ActionCatalog.descriptor(id)?.module == .importance)
-            #expect(ActionCatalog.descriptor(id)?.changesMail == true, "refused in read-only safe mode")
+            #expect(ActionCatalog.descriptor(id)?.changesMail == true)
         }
         #expect(ActionCatalog.descriptor(.explainPlacement)?.changesMail == false, "explaining only reads")
     }
 
-    @Test func effectsDriveRepeatAndSafeMode() {
+    @Test func effectsDriveKeyRepeat() {
         for descriptor in ActionCatalog.all where descriptor.effect != .view {
             #expect(!descriptor.allowsKeyRepeat, "\(descriptor.id)")
         }

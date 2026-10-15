@@ -14,7 +14,7 @@ public enum GoogleCalendarError: Error, Equatable, Sendable {
     case transport(TransportError)
     // The event may exist, so never retry; the caller looks before trying again
     case unclear
-    case blockedBySafeMode(String)
+    case refusedByGuard(String)
     case decoding(String)
     case cancelled
 
@@ -30,7 +30,7 @@ public enum GoogleCalendarError: Error, Equatable, Sendable {
         case .server(let status): "server_\(status)"
         case .transport: "transport"
         case .unclear: "unclear"
-        case .blockedBySafeMode: "blocked_by_safe_mode"
+        case .refusedByGuard: "refused_by_guard"
         case .decoding: "decoding"
         case .cancelled: "cancelled"
         }
@@ -84,12 +84,12 @@ public struct GoogleCalendarClient: Sendable {
     private let timeZone: TimeZone
     private let makeRequestID: @Sendable () -> String
 
-    public init(calendarID: String, mode: SafeMode, grantedScopes: [String], tokens: any AccessTokenProvider,
+    public init(calendarID: String, grantedScopes: [String], tokens: any AccessTokenProvider,
                 transport: any HTTPTransport, clock: any OHClock, budget: CalendarRequestBudget = CalendarRequestBudget(),
                 timeZone: TimeZone = .current, makeRequestID: @escaping @Sendable () -> String = { UUID().uuidString }) {
         self.calendarID = calendarID
         self.tokens = tokens
-        self.transport = CalendarGuardTransport(wrapping: transport, calendarID: calendarID, mode: mode,
+        self.transport = CalendarGuardTransport(wrapping: transport, calendarID: calendarID,
                                                 grantedScopes: grantedScopes, clock: clock,
                                                 verifiesOwnedEventRemoval: true)
         self.clock = clock
@@ -488,7 +488,7 @@ public struct GoogleCalendarClient: Sendable {
                 response = try await transport.send(HTTPRequest(method: method, url: url, headers: headers, body: body))
             } catch let error as TransportError {
                 switch error {
-                case .blockedBySafeMode(let summary): throw GoogleCalendarError.blockedBySafeMode(summary)
+                case .refusedByGuard(let summary): throw GoogleCalendarError.refusedByGuard(summary)
                 case .cancelled: throw GoogleCalendarError.cancelled
                 default:
                     if isWrite, Self.mayHaveBeenSent(error) {
@@ -523,7 +523,7 @@ public struct GoogleCalendarClient: Sendable {
         switch error {
         case .timedOut, .connectionLost(requestMayHaveBeenSent: true), .other: true
         case .notConnected, .connectionLost(requestMayHaveBeenSent: false), .cannotConnect, .tls, .cancelled,
-             .blockedBySafeMode: false
+             .refusedByGuard: false
         }
     }
 

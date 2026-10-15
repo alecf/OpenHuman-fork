@@ -75,13 +75,6 @@ import Testing
         #expect(receiptPort.choices[thread] == nil)
     }
 
-    @Test func readOnlySafeModeRefusesItBeforeThePort() async throws {
-        let f = await fixture(.system(.waiting), options: .init(remoteAck: .immediate, safeMode: .readOnly))
-        #expect(f.registry.availability(.toggleWaiting, host: f.router) == .disabled(.safeMode))
-        _ = await f.run(.toggleWaiting)
-        #expect(port(f).choices.isEmpty)
-    }
-
     @Test func aFailureIsToldAndLeavesNothingChanged() async throws {
         let f = await fixture(.system(.waiting))
         port(f).failNext(.notFound("thread"))

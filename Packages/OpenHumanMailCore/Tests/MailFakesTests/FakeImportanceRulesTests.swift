@@ -89,11 +89,8 @@ import Testing
         #expect(port.allRules.map(\.value) == ["example.org"])
     }
 
-    @Test func editsAreRefusedInReadOnlyAndAnUnknownRuleIsNotFound() async throws {
+    @Test func anUnknownRuleIsNotFoundAndAQueuedFailureIsThrown() async throws {
         let change = ImportanceChange(kind: .neverDomain, account: work, value: "example.com")
-        let readOnly = FakeImportanceRules(safeMode: .readOnly)
-        await #expect(throws: MailPortError.blockedBySafeMode) { try await readOnly.update("rule-1", to: change) }
-        await #expect(throws: MailPortError.blockedBySafeMode) { try await readOnly.delete(["rule-1"]) }
         let port = FakeImportanceRules()
         await #expect(throws: MailPortError.notFound("rule")) { try await port.update("rule-9", to: change) }
         port.failNext(.unavailable("test"))

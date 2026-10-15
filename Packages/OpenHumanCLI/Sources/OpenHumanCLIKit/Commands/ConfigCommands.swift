@@ -127,11 +127,7 @@ struct ConfigSet: CLICommand {
     func handle(_ ctx: CLIContext) async throws -> CommandResult {
         let entry = try ConfigKeys.find(key)
         if !entry.safety, ctx.readonlyByDefault {
-            throw CLIError.policy("readonly", "Blocked: the CLI is in read-only mode (cli.readonly_default).")
-        }
-        if entry.mail, ctx.safeMode == .readOnly {
-            throw CLIError.policy("blocked_by_safe_mode",
-                                  "Blocked: read-only safe mode. \(entry.name) changes how OpenHuman Mail sends or writes mail; change it in the app's Settings.")
+            throw CLIError.policy("readonly", "Blocked: this run is read-only (cli.readonly_default).")
         }
         if entry.safety {
             guard ctx.env.stdinIsTTY, !ctx.global.noInput, !ctx.global.readonly else {

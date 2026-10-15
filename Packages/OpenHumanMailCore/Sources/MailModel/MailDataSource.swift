@@ -28,7 +28,6 @@ public protocol MailDataSource: Sendable {
     func snippets(_ account: AccountID?) -> AsyncThrowingStream<[SnippetInfo], Error>
     func reminders(_ account: AccountID?) -> AsyncThrowingStream<[ReminderItem], Error>
     func failedOperations(_ account: AccountID?) -> AsyncThrowingStream<[FailedOperationInfo], Error>
-    func safeMode() -> SafeModeInfo
     func unsubscribeInfo(_ key: MessageKey) async throws -> UnsubscribeInfo?
     func listID(_ key: MessageKey) async throws -> String?
     func diagnosticsSnapshot() async throws -> DiagnosticsSnapshot
@@ -42,8 +41,6 @@ public protocol MailDataSource: Sendable {
 }
 
 extension MailDataSource {
-    public func safeMode() -> SafeModeInfo { .normal }
-
     public func connectivity() -> AsyncStream<[AccountID: ConnectivityState]> {
         AsyncStream { $0.finish() }
     }

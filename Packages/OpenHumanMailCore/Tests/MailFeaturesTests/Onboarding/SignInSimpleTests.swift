@@ -62,7 +62,7 @@ struct SignInSimpleTests {
     ]
 
     private func model(_ fake: SimpleSignInFake, notice: String? = nil) async -> (SignInModel, Task<Void, Never>) {
-        let model = SignInModel(accounts: fake, safeMode: .normal, notice: notice)
+        let model = SignInModel(accounts: fake, notice: notice)
         let runner = Task { await model.run() }
         await eventually { model.phase != .checking }
         return (model, runner)
@@ -76,7 +76,7 @@ struct SignInSimpleTests {
     }
 
     @Test func everyRestingScreenIsOneSentenceAndOneAction() async {
-        let checking = SignInModel(accounts: SimpleSignInFake(.missing), safeMode: .normal)
+        let checking = SignInModel(accounts: SimpleSignInFake(.missing))
         expectOneSentenceOneAction(checking.screen, "checking")
         for status in Self.statuses {
             let fake = SimpleSignInFake(status)
@@ -207,7 +207,7 @@ struct SignInSimpleTests {
         == "Your sign-in is kept in your Keychain and syncs through iCloud Keychain if you have it turned on.")
     #expect(SignInModel.keychainLocalNote == "Your sign-in is kept in this Mac's Keychain.")
 
-    let local = SignInModel(accounts: SimpleSignInFake(.configured(source: .file), waits: true), safeMode: .normal)
+    let local = SignInModel(accounts: SimpleSignInFake(.configured(source: .file), waits: true))
     await local.run()
     #expect(local.screen.action == .signIn && local.showsKeychainNote)
     #expect(local.keychainNote == SignInModel.keychainLocalNote, "this build keeps sign-ins on this Mac")
@@ -215,11 +215,11 @@ struct SignInSimpleTests {
     #expect(local.phase == .signingIn && local.showsKeychainNote, "still there while the browser finishes")
     local.cancel()
 
-    let synced = SignInModel(accounts: SimpleSignInFake(.configured(source: .file), syncs: true), safeMode: .normal)
+    let synced = SignInModel(accounts: SimpleSignInFake(.configured(source: .file), syncs: true))
     await synced.run()
     #expect(synced.showsKeychainNote && synced.keychainNote == SignInModel.keychainSyncNote)
 
-    let noClient = SignInModel(accounts: SimpleSignInFake(.missing), safeMode: .normal)
+    let noClient = SignInModel(accounts: SimpleSignInFake(.missing))
     await noClient.run()
     #expect(noClient.screen.action == .setUpGoogle && !noClient.showsKeychainNote, "no sign-in offered yet")
 }

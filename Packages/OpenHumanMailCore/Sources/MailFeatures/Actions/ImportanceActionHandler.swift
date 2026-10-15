@@ -83,8 +83,6 @@ public final class ImportanceActionHandler: ActionHandler {
                    explanation.isImportant != (id == .moveToImportant) {
                     self?.environment?.notices.post(Self.senderRuleWinsText(explanation), style: .info)
                 }
-            } catch MailPortError.blockedBySafeMode {
-                feedback.refuse(id, .safeMode)
             } catch {
                 feedback.failed("Couldn't change the importance rule")
             }

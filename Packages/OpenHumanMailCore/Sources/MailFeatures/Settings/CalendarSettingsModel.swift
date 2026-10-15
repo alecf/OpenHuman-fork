@@ -16,7 +16,7 @@ public final class CalendarSettingsModel {
     public static let unavailableNote = "Google Calendar connects only on a real Google account, from this page. This run "
         + "has no connection to Google, so the calendar sidebar and its shortcuts are not shown."
     public static let connectNote = "Turning this on opens Google in your browser to let Mail read this account's calendar "
-        + "(events and free/busy) and, in write mode, create events. It is asked for on its own: your Gmail sign-in and its "
+        + "(events and free/busy) and create events. It is asked for on its own: your Gmail sign-in and its "
         + "permission don't change. Turning it off deletes Mail's calendar access on this Mac; nothing is revoked at Google."
     public static let createNote = "Nothing is created until you press Create event. An event that emails its attendees waits a few seconds first, so Undo "
         + "(⌘Z) can stop it; any other can be undone (deleted) in the same few seconds."
@@ -309,29 +309,24 @@ public final class CalendarSettingsModel {
     }
 
     public var createStatus: String {
-        switch environment.status.safeMode {
-        case .readOnly: return "Read-only safe mode: Mail never creates calendar events."
-        case .writeAllowlist: return "Test writes only: creating calendar events is off."
-        case .normal:
-            if routesByAccount { return accountsCreateStatus }
-            if let refusal = environment.calendar?.info.createRefusal { return refusal }
-            if connection?.status == .connected, connection?.canCreateEvents == false {
-                return "Connected read-only. To create events, turn Connect Google Calendar off and on again."
-            }
-            return isConfigured ? "Events can be created from the sidebar's draft, with undo." : Self.needsConnectedText
+        if routesByAccount { return accountsCreateStatus }
+        if let refusal = environment.calendar?.info.createRefusal { return refusal }
+        if connection?.status == .connected, connection?.canCreateEvents == false {
+            return "Reconnect Google Calendar to create events: turn Connect Google Calendar off and on again."
         }
+        return isConfigured ? "Events can be created from the sidebar's draft, with undo." : Self.needsConnectedText
     }
 
     private var accountsCreateStatus: String {
         let connected = connectedCalendars
         guard !connected.isEmpty else { return Self.needsConnectedText }
         let writable = connected.filter { $0.state?.canCreateEvents == true }.map(\.account.email)
-        let readOnly = connected.filter { $0.state?.canCreateEvents != true }.map(\.account.email)
+        let viewOnly = connected.filter { $0.state?.canCreateEvents != true }.map(\.account.email)
         var text = writable.isEmpty ? "" : "Events can be created from the sidebar's draft, with undo, on "
             + Self.list(writable) + "'s calendar."
-        if !readOnly.isEmpty {
-            text += (text.isEmpty ? "" : " ") + "Connected read-only: " + Self.list(readOnly)
-                + ". To create events there, disconnect it and connect it again."
+        if !viewOnly.isEmpty {
+            text += (text.isEmpty ? "" : " ") + "Reconnect Google Calendar to create events on " + Self.list(viewOnly)
+                + "'s calendar: disconnect it and connect it again."
         }
         return text
     }
@@ -342,7 +337,6 @@ public final class CalendarSettingsModel {
     }
 
     public var canCreateEvents: Bool {
-        guard environment.status.safeMode == .normal else { return false }
         if routesByAccount { return connectedCalendars.contains { $0.state?.canCreateEvents == true } }
         return isConfigured && environment.calendar?.info.createRefusal == nil
     }

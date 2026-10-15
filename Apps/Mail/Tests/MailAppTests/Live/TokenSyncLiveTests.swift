@@ -10,7 +10,7 @@ import Testing
 private func liveManager(store: MailStore, tokens: any TokenStore, home: URL,
                          transport: FakeHTTPTransport) throws -> LiveAccountManager {
     LiveAccountManager(
-        safeMode: .readOnly, store: store,
+        store: store,
         dependencies: LiveAccountManager.Dependencies(
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()], storeDirectory: home,
             tokenStore: tokens, transport: transport, makeReceiver: { AnsweringReceiver(browser: RecordingBrowser()) },
@@ -23,8 +23,8 @@ private func liveManager(store: MailStore, tokens: any TokenStore, home: URL,
     let store = try MailStore.open(StoreOptions(location: StoreLocation(directory: home), processKind: .test,
                                                 appVersion: "0.0.0-test"))
     let address = "robin@example.com"
-    let account = try store.addAccount(email: address, displayName: nil, scopes: [GmailScope.readonly])
-    let own = InMemoryTokenStore([address: StoredToken(refreshToken: "synthetic-refresh", grantedScopes: [GmailScope.readonly],
+    let account = try store.addAccount(email: address, displayName: nil, scopes: [GmailScope.modify])
+    let own = InMemoryTokenStore([address: StoredToken(refreshToken: "synthetic-refresh", grantedScopes: [GmailScope.modify],
                                                        clientID: SyntheticClient.clientID)])
     let cloud = InMemorySharedGrantStore()
     let tokens = SyncedTokenStore(local: own, shared: cloud, device: InMemoryTokenDeviceStore())
@@ -61,8 +61,8 @@ private func liveManager(store: MailStore, tokens: any TokenStore, home: URL,
     let store = try MailStore.open(StoreOptions(location: StoreLocation(directory: home), processKind: .test,
                                                 appVersion: "0.0.0-test"))
     let address = "robin@example.com"
-    let account = try store.addAccount(email: address, displayName: nil, scopes: [GmailScope.readonly])
-    let own = InMemoryTokenStore([address: StoredToken(refreshToken: "synthetic-refresh", grantedScopes: [GmailScope.readonly],
+    let account = try store.addAccount(email: address, displayName: nil, scopes: [GmailScope.modify])
+    let own = InMemoryTokenStore([address: StoredToken(refreshToken: "synthetic-refresh", grantedScopes: [GmailScope.modify],
                                                        clientID: SyntheticClient.clientID)])
     let cloud = InMemorySharedGrantStore()
     let tokens = SyncedTokenStore(local: own, shared: cloud, device: InMemoryTokenDeviceStore())
@@ -79,7 +79,7 @@ private func liveManager(store: MailStore, tokens: any TokenStore, home: URL,
     let address = "robin@example.com"
     let cloud = InMemorySharedGrantStore()
     try SyncedTokenStore(local: InMemoryTokenStore(), shared: cloud, device: InMemoryTokenDeviceStore())
-        .save(StoredToken(refreshToken: "synthetic-refresh", grantedScopes: [GmailScope.readonly],
+        .save(StoredToken(refreshToken: "synthetic-refresh", grantedScopes: [GmailScope.modify],
                           clientID: SyntheticClient.clientID), account: address)
 
     let home = FileManager.default.temporaryDirectory.appendingPathComponent("oh-tokensync-2-\(UUID().uuidString)")
@@ -91,11 +91,11 @@ private func liveManager(store: MailStore, tokens: any TokenStore, home: URL,
     let google = FakeHTTPTransport()
     google.on("POST", "/token") { _ in
         FakeHTTPTransport.json(200, ["access_token": "synthetic-access", "expires_in": 3600,
-                                     "scope": GmailScope.readonly, "token_type": "Bearer"])
+                                     "scope": GmailScope.modify, "token_type": "Bearer"])
     }
     let browser = RecordingBrowser()
     let manager = LiveAccountManager(
-        safeMode: .readOnly, store: store,
+        store: store,
         dependencies: LiveAccountManager.Dependencies(
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()], storeDirectory: home,
             tokenStore: tokens, transport: google, makeReceiver: { AnsweringReceiver(browser: browser) },
@@ -118,8 +118,8 @@ private func liveManager(store: MailStore, tokens: any TokenStore, home: URL,
     let store = try MailStore.open(StoreOptions(location: StoreLocation(directory: home), processKind: .test,
                                                 appVersion: "0.0.0-test"))
     let address = "robin@example.com"
-    let account = try store.addAccount(email: address, displayName: nil, scopes: [GmailScope.readonly])
-    let own = InMemoryTokenStore([address: StoredToken(refreshToken: "synthetic-refresh", grantedScopes: [GmailScope.readonly],
+    let account = try store.addAccount(email: address, displayName: nil, scopes: [GmailScope.modify])
+    let own = InMemoryTokenStore([address: StoredToken(refreshToken: "synthetic-refresh", grantedScopes: [GmailScope.modify],
                                                        clientID: SyntheticClient.clientID)])
     let tokens = SyncedTokenStore(local: own, shared: InMemorySharedGrantStore(available: false),
                                   device: InMemoryTokenDeviceStore())
@@ -133,7 +133,7 @@ private func liveManager(store: MailStore, tokens: any TokenStore, home: URL,
     defer { try? FileManager.default.removeItem(at: home) }
     let store = try MailStore.open(StoreOptions(location: StoreLocation(directory: home), processKind: .test,
                                                 appVersion: "0.0.0-test"))
-    let account = try store.addAccount(email: "sam@example.com", displayName: nil, scopes: [GmailScope.readonly])
+    let account = try store.addAccount(email: "sam@example.com", displayName: nil, scopes: [GmailScope.modify])
     let manager = try liveManager(store: store, tokens: InMemoryTokenStore(), home: home, transport: FakeHTTPTransport())
     #expect(await manager.signInSync(for: account) == nil)
     #expect(!(await manager.signInsSyncThroughICloudKeychain()))

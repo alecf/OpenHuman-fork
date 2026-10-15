@@ -11,8 +11,8 @@ public struct ReadOnlyTransport: HTTPTransport {
     public func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         if let reason = Self.refusalReason(for: request) {
             let summary = Self.summary(of: request)
-            Log(.gmail).notice("safe mode read-only refused \(Self.redactingAddresses(summary)): \(reason)")
-            throw TransportError.blockedBySafeMode(summary)
+            Log(.gmail).notice("read-only transport refused \(Self.redactingAddresses(summary)): \(reason)")
+            throw TransportError.refusedByGuard(summary)
         }
         return try await wrapped.send(request)
     }

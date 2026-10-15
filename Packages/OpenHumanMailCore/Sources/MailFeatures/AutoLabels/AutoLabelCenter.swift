@@ -244,9 +244,9 @@ public final class AutoLabelCenter {
     public var writesToGmail: Bool { applySetting && canChangeGmail }
 
     var canChangeGmail: Bool {
-        guard let environment, environment.commands != nil, environment.status.safeMode.allowsMailChanges else { return false }
+        guard let environment, environment.commands != nil else { return false }
         if let forced = options.writesToGmail { return forced }
-        return !environment.isFake && environment.writeMode != nil
+        return !environment.isFake && environment.isLiveAccount
     }
 
     private func accountsChanged(_ list: [Account]) async {

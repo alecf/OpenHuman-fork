@@ -16,8 +16,8 @@ import Testing
         return base
     }
 
-    private func client(_ http: FakeHTTPTransport, mode: SafeMode = .normal) -> GoogleCalendarClient {
-        GoogleCalendarClient(calendarID: Self.me, mode: mode, grantedScopes: CalendarScopes.requested(for: mode),
+    private func client(_ http: FakeHTTPTransport, scopes: [String] = CalendarScopes.request.write) -> GoogleCalendarClient {
+        GoogleCalendarClient(calendarID: Self.me, grantedScopes: scopes,
                              tokens: StaticTokenProvider(token: "synthetic-cal-access"), transport: http,
                              clock: InstantClock(), timeZone: TimeZone(identifier: "America/Los_Angeles")!)
     }
@@ -104,19 +104,19 @@ import Testing
         }
     }
 
-    @Test func readOnlyAndTestWriteModesNeverReachTheWire() async {
-        for mode in [SafeMode.readOnly, .writeAllowlist] {
-            let http = FakeHTTPTransport()
-            serve(http, event(["organizer": ["self": true]]))
-            await #expect(throws: GoogleCalendarError.self) { try await client(http, mode: mode).removeEvent(id: "ev1", sendUpdates: .none) }
-            #expect(http.requests.isEmpty, "\(mode): not even the guard's read")
+    @Test func aReadGrantNeverReachesTheWire() async {
+        let http = FakeHTTPTransport()
+        serve(http, event(["organizer": ["self": true]]))
+        await #expect(throws: GoogleCalendarError.self) {
+            try await client(http, scopes: CalendarScopes.request.read).removeEvent(id: "ev1", sendUpdates: .none)
         }
+        #expect(http.requests.isEmpty, "not even the guard's read")
     }
 
     @Test func anotherCalendarOrWithoutSendUpdatesIsRefusedBeforeAnyRead() {
         let wire = ScriptedTransport()
-        let calendar = CalendarGuardTransport(wrapping: wire, calendarID: Self.me, mode: .normal,
-                                              grantedScopes: CalendarScopes.requested(for: .normal),
+        let calendar = CalendarGuardTransport(wrapping: wire, calendarID: Self.me,
+                                              grantedScopes: CalendarScopes.request.write,
                                               verifiesOwnedEventRemoval: true)
         let other = HTTPRequest(method: "DELETE", url: URL(string: "https://www.googleapis.com/calendar/v3/calendars/other@example.org/events/ev1?sendUpdates=none")!, headers: [:], body: nil)
         #expect(calendar.refusalReason(for: other) != nil)
@@ -126,8 +126,8 @@ import Testing
 
     @Test func theRuleIsOffUnlessTheGuardIsMadeWithIt() async {
         let wire = ScriptedTransport { _ in jsonResponse(200, ["organizer": ["self": true]]) }
-        let plain = CalendarGuardTransport(wrapping: wire, calendarID: Self.me, mode: .normal,
-                                           grantedScopes: CalendarScopes.requested(for: .normal))
+        let plain = CalendarGuardTransport(wrapping: wire, calendarID: Self.me,
+                                           grantedScopes: CalendarScopes.request.write)
         let marked = [CalendarGuardTransport.removalRuleHeader: CalendarGuardTransport.removalRuleValue]
         let delete = HTTPRequest(method: "DELETE", url: URL(string: "https://www.googleapis.com" + Self.path + "?sendUpdates=none")!, headers: marked, body: nil)
         await #expect(throws: TransportError.self) { _ = try await plain.send(delete) }
@@ -136,8 +136,8 @@ import Testing
 
     @Test func withoutTheMarkerAGuardWithTheRuleStillFollowsTheCreateUndoRules() async {
         let wire = ScriptedTransport { _ in jsonResponse(200, ["organizer": ["self": true]]) }
-        let calendar = CalendarGuardTransport(wrapping: wire, calendarID: Self.me, mode: .normal,
-                                              grantedScopes: CalendarScopes.requested(for: .normal), verifiesOwnedEventRemoval: true)
+        let calendar = CalendarGuardTransport(wrapping: wire, calendarID: Self.me,
+                                              grantedScopes: CalendarScopes.request.write, verifiesOwnedEventRemoval: true)
         let unmarked = HTTPRequest(method: "DELETE", url: URL(string: "https://www.googleapis.com" + Self.path + "?sendUpdates=none")!, headers: [:], body: nil)
         await #expect(throws: TransportError.self) { _ = try await calendar.send(unmarked) }
         #expect(wire.requests.isEmpty, "not even a read: only an event created here, as before")

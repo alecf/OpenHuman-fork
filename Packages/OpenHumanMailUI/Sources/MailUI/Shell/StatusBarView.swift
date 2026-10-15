@@ -6,7 +6,6 @@ import SwiftUI
 public struct StatusBarView: View {
     let model: StatusModel
     let theme: ThemeTokens
-    @State private var explainsMode = false
 
     public init(model: StatusModel, theme: ThemeTokens) {
         self.model = model
@@ -15,7 +14,6 @@ public struct StatusBarView: View {
 
     public var body: some View {
         HStack(spacing: theme.space5) {
-            if let text = model.safeModeText { modeChip(text) }
             if let sending = model.sendingLine { sendingButton(sending) }
             if let focus = model.focusLine {
                 Text(focus)
@@ -82,59 +80,6 @@ public struct StatusBarView: View {
         .accessibilityHint("Shows the message on its way, with Undo while it can still be undone.")
         .accessibilityIdentifier("status.sending")
     }
-
-    private var safeModeTooltip: String {
-        [model.safeModeDetail.map { $0 + "." }, model.safeModeHelp].compactMap { $0 }.joined(separator: " ")
-    }
-
-    private func modeChip(_ text: String) -> some View {
-        Button {
-            explainsMode.toggle()
-        } label: {
-            HStack(spacing: theme.space2) {
-                Image(systemName: Self.modeSymbol)
-                    .font(.system(size: ShellMetrics.statusIconSize, weight: .regular))
-                Text(text)
-                    .font(theme.typeMeta.swiftUIFont)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, theme.space3)
-            .padding(.vertical, theme.space1)
-            .background(Capsule().fill(theme.bgWarningSubtle.color))
-            .foregroundStyle(theme.textWarning.color)
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .help(safeModeTooltip)
-        .popover(isPresented: $explainsMode, arrowEdge: .top) { modeExplanation(text) }
-        .accessibilityLabel(text)
-        .accessibilityHint("Shows what this mode allows. " + safeModeTooltip)
-    }
-
-    private func modeExplanation(_ text: String) -> some View {
-        VStack(alignment: .leading, spacing: theme.space3) {
-            Label(text, systemImage: Self.modeSymbol)
-                .font(theme.typeBodyStrong.swiftUIFont)
-                .foregroundStyle(theme.textWarning.color)
-            if let detail = model.safeModeDetail {
-                Text(detail + ".")
-                    .font(theme.typeBody.swiftUIFont)
-                    .foregroundStyle(theme.textPrimary.color)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let help = model.safeModeHelp {
-                Text(help)
-                    .font(theme.typeMeta.swiftUIFont)
-                    .foregroundStyle(theme.textSecondary.color)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(theme.space5)
-        .frame(width: ShellMetrics.modePopoverWidth, alignment: .leading)
-        .background(theme.component.popover.bg.color)
-    }
-
-    nonisolated static let modeSymbol = "lock.fill"
 
     private var syncColor: ThemeColor {
         guard let state = model.shownSync?.state else { return theme.textTertiary }

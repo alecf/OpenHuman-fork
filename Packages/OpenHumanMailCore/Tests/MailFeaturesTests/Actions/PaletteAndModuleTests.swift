@@ -83,19 +83,6 @@ import Testing
         #expect(!palette.performSelected())
     }
 
-    @Test func readOnlyPaletteOffersNoChanges() async throws {
-        let f = ActionFixture(options: .init(safeMode: .readOnly))
-        await f.loaded(10)
-        let palette = f.registry.palette
-        palette.open(host: f.router)
-        for query in ["", "done", "trash", "star", "important", "label"] {
-            palette.query = query
-            for row in palette.rows {
-                #expect(ActionCatalog.descriptor(row.action)?.changesMail == false, "\(query): \(row.action)")
-            }
-        }
-    }
-
     @Test func rankingFiveHundredEntriesStaysFast() {
         let descriptors = (0..<500).map { n in
             ActionDescriptor(ActionID("test.action\(n)"), "Action number \(n)", category: .thread,

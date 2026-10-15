@@ -4,7 +4,7 @@ import Testing
 @testable import OpenHumanGmail
 
 @Suite struct OAuthFlowManualTests {
-    private func googleFake(scope: String = GmailScope.readonly) -> ScriptedTransport {
+    private func googleFake(scope: String = GmailScope.modify) -> ScriptedTransport {
         ScriptedTransport { request in
             if request.url.host == "oauth2.example.invalid" {
                 return jsonResponse(200, ["access_token": "synthetic-access-1", "expires_in": 3599,
@@ -17,9 +17,9 @@ import Testing
         }
     }
 
-    private func flow(_ transport: ScriptedTransport, mode: SafeMode = .readOnly,
+    private func flow(_ transport: ScriptedTransport, scopes: [String] = OAuthScopes.mailRequest,
                       receiver: FakeReceiver = FakeReceiver(), browser: FakeBrowser = FakeBrowser()) -> OAuthFlow {
-        OAuthFlow(client: Synthetic.client, mode: mode, transport: transport, receiver: receiver, browser: browser,
+        OAuthFlow(client: Synthetic.client, scopes: scopes, transport: transport, receiver: receiver, browser: browser,
                   clock: TestClock())
     }
 
@@ -40,7 +40,7 @@ import Testing
         #expect(queryValue(session.url, "state") == session.state)
         #expect(queryValue(session.url, "code_challenge") == PKCE.challenge(for: session.verifier))
         #expect(queryValue(session.url, "login_hint") == "me@example.com")
-        #expect(queryValue(session.url, "scope") == GmailScope.readonly)
+        #expect(queryValue(session.url, "scope") == GmailScope.modify)
         #expect(queryValue(session.url, "include_granted_scopes") == nil)
         let text = "\(session)"
         #expect(!text.contains(session.verifier) && !text.contains(session.state))
@@ -186,7 +186,7 @@ import Testing
 
     @Test func theManualFlowKeepsTheReadOnlyScopeGuard() async throws {
         let transport = googleFake(scope: "\(GmailScope.readonly) \(GmailScope.modify)")
-        let f = flow(transport)
+        let f = flow(transport, scopes: [GmailScope.readonly])
         let session = try f.beginManual(redirectURI: Self.redirect)
         do {
             _ = try await f.completeManual(pasted: pasted(session, query: "code=c&state=\(session.state)"), session)

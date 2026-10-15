@@ -35,14 +35,11 @@ private final class RealLaunch {
     let directory: URL
     let tokens: InMemoryTokenStore
     let browser = RecordingBrowser()
-    let writeModeSwitch: LiveWriteModeSwitch
-    let reopened: Counter
     let backend: LiveBackend
     let app: AppModel
 
     init(environment: [String: String] = [:], tokenScopes: [String]?, threads: Int = 4,
-         grants: String = GmailScope.modify, switchOn: Bool? = nil) async throws {
-        let choice = try LaunchSafeMode.environmentChoice(environment)
+         grants: String = GmailScope.modify) async throws {
         corpus = FakeCorpus.make(threadCount: threads, now: Date())
         gmail = FakeGmail(accountEmail: corpus.account.email)
         await FakeGmailLaunch.seed(gmail, corpus: corpus)
@@ -56,11 +53,6 @@ private final class RealLaunch {
         store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: .test,
                                                 appVersion: "0.0.0-test",
                                                 changeNotificationName: "dev.openhuman.tests.rung3.\(UUID().uuidString)"))
-        if let switchOn { try store.setSetting(LiveWriteModeSwitch.key, switchOn, scope: .global) }
-        let launch = LaunchSafeMode.forRealAccounts(choice, allowsChanges: LiveWriteModeSwitch.read(store))
-        let reopened = Counter()
-        self.reopened = reopened
-        writeModeSwitch = LiveWriteModeSwitch(store: store, launchSource: choice, reopen: { reopened.count += 1 })
         let email = corpus.account.email
         tokens = InMemoryTokenStore()
         if let tokenScopes {
@@ -70,7 +62,7 @@ private final class RealLaunch {
         }
         let browser = self.browser
         backend = LiveBackend(
-            safeMode: launch, store: store, writeModeSwitch: writeModeSwitch,
+            store: store,
             accountDependencies: LiveAccountManager.Dependencies(
                 environment: environment.merging(["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()]) { a, _ in a },
                 storeDirectory: directory.appendingPathComponent("none"), tokenStore: tokens,
@@ -89,7 +81,7 @@ private final class RealLaunch {
     }
 
     var gmailWrites: [HTTPRequest] {
-        google.http.requests.filter { $0.url.path() != "/token" && !isReadOnlyOnTheWire($0) }
+        google.http.requests.filter { $0.url.path() != "/token" && !isReadOnTheWire($0) }
     }
 
     func openInbox() async throws -> AppRouter {
@@ -128,90 +120,50 @@ private final class RealLaunch {
     private var stopped = false
 }
 
-private let normal = ["OPENHUMAN_SAFE_MODE": "normal"]
-
 @MainActor
-private final class Counter {
-    var count = 0
-}
-
-@MainActor
-@Test(.timeLimit(.minutes(3))) func theDefaultLaunchIsWriteModeAndSignInAsksForExactlyModify() async throws {
+@Test(.timeLimit(.minutes(3))) func signInAsksForExactlyModify() async throws {
     let f = try await RealLaunch(tokenScopes: nil)
     defer { Task { await f.stop() } }
-    #expect(f.backend.safeMode == .normal && f.writeModeSwitch.launchSource == .setting && f.writeModeSwitch.allowsChanges)
     guard case .signIn(let signIn) = f.app.screen else {
         Issue.record("expected the sign-in screen")
         return
     }
-    #expect(signIn.safeMode == .normal && !signIn.offersReadOnly && signIn.notice == nil)
+    #expect(signIn.notice == nil)
     let runner = Task { await signIn.run() }
     defer { runner.cancel() }
     await eventually("client configured") { signIn.phase == .ready }
+    #expect(signIn.screen.sentence == SignInModel.readySentence && signIn.screen.buttons == ["Sign in with Google"])
+    let view = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Packages/OpenHumanMailUI/Sources/MailUI/Onboarding/SignInView.swift"), encoding: .utf8)
+    #expect(view.contains("static let accessText = \"Mail asks Gmail for permission to read and change your mail: archive, star, "))
+    #expect(view.contains("It never asks to delete mail permanently or to change Gmail settings or filters."))
+    #expect(!view.contains("modeText") && !view.lowercased().contains("read-only"), "one access text, no mode line")
     signIn.signIn()
-    await eventually("the write-mode session") { f.session != nil }
+    await eventually("the session") { f.session != nil }
     let consent = try #require(f.browser.urls.first)
     let query = URLComponents(url: consent, resolvingAgainstBaseURL: false)?.queryItems ?? []
     #expect(query.first { $0.name == "scope" }?.value == GmailScope.modify)
     #expect(!query.contains { $0.name == "include_granted_scopes" })
     #expect(try f.tokens.load(account: f.corpus.account.email)?.grantedScopes == [GmailScope.modify])
     let environment = try #require(f.environment)
-    #expect(f.session?.safeMode == .normal && environment.writeMode != nil && environment.status.isWriteMode)
-    #expect(environment.status.safeModeText == nil, "no write-mode indicator (WRITE-MODE-CALM)")
-    let row = WriteModeSettingModel(port: try #require(environment.writeModeSwitch))
-    #expect(row.isOn && !row.isShown, "no read-only choice in Settings")
+    #expect(environment.isLiveAccount)
     #expect(f.gmailWrites.isEmpty, "signing in changed nothing in Gmail")
     await f.stop()
 
     let signedIn = try await RealLaunch(tokenScopes: [GmailScope.modify], threads: 1)
     defer { Task { await signedIn.stop() } }
-    #expect(signedIn.session?.safeMode == .normal && signedIn.environment?.writeMode != nil)
+    #expect(signedIn.environment?.isLiveAccount == true)
     await signedIn.stop()
 }
 
 @MainActor
-@Test(.timeLimit(.minutes(3))) func aReadOnlyLaunchStaysReadOnlyEvenWithAWriteModeToken() async throws {
-    for (environment, switchOn) in [([:], false), (["OPENHUMAN_SAFE_MODE": "read-only"], nil)] as [([String: String], Bool?)] {
-        let f = try await RealLaunch(environment: environment, tokenScopes: [GmailScope.modify], switchOn: switchOn)
-        defer { Task { await f.stop() } }
-        #expect(f.backend.safeMode == .readOnly)
-        let environment = try #require(f.environment)
-        let session = try #require(f.session)
-        #expect(session.safeMode == .readOnly && environment.writeMode == nil)
-        #expect(environment.status.safeModeText == "Read-only" && !environment.status.isWriteMode)
-        _ = try await f.openInbox()
-        #expect(!environment.router.windowTitle.contains("Write mode"))
-        let ref = try #require(try f.inboxRefs().first)
-
-        let queued = try f.store.apply(.star([ref]), origin: .app)
-        _ = try f.store.apply(.setReminder(ref, dueAt: Date().addingTimeInterval(-60), condition: .always), origin: .app)
-        _ = try await session.engine.syncNow(session.account, reason: "test")
-        let statuses = await session.engine.waitForOperations(queued.operationIDs, timeout: .seconds(2))
-        #expect(statuses.values.allSatisfy { $0 == .pending }, "no drainer in read-only")
-        #expect(try f.store.activeReminders(account: session.account, limit: 10).count == 1, "no reminder runner in read-only")
-
-        let port = try #require(environment.commands)
-        await #expect(throws: MailPortError.blockedBySafeMode) {
-            _ = try await port.apply(.star([MailStoreAdapter.threadKey(ref)]))
-        }
-        await #expect(throws: EngineError.self) { _ = try await session.engine.perform(.star([ref]), origin: .app) }
-        await #expect(throws: GmailError.self) {
-            try await session.api.batchModifyMessages(ids: ["m1"], add: ["STARRED"], remove: [])
-        }
-        #expect(f.gmailWrites.isEmpty, "Gmail saw reads only")
-        await f.stop()
-    }
-}
-
-@MainActor
-@Test(.timeLimit(.minutes(3))) func writeModeStartsAtOnceThenAStarAndItsUndoReachGmail() async throws {
-    let f = try await RealLaunch(environment: normal, tokenScopes: [GmailScope.modify])
+@Test(.timeLimit(.minutes(3))) func aRealAccountStartsAtOnceThenAStarAndItsUndoReachGmail() async throws {
+    let f = try await RealLaunch(tokenScopes: [GmailScope.modify])
     defer { Task { await f.stop() } }
-    #expect(f.backend.safeMode == .normal)
     let environment = try #require(f.environment, "the mail window comes up at once, no sheet")
     let session = try #require(f.session)
-    #expect(session.safeMode == .normal && !f.app.openedReadOnly)
-    #expect(environment.writeMode != nil && environment.status.isWriteMode)
+    #expect(environment.isLiveAccount)
     let window = try await f.openInbox()
     let ref = try #require(try f.inboxRefs().first)
     let key = MailStoreAdapter.threadKey(ref)
@@ -229,13 +181,13 @@ private final class Counter {
 
     _ = try await port.apply(.setReminder(key, dueAt: Date().addingTimeInterval(-60), kind: .always))
     await waitFor("the reminder fired") { (try? f.store.activeReminders(account: session.account, limit: 10).isEmpty) == true }
-    #expect(!window.windowTitle.contains("Write mode"), "no title prefix (WRITE-MODE-CALM)")
+    #expect(!window.windowTitle.contains("Write mode"), "no title prefix")
     await f.stop()
 }
 
 @MainActor
 @Test(.timeLimit(.minutes(3))) func aReadOnlyTokenAsksToSignInAgainToAllowChanges() async throws {
-    let f = try await RealLaunch(environment: normal, tokenScopes: [GmailScope.readonly])
+    let f = try await RealLaunch(tokenScopes: [GmailScope.readonly])
     defer { Task { await f.stop() } }
     guard case .signIn(let signIn) = f.app.screen else {
         Issue.record("expected the sign-in screen")
@@ -244,24 +196,26 @@ private final class Counter {
     #expect(signIn.notice == LiveBackend.writeAccessNotice)
     #expect(signIn.notice?.hasPrefix("To make changes, sign in again") == true && signIn.notice?.contains("gmail.") == false,
             "user words, no scope names")
-    #expect(signIn.safeMode == .normal && signIn.offersReadOnly)
     #expect(signIn.loginHint == f.corpus.account.email)
     #expect(f.session == nil && f.gmailWrites.isEmpty)
     let runner = Task { await signIn.run() }
     defer { runner.cancel() }
     await eventually("client configured") { signIn.phase == .ready }
+    #expect(signIn.screen.sentence == LiveBackend.writeAccessNotice && signIn.screen.buttons == ["Sign in with Google"],
+            "signing in again is the only way in; nothing opens the account without it")
+    #expect(f.session == nil)
     signIn.signIn()
-    await eventually("the write-mode session") { f.session != nil }
+    await eventually("the session") { f.session != nil }
     let consent = try #require(f.browser.urls.first)
     let query = URLComponents(url: consent, resolvingAgainstBaseURL: false)?.queryItems ?? []
     #expect(query.first { $0.name == "scope" }?.value == GmailScope.modify)
     #expect(!query.contains { $0.name == "include_granted_scopes" })
     #expect(try f.tokens.load(account: f.corpus.account.email)?.grantedScopes == [GmailScope.modify])
     #expect(try f.store.accounts().first?.grantedScopes == [GmailScope.modify])
-    #expect(f.session?.safeMode == .normal && f.environment?.writeMode != nil)
+    #expect(f.environment?.isLiveAccount == true)
     await f.stop()
 
-    let broad = try await RealLaunch(environment: normal, tokenScopes: [GmailScope.readonly],
+    let broad = try await RealLaunch(tokenScopes: [GmailScope.readonly],
                                      grants: "\(GmailScope.modify) https://mail.google.com/")
     defer { Task { await broad.stop() } }
     await #expect(throws: AccountSetupError.self) { _ = try await broad.backend.accounts.addAccount(loginHint: nil) }
@@ -272,36 +226,28 @@ private final class Counter {
 }
 
 @MainActor
-@Test(.timeLimit(.minutes(3))) func aReadOnlyTokenInWriteModeOpensReadOnlyWithoutSigningIn() async throws {
-    let f = try await RealLaunch(environment: normal, tokenScopes: [GmailScope.readonly], grants: GmailScope.readonly)
-    defer { Task { await f.stop() } }
-    guard case .signIn(let signIn) = f.app.screen else {
-        Issue.record("expected the sign-in screen")
-        return
+@Test func theDenyListIsInTheTransportStack() async throws {
+    let wire = FakeHTTPTransport()
+    let factory = DefaultGmailClientFactory(apiTransport: wire, config: GmailClientConfig(userAgent: "OpenHumanMail/test"),
+                                            clock: SystemClock()) { _ in
+        (StaticTokenProvider(token: "synthetic-access"), [GmailScope.modify])
     }
-    signIn.openReadOnly()
-    let session = try #require(f.session)
-    let environment = try #require(f.environment)
-    #expect(session.safeMode == .readOnly && environment.writeMode == nil && f.app.openedReadOnly)
-    #expect(environment.status.safeModeText == "Read-only")
-    _ = try await f.openInbox()
-    let ref = try #require(try f.inboxRefs().first)
-    let port = try #require(environment.commands)
-    await #expect(throws: MailPortError.blockedBySafeMode) { _ = try await port.apply(.star([MailStoreAdapter.threadKey(ref)])) }
-    await #expect(throws: EngineError.self) { _ = try await session.engine.perform(.star([ref]), origin: .app) }
-    await #expect(throws: GmailError.self) { try await session.api.batchModifyMessages(ids: ["m1"], add: ["STARRED"], remove: []) }
-    let queued = try f.store.apply(.star([ref]), origin: .app)
-    let statuses = await session.engine.waitForOperations(queued.operationIDs, timeout: .seconds(2))
-    #expect(statuses.values.allSatisfy { $0 == .pending }, "no drainer")
-    #expect(f.browser.urls.isEmpty && f.gmailWrites.isEmpty)
-    await f.stop()
-}
+    let client = try factory.gmailClient(for: "robin@example.com")
+    for escape in ["../messages/m1", "../threads/t1", "../labels/Label_1", "../../settings/filters/f1"] {
+        do {
+            try await client.deleteDraft(id: escape)
+            Issue.record("\(escape) was sent")
+        } catch GmailError.transport(.refusedByGuard) {
+        } catch {
+            Issue.record("\(escape): \(error)")
+        }
+    }
+    #expect(wire.requests.isEmpty, "nothing reached Google")
+    try? await client.deleteDraft(id: "r1")
+    #expect(wire.requests.map { "\($0.method) \($0.url.path())" } == ["DELETE /gmail/v1/users/me/drafts/r1"],
+            "a draft delete is one of the client's own writes and goes through")
 
-@MainActor
-@Test func theDenyListIsInTheWriteModeTransportStack() async throws {
-    let google = FakeGoogle(gmail: FakeGmail(accountEmail: "robin@example.com"))
-    let transport = SafeModeTransport.wrap(google.http, mode: .normal, grantedScopes: [GmailScope.modify], allowlist: nil)
-    #expect(transport is DenyListTransport)
+    let transport = DenyListTransport(wrapping: wire)
     let api = "https://gmail.googleapis.com/gmail/v1/users/me/"
     let denied: [(String, String)] = [
         ("DELETE", "messages/m1"), ("DELETE", "threads/t1"), ("POST", "messages/batchDelete"), ("DELETE", "labels/Label_1"),
@@ -310,17 +256,16 @@ private final class Counter {
     ]
     for (method, path) in denied {
         let request = HTTPRequest(method: method, url: URL(string: api + path)!, headers: [:], body: Data("{}".utf8))
-        await #expect(throws: TransportError.blockedBySafeMode("\(method) /gmail/v1/users/me/\(path)")) {
+        await #expect(throws: TransportError.refusedByGuard("\(method) /gmail/v1/users/me/\(path)")) {
             _ = try await transport.send(request)
         }
     }
-    #expect(google.http.requests.isEmpty, "nothing reached Google")
+    #expect(wire.requests.count == 1, "nothing more reached Google")
 }
 
 @MainActor
 @Test(.timeLimit(.minutes(3))) func aBulkChangeOfAnySizeGoesAtOnceAndOneUndoReversesItInGmail() async throws {
-    let f = try await RealLaunch(environment: normal.merging(["OPENHUMAN_WRITE_BULK_LIMIT": "1"]) { a, _ in a },
-                                 tokenScopes: [GmailScope.modify], threads: 3)
+    let f = try await RealLaunch(environment: ["OPENHUMAN_WRITE_BULK_LIMIT": "1"], tokenScopes: [GmailScope.modify], threads: 3)
     defer { Task { await f.stop() } }
     let environment = try #require(f.environment)
     let window = try await f.openInbox()
@@ -352,13 +297,13 @@ private final class Counter {
 
 @MainActor
 @Test(.timeLimit(.minutes(3))) func aSendGoesStraightToItsUndoWindowWhateverTheRecipients() async throws {
-    let f = try await RealLaunch(environment: normal.merging(["OPENHUMAN_WRITE_RECIPIENT_LIMIT": "1"]) { a, _ in a },
-                                 tokenScopes: [GmailScope.modify], threads: 2)
+    let f = try await RealLaunch(environment: ["OPENHUMAN_WRITE_RECIPIENT_LIMIT": "1"], tokenScopes: [GmailScope.modify],
+                                 threads: 2)
     defer { Task { await f.stop() } }
     let environment = try #require(f.environment)
     let window = try await f.openInbox()
     let settings = try #require(environment.settings)
-    #expect(try await settings.get(WriteModeSession.confirmEverySend) == false, "off by default")
+    #expect(try await settings.get(SendSettings.confirmEverySend) == false, "off by default")
     let compose = environment.compose
     compose.timing = ComposeTiming(autosaveDelay: .milliseconds(1), discardWindow: .milliseconds(1))
     func sent() async -> Int { Set(await f.gmail.deliveries().map(\.sentMessageID)).count }
@@ -391,125 +336,21 @@ private final class Counter {
 }
 
 @MainActor
-@Test(.timeLimit(.minutes(3))) func writeModeShowsNoIndicatorEvenForARealAccount() async throws {
-    let f = try await RealLaunch(environment: normal, tokenScopes: [GmailScope.modify])
+@Test(.timeLimit(.minutes(3))) func aRealAccountShowsNoModeIndicator() async throws {
+    let f = try await RealLaunch(tokenScopes: [GmailScope.modify])
     defer { Task { await f.stop() } }
     let environment = try #require(f.environment)
-    let status = environment.status
-    #expect(environment.writeMode != nil && status.isWriteMode)
-    #expect(status.safeModeText == nil && status.safeModeDetail == nil && status.safeModeHelp == nil)
-    #expect(!environment.router.windowTitle.contains("Write mode"))
-    #expect(GeneralSettingsModel(environment: environment).showsWriteModeSending)
+    #expect(environment.isLiveAccount)
+    #expect(!environment.router.windowTitle.contains("Write mode") && !environment.router.windowTitle.contains("Read-only"))
+    #expect(GeneralSettingsModel(environment: environment).showsConfirmBeforeSending)
     #expect(GeneralSettingsModel.confirmEverySendNote.contains("Undo send"))
     await f.stop()
 
     let corpus = FakeCorpus.make(threadCount: 2, now: Date())
-    let running = try FakeGmailLaunch.makeSession(safeMode: .normal, store: try MailStore.openInMemoryForTesting(),
+    let running = try FakeGmailLaunch.makeSession(store: try MailStore.openInMemoryForTesting(),
                                                   gmail: FakeGmail(accountEmail: corpus.account.email))
     let fake = running.session.environment
-    #expect(fake.writeMode == nil && !fake.status.isWriteMode && fake.status.safeModeText == nil)
-    #expect(!fake.router.windowTitle.contains("Write mode"))
-    #expect(!GeneralSettingsModel(environment: fake).showsWriteModeSending)
-}
-
-@MainActor
-@Test(.timeLimit(.minutes(3))) func aDockLaunchWithTheSwitchOnIsWriteModeLikeTheVariable() async throws {
-    let f = try await RealLaunch(tokenScopes: [GmailScope.modify], switchOn: true)
-    defer { Task { await f.stop() } }
-    #expect(f.backend.safeMode == .normal)
-    let environment = try #require(f.environment, "the mail window comes up at once, no sheet")
-    let session = try #require(f.session)
-    #expect(session.safeMode == .normal && environment.writeMode != nil && environment.status.isWriteMode)
-    #expect(environment.writeModeSwitch === f.writeModeSwitch && f.writeModeSwitch.writesNow)
-    #expect(f.writeModeSwitch.launchSource == .setting && f.writeModeSwitch.allowsChanges)
-    let window = try await f.openInbox()
-    #expect(!window.windowTitle.contains("Write mode"), "no title prefix (WRITE-MODE-CALM)")
-    let ref = try #require(try f.inboxRefs().first)
-    let port = try #require(environment.commands)
-    let token = try await port.apply(.star([MailStoreAdapter.threadKey(ref)]))
-    await waitFor("STARRED in FakeGmail") { await f.starred(ref) }
-    _ = try await port.undo(token)
-    await waitFor("STARRED gone in FakeGmail") { await !f.starred(ref) }
-    #expect(f.gmailWrites.allSatisfy { $0.method == "POST" && ($0.url.path().hasSuffix("/batchModify") || $0.url.path().hasSuffix("/modify")) })
-    await f.stop()
-
-    let old = try await RealLaunch(tokenScopes: [GmailScope.readonly], switchOn: true)
-    defer { Task { await old.stop() } }
-    guard case .signIn(let signIn) = old.app.screen else {
-        Issue.record("expected the sign-in screen")
-        return
-    }
-    #expect(signIn.notice == LiveBackend.writeAccessNotice && signIn.offersReadOnly)
-    #expect(old.session == nil && old.gmailWrites.isEmpty)
-    await old.stop()
-}
-
-@MainActor
-@Test(.timeLimit(.minutes(3))) func theVariableKeepsPriorityOverTheSwitch() async throws {
-    let cases: [([String: String], Bool?, SafeMode, WriteModeLaunchSource)] = [
-        (["OPENHUMAN_SAFE_MODE": "read-only"], true, .readOnly, .environmentReadOnly),
-        (normal, false, .normal, .environmentNormal),
-        (["OPENHUMAN_SAFE_MODE": "Normal"], true, .readOnly, .environmentReadOnly),
-        (["OPENHUMAN_SAFE_MODE": "read_only"], true, .readOnly, .environmentReadOnly),
-        ([:], false, .readOnly, .setting),
-        ([:], nil, .normal, .setting),
-        (["OPENHUMAN_SAFE_MODE": "read-only"], nil, .readOnly, .environmentReadOnly),
-    ]
-    for (environment, switchOn, mode, source) in cases {
-        let f = try await RealLaunch(environment: environment, tokenScopes: [GmailScope.modify], threads: 1, switchOn: switchOn)
-        #expect(f.backend.safeMode == mode && f.session?.safeMode == mode, "\(environment) \(switchOn)")
-        #expect(f.writeModeSwitch.launchSource == source && f.writeModeSwitch.writesNow == (mode == .normal))
-        #expect((f.environment?.writeMode != nil) == (mode == .normal))
-        if mode == .readOnly {
-            let model = WriteModeSettingModel(port: f.writeModeSwitch)
-            #expect(model.isOn == (switchOn ?? true))
-            if source == .environmentReadOnly { #expect(model.status?.contains("keeps this launch read-only") == true) }
-        }
-        #expect(f.gmailWrites.isEmpty)
-        await f.stop()
-    }
-}
-
-@MainActor
-@Test(.timeLimit(.minutes(3))) func theSwitchAsksBeforeOnAndTurnsOffAtOnce() async throws {
-    let f = try await RealLaunch(tokenScopes: [GmailScope.modify], threads: 1, switchOn: false)
-    defer { Task { await f.stop() } }
-    let model = WriteModeSettingModel(port: try #require(f.environment?.writeModeSwitch))
-    #expect(!model.isOn && model.isShown && !f.writeModeSwitch.writesNow)
-    model.request(true)
-    #expect(model.isConfirming && !model.isOn && !LiveWriteModeSwitch.read(f.store), "the sheet first, nothing saved")
-    model.cancel()
-    #expect(!model.isConfirming && !model.isOn && !LiveWriteModeSwitch.read(f.store) && f.reopened.count == 0)
-    model.request(true)
-    model.confirm()
-    #expect(model.isOn && LiveWriteModeSwitch.read(f.store) && f.reopened.count == 1, "saved, then Mail reopens")
-    await f.stop()
-
-    let writing = try await RealLaunch(tokenScopes: [GmailScope.modify], threads: 1, switchOn: true)
-    defer { Task { await writing.stop() } }
-    let on = WriteModeSettingModel(port: try #require(writing.environment?.writeModeSwitch))
-    #expect(on.isOn && !on.isShown && on.status == nil && writing.writeModeSwitch.writesNow)
-    on.request(false)
-    #expect(!on.isConfirming && !on.isOn && !LiveWriteModeSwitch.read(writing.store), "off at once, no sheet")
-    #expect(writing.reopened.count == 1, "the writing window reopens read-only")
-    #expect(try writing.tokens.load(account: writing.corpus.account.email)?.grantedScopes == [GmailScope.modify],
-            "nothing revoked: the token stays")
-    #expect(!writing.google.http.requests.contains { $0.url.path().contains("revoke") })
-    await writing.stop()
-
-    let forced = try await RealLaunch(environment: ["OPENHUMAN_SAFE_MODE": "read-only"], tokenScopes: [GmailScope.modify],
-                                      threads: 1, switchOn: false)
-    defer { Task { await forced.stop() } }
-    let readOnly = WriteModeSettingModel(port: try #require(forced.environment?.writeModeSwitch))
-    readOnly.request(true)
-    readOnly.confirm()
-    #expect(readOnly.isOn && LiveWriteModeSwitch.read(forced.store) && forced.reopened.count == 0,
-            "saved for the next launch; the variable keeps this one read-only")
-    #expect(forced.session?.safeMode == .readOnly)
-    await forced.stop()
-
-    let corpus = FakeCorpus.make(threadCount: 1, now: Date())
-    let fake = try FakeGmailLaunch.makeSession(safeMode: .normal, store: try MailStore.openInMemoryForTesting(),
-                                               gmail: FakeGmail(accountEmail: corpus.account.email))
-    #expect(fake.session.environment.writeModeSwitch == nil, "FakeGmail never gets the switch")
+    #expect(!fake.isLiveAccount)
+    #expect(!fake.router.windowTitle.contains("Write mode") && !fake.router.windowTitle.contains("Read-only"))
+    #expect(!GeneralSettingsModel(environment: fake).showsConfirmBeforeSending)
 }

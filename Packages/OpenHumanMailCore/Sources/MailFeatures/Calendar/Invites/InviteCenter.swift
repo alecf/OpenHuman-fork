@@ -200,18 +200,8 @@ public final class InviteCenter {
         connectPrompt = nil
     }
 
-    var safeModeRefusal: String? {
-        switch environment.status.safeMode {
-        case .readOnly: String(localized: "Read-only safe mode: Mail never answers invitations.")
-        case .writeAllowlist: String(localized: "Test-writes safe mode: answering invitations is off (it emails the organizer).")
-        case .normal: nil
-        }
-    }
-
-
     public func answerBlock(for key: MessageKey) -> String? {
         guard let card = card(for: key), card.offersRSVP else { return nil }
-        if let refusal = safeModeRefusal { return refusal }
         if !card.isInvited { return Self.notInvited }
         return calendarRefusals[key]
     }
@@ -224,11 +214,6 @@ public final class InviteCenter {
     public func respond(_ response: CalendarResponse, to key: MessageKey, wholeSeries: Bool = false) async {
         guard response != .needsAction, var card = card(for: key), card.offersRSVP else { return }
         notes[key] = nil
-        if let refusal = safeModeRefusal {
-            notes[key] = refusal
-            environment.actions.refuse(Self.actionID(response), .safeMode)
-            return
-        }
         guard let provider = await calendar(for: key.account) else {
             connectPrompt = key
             return
@@ -273,14 +258,6 @@ public final class InviteCenter {
         case (_, true): String(localized: "Maybe to all events")
         }
         return done ? String(localized: "\(answer) — Done") : answer
-    }
-
-    static func actionID(_ response: CalendarResponse) -> ActionID {
-        switch response {
-        case .accepted: .inviteYes
-        case .declined: .inviteNo
-        default: .inviteMaybe
-        }
     }
 
     private func markDone(_ thread: ThreadKey) async -> (UndoToken?, UndoCoordinator.Entry.Reopen?) {

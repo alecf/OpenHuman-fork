@@ -648,10 +648,6 @@ public final class ComposeSession: Identifiable {
                 notice = Notice(.warning, String(localized: "This draft changed somewhere else. Mail reloaded it."))
             }
             return false
-        } catch MailPortError.blockedBySafeMode {
-            dirty = true
-            saveState = .localOnly(String(localized: "Not saved: Mail is read-only."))
-            return false
         } catch {
             dirty = true
             saveState = .failed(String(localized: "Couldn't save the draft"))
@@ -787,9 +783,7 @@ public final class ComposeSession: Identifiable {
             subject = Self.prefixed(subjectHint, mode: mode)
             loading = false
             if !canPersist {
-                let why = services.safeMode == .readOnly ? String(localized: "Read-only")
-                                                         : String(localized: "Drafts can't be saved here")
-                notice = Notice(.info, String(localized: "\(why): recipients and the quoted message aren't filled in, and this reply can't be saved or sent."))
+                notice = Notice(.info, String(localized: "Drafts can't be saved here: recipients and the quoted message aren't filled in, and this reply can't be saved or sent."))
             }
             return
         }
@@ -902,8 +896,8 @@ extension ComposeSession: ActionHost {
     public func actionContext() -> ActionContext {
         ActionContext(scope: .composer, account: account.id, accountCount: services.accountCount(),
                       location: services.location(), selection: thread.map { [$0] } ?? [], focusedThread: thread,
-                      focusedMessage: replyTo, hasRows: false, composer: id, safeMode: services.safeMode,
-                      canWrite: services.commands != nil, canUndo: services.canUndo(), canRedo: services.canRedo())
+                      focusedMessage: replyTo, hasRows: false, composer: id, canWrite: services.commands != nil,
+                      canUndo: services.canUndo(), canRedo: services.canRedo())
     }
 }
 
@@ -911,7 +905,6 @@ extension ComposeSession: ActionHost {
 struct ComposeServices {
     let data: any MailDataSource
     let commands: (any MailCommanding)?
-    let safeMode: SafeModeInfo
     let timing: ComposeTiming
     let recovery: any DraftRecoveryStoring
     let staging: any AttachmentStaging
@@ -926,12 +919,9 @@ struct ComposeServices {
     let recordSnippetUse: @MainActor (String) -> Void
     let draftOpened: @MainActor (DraftKey) -> Void
 
-    var canPersist: Bool { commands != nil && safeMode != .readOnly }
+    var canPersist: Bool { commands != nil }
 
-    var localOnlyReason: String {
-        commands == nil ? String(localized: "Drafts can't be saved here")
-                        : String(localized: "Not saved (read-only)")
-    }
+    var localOnlyReason: String { String(localized: "Drafts can't be saved here") }
 
     func draftRow(_ key: DraftKey) async -> DraftSummary? {
         do {

@@ -146,10 +146,6 @@ extension AppRouter {
         state.reopenAfterUndo(reopen.thread)
         setNeedsPersist()
     }
-
-    func refuseBlockedWrite(_ action: ActionID) {
-        environment.actions.refuse(action, .safeMode)
-    }
 }
 
 extension NoticeCenter {

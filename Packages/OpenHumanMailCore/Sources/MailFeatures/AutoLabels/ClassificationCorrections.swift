@@ -91,7 +91,6 @@ public final class ClassificationCorrectionHandler: ActionHandler {
         + ActionID.classificationLabelCategories.map(ActionID.classificationSetLabel)
 
     nonisolated static let gmailImportant = GmailLabelID("IMPORTANT")
-    nonisolated static let readOnlyNote = "Recorded for testing. Mail can't change importance while read-only."
 
     @ObservationIgnored private weak var environment: AppEnvironment?
     @ObservationIgnored private let feedback: ActionFeedback
@@ -123,7 +122,7 @@ public final class ClassificationCorrectionHandler: ActionHandler {
             let important = request.id == .classificationMarkImportant
             return .started(Task { [weak self] in
                 await self?.correctImportance(important, thread: thread, row: row, port: port, sender: context.sender,
-                                              domain: context.senderDomain, id: request.id)
+                                              domain: context.senderDomain)
             })
         case .classificationRuleFromThread:
             return .started(Task { [weak self] in
@@ -133,7 +132,6 @@ public final class ClassificationCorrectionHandler: ActionHandler {
             guard let category = request.id.classificationSetLabelCategory, let center = environment.autoLabels else {
                 return .notHandled
             }
-            let id = request.id
             return .started(Task { [weak self] in
                 guard let self else { return }
                 do {
@@ -143,8 +141,6 @@ public final class ClassificationCorrectionHandler: ActionHandler {
                     }
                     if !center.writesToGmail { environment.notices.post("Labelled \(title) on this Mac", style: .info) }
                     await self.offerLabelRule(title, thread: thread, sender: context.sender, domain: context.senderDomain)
-                } catch MailPortError.blockedBySafeMode {
-                    self.feedback.refuse(id, .safeMode)
                 } catch {
                     self.feedback.failed("Couldn't label this conversation")
                 }
@@ -154,7 +150,7 @@ public final class ClassificationCorrectionHandler: ActionHandler {
 
 
     private func correctImportance(_ important: Bool, thread: ThreadKey, row: ThreadRow?, port: any ImportanceRulesPort,
-                                   sender: String?, domain: String?, id: ActionID) async {
+                                   sender: String?, domain: String?) async {
         guard let environment else { return }
         var row = row
         if row == nil { row = (try? await environment.data.localThread(thread.account, gmailThreadID: thread.gmailThreadID)) ?? nil }
@@ -163,7 +159,6 @@ public final class ClassificationCorrectionHandler: ActionHandler {
         let flagSetting = (try? await environment.settings?.get(AppSettings.classificationNotImportantRemovesGmailFlag))
             ?? AppSettings.classificationNotImportantRemovesGmailFlag.defaultValue
         let removesFlag = !important && flagSetting && (row?.isImportant ?? true)
-            && environment.status.safeMode.allowsMailChanges
         let commands = removesFlag ? environment.commands : nil
         let title: LocalizedStringResource = important ? "Marked important" : "Marked not important"
         do {
@@ -186,9 +181,6 @@ public final class ClassificationCorrectionHandler: ActionHandler {
             }
             await recordImportance(important, thread: thread, row: row)
             await offerImportanceRule(important, thread: thread, port: port, sender: sender, domain: domain)
-        } catch MailPortError.blockedBySafeMode {
-            await recordImportance(important, thread: thread, row: row)
-            environment.notices.post(Self.readOnlyNote, style: .info)
         } catch {
             feedback.failed("Couldn't change the importance rule")
         }
@@ -227,8 +219,6 @@ public final class ClassificationCorrectionHandler: ActionHandler {
                 do {
                     if let undo { try await undo.perform(done, threads: [thread], via: port) { try await port.apply(change) } }
                     else { _ = try await port.apply(change) }
-                } catch MailPortError.blockedBySafeMode {
-                    self?.feedback.refuse(.classificationNotImportant, .safeMode)
                 } catch {
                     self?.feedback.failed("Couldn't change the importance rule")
                 }

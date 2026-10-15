@@ -835,7 +835,7 @@ public final class ReaderViewController: NSViewController {
     private func actionContext() -> (AppRouter, ActionContext)? {
         guard let model, let router, router.active != nil else { return nil }
         return (router, ReaderActions.context(host: router, thread: model.thread, lastMessage: model.messages.last?.id,
-                                              safeMode: model.safeMode, isStarred: model.isStarred))
+                                              isStarred: model.isStarred))
     }
 
     func offeredThreadActions() -> [ActionDescriptor] {

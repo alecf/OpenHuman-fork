@@ -264,16 +264,18 @@ private enum TwoClients {
     @Test func theFactoryRebuildsAClientWhenTheAccountsClientChanged() async throws {
         let clock = TestClock()
         let store = InMemoryTokenStore(["me@example.com": Synthetic.token(
-            refresh: "r1", access: "first", expiry: clock.now.addingTimeInterval(3600), clientID: TwoClients.workID)])
+            refresh: "r1", access: "first", expiry: clock.now.addingTimeInterval(3600), clientID: TwoClients.workID,
+            scopes: [GmailScope.modify])])
         let registry = credentials(store, TwoClients.tokenEndpoint(), clock)
         let api = FakeHTTPTransport()
         api.on("GET", "/gmail/v1/users/me/labels") { _ in FakeHTTPTransport.json(200, ["labels": []]) }
-        let factory = DefaultGmailClientFactory(safeMode: .readOnly, accountCredentials: registry, apiTransport: api,
+        let factory = DefaultGmailClientFactory(accountCredentials: registry, apiTransport: api,
                                                 config: GmailClientConfig(userAgent: "t"), clock: clock)
         let first = try factory.gmailClient(for: "me@example.com")
         #expect(try factory.gmailClient(for: "me@example.com") === first)
         try await registry.save(Synthetic.result(email: "me@example.com", token: Synthetic.token(
-            refresh: "r2", access: "second", expiry: clock.now.addingTimeInterval(3600), clientID: TwoClients.personalID)))
+            refresh: "r2", access: "second", expiry: clock.now.addingTimeInterval(3600), clientID: TwoClients.personalID,
+            scopes: [GmailScope.modify])))
         let second = try factory.gmailClient(for: "me@example.com")
         #expect(second !== first)
         _ = try await second.listLabels()

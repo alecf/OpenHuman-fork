@@ -39,7 +39,6 @@ public final class ArchiveSuggestionModel {
     public nonisolated static let maxSenderChecks = 300
     public nonisolated static let firstCheckDelay: Duration = .seconds(20)
     public nonisolated static let checkInterval: Duration = .seconds(3_600)
-    public static let readOnlyNote = "Read-only: Mail can't archive in this session."
     public static let footnote = "Archived mail stays in Done and search. Undo with ⌘Z, or Bulk actions for 7 days."
 
     public private(set) var suggestion: Suggestion?
@@ -58,8 +57,6 @@ public final class ArchiveSuggestionModel {
     isolated deinit {
         schedule?.cancel()
     }
-
-    public var isReadOnly: Bool { environment?.status.safeMode == .readOnly }
 
     public func startSchedule() {
         guard schedule == nil, let environment, !environment.isFake else { return }

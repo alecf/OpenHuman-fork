@@ -76,7 +76,7 @@ private final class ClientChoiceAccounts: AccountManaging {
 @Test func theSignInScreenNamesTheClientAndPicksAnother() async throws {
     let accounts = ClientChoiceAccounts(clients: [(id: "key-work", short: "aaaa1111", secret: true),
                                                   (id: "key-personal", short: "bbbb2222", secret: true)])
-    let model = SignInModel(accounts: accounts, safeMode: .readOnly)
+    let model = SignInModel(accounts: accounts)
     let runner = Task { await model.run() }
     defer { runner.cancel() }
     await eventually { model.phase == .ready && model.clients.count == 2 }
@@ -91,7 +91,7 @@ private final class ClientChoiceAccounts: AccountManaging {
     await eventually { model.phase == .signedIn(AccountID(42)) }
     #expect(accounts.signInsWith == ["key-personal"], "the sign-in used the picked client")
 
-    let again = SignInModel(accounts: accounts, safeMode: .readOnly)
+    let again = SignInModel(accounts: accounts)
     let second = Task { await again.run() }
     defer { second.cancel() }
     await eventually { again.phase == .ready && again.clients.count == 2 }
@@ -103,7 +103,7 @@ private final class ClientChoiceAccounts: AccountManaging {
 @MainActor
 @Test func importingAnotherClientSelectsItAndOneClientShowsNoPicker() async throws {
     let accounts = ClientChoiceAccounts(clients: [(id: "key-work", short: "aaaa1111", secret: true)])
-    let model = SignInModel(accounts: accounts, safeMode: .readOnly)
+    let model = SignInModel(accounts: accounts)
     let runner = Task { await model.run() }
     defer { runner.cancel() }
     await eventually { model.phase == .ready && model.clients.count == 1 }

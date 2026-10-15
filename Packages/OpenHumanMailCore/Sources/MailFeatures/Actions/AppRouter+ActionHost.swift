@@ -12,8 +12,7 @@ extension AppRouter: ActionHost {
     }
 
     public func contentContext() -> ActionContext {
-        var c = ActionContext(accountCount: accounts.count, safeMode: environment.status.safeMode,
-                              canWrite: environment.commands != nil, canUndo: environment.undo?.canUndo ?? false,
+        var c = ActionContext(accountCount: accounts.count, canWrite: environment.commands != nil, canUndo: environment.undo?.canUndo ?? false,
                               canRedo: environment.undo?.canRedo ?? false, togglesOn: togglesOn())
         c.accountTitles = accounts.map { $0.account.alias ?? $0.account.displayName ?? $0.account.email }
         guard let active else { return c }

@@ -259,7 +259,7 @@ struct RenderSweepTests {
 
     @Test(arguments: SweepTheme.builtIns)
     func commandPalette(_ theme: SweepTheme) async throws {
-        let w = try await SweepWindow.make(SweepWindow.environment(safeMode: .readOnly), theme: theme)
+        let w = try await SweepWindow.make(SweepWindow.environment(), theme: theme)
         defer { w.close() }
         let (thread, _) = try await w.conversationWithAMiddleSender()
         _ = try await w.open(thread)
@@ -292,10 +292,9 @@ struct RenderSweepTests {
 
     @Test(arguments: SweepTheme.builtIns)
     func footer(_ theme: SweepTheme) async throws {
-        let w = try await SweepWindow.make(SweepWindow.environment(safeMode: .readOnly), theme: theme)
+        let w = try await SweepWindow.make(SweepWindow.environment(), theme: theme)
         defer { w.close() }
         try await w.cursorAndHover(steps: 1, offset: 2)
-        try await sweepShoot(w.window, screen: "window-read-only", theme: theme)
 
         let store = theme.makeStore()
         let hints = HintBarModel(router: w.router)
@@ -308,13 +307,13 @@ struct RenderSweepTests {
     }
 
     @Test(arguments: SweepTheme.builtIns)
-    func writeModeIndicator(_ theme: SweepTheme) async throws {
+    func liveAccountWindow(_ theme: SweepTheme) async throws {
         let store = FakeMailStore(corpus: .small, options: .init(remoteAck: .immediate))
         let environment = AppEnvironment(data: store, commands: store, accounts: store, settings: store, isFake: true,
-                                         featureFlags: FeatureFlags(), writeMode: WriteModeSession())
+                                         featureFlags: FeatureFlags(), isLiveAccount: true)
         let w = try await SweepWindow.make(environment, theme: theme)
         defer { w.close() }
-        try await sweepShoot(w.window, screen: "write-mode", theme: theme)
+        try await sweepShoot(w.window, screen: "window-live-account", theme: theme)
     }
 
     @Test(arguments: SweepTheme.builtIns)
@@ -337,7 +336,7 @@ struct RenderSweepTests {
         let store = theme.makeStore()
         let size = NSSize(width: 960, height: 640)
         for (screen, status) in [("sign-in", OAuthClientStatus.configured(source: .environment)), ("sign-in-needs-client", .missing)] {
-            let model = SignInModel(accounts: SweepAccounts(status: status), safeMode: .readOnly)
+            let model = SignInModel(accounts: SweepAccounts(status: status))
             await model.run()
             let window = sweepStandaloneWindow(SignInView(model: model, theme: store.resolved.tokens), store: store, size: size)
             defer { window.orderOut(nil) }

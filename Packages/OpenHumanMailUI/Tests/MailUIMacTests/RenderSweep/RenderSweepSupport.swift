@@ -190,11 +190,10 @@ enum SweepWindow {
         return InlineReplyWindow(environment: environment, window: window, content: content)
     }
 
-    static func environment(safeMode: SafeModeInfo = .normal, heldSends: FakeMailStore.Options.HeldSends = .realTime,
-                            liveConnectivity: Bool = false, calendar: Bool = false) -> AppEnvironment {
+    static func environment(heldSends: FakeMailStore.Options.HeldSends = .realTime, liveConnectivity: Bool = false,
+                            calendar: Bool = false) -> AppEnvironment {
         AppEnvironment.fake(corpus: .small,
-                            options: .init(remoteAck: .immediate, heldSends: heldSends, liveConnectivity: liveConnectivity,
-                                           safeMode: safeMode),
+                            options: .init(remoteAck: .immediate, heldSends: heldSends, liveConnectivity: liveConnectivity),
                             featureFlags: FeatureFlags(), calendar: calendar ? FakeCalendar.sample() : nil)
     }
 }

@@ -18,14 +18,14 @@ private struct Rig {
     let clock: TestClock
 }
 
-private func rig(grantedScope: String = GmailScope.readonly, timeout: Duration = .seconds(600)) throws -> Rig {
+private func rig(grantedScope: String = GmailScope.modify, timeout: Duration = .seconds(600)) throws -> Rig {
     let google = FakeGoogle(gmail: FakeGmail(accountEmail: "robin@example.com"), grantedScope: grantedScope)
     let tokens = InMemoryTokenStore()
     let browser = RecordingBrowser()
     let store = try MailStore.openInMemoryForTesting()
     let clock = TestClock()
     let manager = LiveAccountManager(
-        safeMode: .readOnly, store: store,
+        store: store,
         dependencies: LiveAccountManager.Dependencies(
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()],
             storeDirectory: FileManager.default.temporaryDirectory.appendingPathComponent("oh-none-\(UUID().uuidString)"), tokenStore: tokens, transport: google.http,
@@ -54,10 +54,10 @@ private func setupError(_ rig: Rig, _ pasted: String) async -> AccountSetupError
     return nil
 }
 
-@Test func theChallengeIsReadOnlyAndOpensNothing() async throws {
+@Test func theChallengeAsksForModifyAndOpensNothing() async throws {
     let r = try rig()
     let challenge = try await r.manager.beginRemoteSignIn(loginHint: "robin@example.com")
-    #expect(query(challenge.url, "scope") == GmailScope.readonly)
+    #expect(query(challenge.url, "scope") == GmailScope.modify)
     #expect(query(challenge.url, "include_granted_scopes") == nil)
     #expect(query(challenge.url, "login_hint") == "robin@example.com")
     #expect(query(challenge.url, "client_id") == SyntheticClient.clientID)
@@ -73,7 +73,7 @@ private func setupError(_ rig: Rig, _ pasted: String) async -> AccountSetupError
     let r = try rig()
     let challenge = try await r.manager.beginRemoteSignIn(loginHint: nil)
     let id = try await r.manager.completeRemoteSignIn(pasted: " \(redirectAddress(for: challenge))\n")
-    #expect(try r.tokens.load(account: "robin@example.com")?.grantedScopes == [GmailScope.readonly])
+    #expect(try r.tokens.load(account: "robin@example.com")?.grantedScopes == [GmailScope.modify])
     #expect(try r.store.accounts().map(\.id) == [id])
     #expect(tokenPosts(r) == 1)
     #expect(r.browser.urls.isEmpty)
@@ -119,7 +119,7 @@ private func setupError(_ rig: Rig, _ pasted: String) async -> AccountSetupError
 }
 
 @Test func extraScopesAreRefusedAndNothingIsStored() async throws {
-    let r = try rig(grantedScope: "\(GmailScope.readonly) \(GmailScope.modify)")
+    let r = try rig(grantedScope: "\(GmailScope.modify) https://mail.google.com/")
     let challenge = try await r.manager.beginRemoteSignIn(loginHint: nil)
     let error = await setupError(r, redirectAddress(for: challenge))
     #expect(error?.kind == .refused)
@@ -160,7 +160,7 @@ private func setupError(_ rig: Rig, _ pasted: String) async -> AccountSetupError
     let tokens = InMemoryTokenStore()
     let browser = RecordingBrowser()
     let backend = LiveBackend(
-        safeMode: .readOnly, store: try MailStore.openInMemoryForTesting(),
+        store: try MailStore.openInMemoryForTesting(),
         accountDependencies: LiveAccountManager.Dependencies(
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()],
             storeDirectory: FileManager.default.temporaryDirectory.appendingPathComponent("oh-none-\(UUID().uuidString)"), tokenStore: tokens, transport: google.http,
@@ -185,7 +185,7 @@ private func setupError(_ rig: Rig, _ pasted: String) async -> AccountSetupError
     await eventually("mail window") { if case .mail = app.screen { return true }; return false }
     guard let session = app.session else { return }
     defer { Task { await session.stop() } }
-    #expect(try tokens.load(account: corpus.account.email)?.grantedScopes == [GmailScope.readonly])
+    #expect(try tokens.load(account: corpus.account.email)?.grantedScopes == [GmailScope.modify])
     #expect(browser.urls.isEmpty)
 }
 

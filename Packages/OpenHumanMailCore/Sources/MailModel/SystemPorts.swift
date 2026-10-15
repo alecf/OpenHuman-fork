@@ -5,7 +5,6 @@ public struct SystemNotification: Sendable, Hashable {
     public enum Category: String, Sendable, Hashable {
         case newMail
         case reminder
-        case readOnly
     }
 
     public let identifier: String

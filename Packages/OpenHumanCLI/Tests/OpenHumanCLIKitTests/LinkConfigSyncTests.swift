@@ -97,28 +97,21 @@ final class Locked<Value>: @unchecked Sendable {
         #expect(try h.store.setting(.pollIntervalSeconds, scope: .global) == 120)
     }
 
-    @Test func mailGuardRailsAreSafetyKeysAndOffInReadOnlySafeMode() async throws {
+    @Test func mailGuardRailsAreSafetyKeys() async throws {
         let h = try Harness()
-        let agent = await h.run(["config", "set", "undo_send_seconds", "0", "--no-input", "--json"])
-        #expect(agent.code == 5 && agent.errorCode == "blocked_by_safe_mode")
-        let person = await h.run(["config", "set", "undo_send_seconds", "0", "--json"], stdinTTY: true, readLine: "me@example.com")
-        #expect(person.code == 5 && person.errorCode == "blocked_by_safe_mode")
-        for key in ["scheduler.send_later.enabled", "scheduler.snooze.enabled", "scheduler.reminders.enabled"] {
-            #expect((await h.run(["config", "set", key, "false", "--json"])).errorCode == "blocked_by_safe_mode", "\(key)")
-        }
-        #expect(try h.store.setting(.undoSendSeconds, scope: .global) == 10)
-        #expect(try h.store.setting(.schedulerSendLaterEnabled, scope: .global) == true)
-
-        let piped = await h.run(["config", "set", "undo_send_seconds", "0", "--json"], environment: Harness.write)
+        let piped = await h.run(["config", "set", "undo_send_seconds", "0", "--json"])
         #expect(piped.code == 5 && piped.errorCode == "safety_key_gated")
-        let noInput = await h.run(["config", "set", "undo_send_seconds", "0", "--no-input", "--json"],
-                                  environment: Harness.write, stdinTTY: true, readLine: "me@example.com")
+        let noInput = await h.run(["config", "set", "undo_send_seconds", "0", "--no-input", "--json"], stdinTTY: true, readLine: "me@example.com")
         #expect(noInput.code == 5 && noInput.errorCode == "safety_key_gated")
-        let sendLater = await h.run(["config", "set", "scheduler.send_later.enabled", "false", "--json"], environment: Harness.write)
-        #expect(sendLater.code == 5 && sendLater.errorCode == "safety_key_gated")
+        for key in ["scheduler.send_later.enabled", "scheduler.snooze.enabled", "scheduler.reminders.enabled"] {
+            let gated = await h.run(["config", "set", key, "false", "--json"])
+            #expect(gated.code == 5 && gated.errorCode == "safety_key_gated", "\(key)")
+        }
+        #expect(try h.store.setting(.schedulerSendLaterEnabled, scope: .global) == true)
+        let wrong = await h.run(["config", "set", "undo_send_seconds", "0", "--json"], stdinTTY: true, readLine: "someone@example.com")
+        #expect(wrong.code == 5 && wrong.errorCode == "confirmation_failed")
         #expect(try h.store.setting(.undoSendSeconds, scope: .global) == 10)
-        let confirmed = await h.run(["config", "set", "undo_send_seconds", "5", "--json"], environment: Harness.write,
-                                    stdinTTY: true, readLine: "me@example.com")
+        let confirmed = await h.run(["config", "set", "undo_send_seconds", "5", "--json"], stdinTTY: true, readLine: "me@example.com")
         #expect(confirmed.code == 0 && confirmed.data["safety"] as? Bool == true)
         #expect(try h.store.setting(.undoSendSeconds, scope: .global) == 5)
         let listed = (await h.run(["config", "list", "--json"])).list("settings")
@@ -183,9 +176,7 @@ final class Locked<Value>: @unchecked Sendable {
         #expect(r.code == 0 && r.data["ok"] as? Bool == true)
         let checks = r.list("checks")
         let names = checks.compactMap { $0["name"] as? String }
-        #expect(["cli", "safe-mode", "store.open", "sqlite", "accounts", "app", "queue", "policy"].allSatisfy(names.contains))
-        #expect(checks.first { $0["name"] as? String == "safe-mode" }?["detail"] as? String
-            == "read-only (OPENHUMAN_SAFE_MODE; unset or unrecognised means read-only)")
+        #expect(["cli", "store.open", "sqlite", "accounts", "app", "queue", "policy"].allSatisfy(names.contains))
         #expect(!r.out.contains("Invoice") && !r.out.contains("alice@example.com"))
         let empty = FileManager.default.temporaryDirectory.appendingPathComponent("oh-cli-doctor-\(UUID().uuidString)")
         let none = await h.run(["doctor", "--home", empty.path, "--json"])

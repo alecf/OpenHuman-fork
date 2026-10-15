@@ -109,14 +109,6 @@ import Testing
         #expect(model.canSave)
     }
 
-    @Test func readOnlyRefusesStoringFiles() async throws {
-        let f = SettingsFixture(safeMode: .readOnly)
-        let commands = try #require(f.env.commands)
-        await #expect(throws: MailPortError.self) {
-            _ = try await commands.storeSnippetAttachment(try tempFile("x.txt"), mimeType: "text/plain")
-        }
-    }
-
     @Test func aV2FileCarriesRecipientsAndFilesAndImportsThem() async throws {
         let a = SettingsFixture()
         let stored = try await a.store.storeSnippetAttachment(try tempFile("guide.txt", bytes: 120), mimeType: "text/plain")

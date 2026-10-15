@@ -136,33 +136,23 @@ import Testing
     @Test(arguments: [false, true])
     func anAgentDraftTheUserSendsReachesNobodyWithItsMarkers(ambiguousStrip: Bool) async throws {
         let h = try await EngineHarness()
+        let agentLabel = await h.gmail.addUserLabel(OHGmailLabels.agent)
+        let remote = try await h.gmail.createDraft(rawRFC822: rawDraft(subject: "From an agent",
+                                                                       body: "Synthetic first pass.", origin: "cli"),
+                                                   threadID: nil)
+        let first = try #require(remote.message?.id)
+        await h.gmail.modifyLabels(messageID: first, add: [agentLabel])
         let probe = ProbeGmail(h.gmail)
         let app = h.engine(factory: FixedGmailFactory(api: probe))
         let events = EngineEvents(app)
-        await app.setDrainsExternalOpsForTesting(true)
         await app.start()
         try await h.waitForSyncs(app)
-        let cli = h.engine(role: .localClient, factory: .some(nil))
-        var content = DraftContent(to: [EmailAddress(email: "bob@example.invalid")], cc: [], bcc: [],
-                                   subject: "From an agent", bodyHTML: "<p>Synthetic first pass.</p>", attachments: [])
-        let id = try await cli.createAgentDraft(account: h.account, mode: .new, replyTo: nil, content: content,
-                                                note: "for review", origin: .cli)
-        func uploaded(replacing previous: GmailMessageID?) async throws -> String {
-            try await eventually("uploaded by the app's drainer") {
-                let message = try h.store.draft(id)?.gmailMessageID, idle = try h.ops([.pending, .inFlight]).isEmpty
-                return message != nil && message != previous && idle
-            }
-            return try #require(try h.store.draft(id)?.gmailMessageID).rawValue
-        }
-        let first = try await uploaded(replacing: nil)
+        let id = try #require(try await app.fetchDraft(account: h.account, gmailDraftID: GmailDraftID(remote.id)))
+        let imported = try #require(try h.store.draft(id))
+        #expect(imported.origin == .cli && imported.reviewState == .pending)
+        #expect(imported.gmailMessageID?.rawValue == first)
         #expect(await h.labelNames(ofMessage: first).contains(OHGmailLabels.agent))
         #expect(lines(try await h.rawOnGmail(first), startingWith: "x-openhuman-origin:") == ["X-OpenHuman-Origin: cli"])
-
-        content.bodyHTML = "<p>Synthetic second pass.</p>"
-        try await cli.updateAgentDraft(id, content: content, note: nil)
-        let second = try await uploaded(replacing: GmailMessageID(first))
-        #expect(await h.labelNames(ofMessage: second).contains(OHGmailLabels.agent))
-        #expect(await h.gmail.labelIDs(ofMessage: first) == nil)
 
         if ambiguousStrip { await h.gmail.ambiguousFailureAfterCommit(.updateDraft) }
         let receipt = try await app.send(id, authorization: .userConfirmed, undoWindow: .zero)

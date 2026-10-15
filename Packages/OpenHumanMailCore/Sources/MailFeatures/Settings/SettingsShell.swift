@@ -41,13 +41,11 @@ public enum SettingsPageID: String, Sendable, Hashable, CaseIterable {
 }
 
 public struct SettingsAvailability: Sendable, Hashable {
-    public let safeMode: SafeModeInfo
     public let hasCommands: Bool
     public let hasSettings: Bool
     public let hasAccounts: Bool
 
-    public init(safeMode: SafeModeInfo, hasCommands: Bool, hasSettings: Bool, hasAccounts: Bool) {
-        self.safeMode = safeMode
+    public init(hasCommands: Bool, hasSettings: Bool, hasAccounts: Bool) {
         self.hasCommands = hasCommands
         self.hasAccounts = hasAccounts
         self.hasSettings = hasSettings
@@ -55,30 +53,13 @@ public struct SettingsAvailability: Sendable, Hashable {
 
     @MainActor
     public init(environment: AppEnvironment) {
-        self.init(safeMode: environment.status.safeMode, hasCommands: environment.commands != nil,
-                  hasSettings: environment.settings != nil, hasAccounts: environment.accounts != nil)
+        self.init(hasCommands: environment.commands != nil, hasSettings: environment.settings != nil,
+                  hasAccounts: environment.accounts != nil)
     }
 
-    public var canEditStoredItems: Bool { hasCommands && safeMode.allowsMailChanges }
     public var canEditSettings: Bool { hasSettings }
 
-    public var banner: String? {
-        switch safeMode {
-        case .readOnly:
-            return "Read-only: Mail can't change, delete or send anything in Gmail. Splits, snippets and importance rules "
-                + "can't be edited; other settings work as usual."
-        case .writeAllowlist:
-            return "Test writes only: sending is off and only test threads can change."
-        case .normal:
-            return nil
-        }
-    }
-
-    public var storedItemsNote: String? {
-        if !safeMode.allowsMailChanges { return "Read-only: splits and snippets can't be edited." }
-        if !hasCommands { return "Editing isn't available here." }
-        return nil
-    }
+    public var storedItemsNote: String? { hasCommands ? nil : "Editing isn't available here." }
 }
 
 public struct SettingsPageEntry: Identifiable, Hashable, Sendable {
@@ -118,8 +99,7 @@ public final class SettingsShellModel {
 
     public static func standalone(defaults: UserDefaults? = nil) -> SettingsShellModel {
         SettingsShellModel(registry: ModuleRegistry(),
-                           availability: SettingsAvailability(safeMode: .readOnly, hasCommands: false, hasSettings: false,
-                                                              hasAccounts: false),
+                           availability: SettingsAvailability(hasCommands: false, hasSettings: false, hasAccounts: false),
                            defaults: defaults)
     }
 

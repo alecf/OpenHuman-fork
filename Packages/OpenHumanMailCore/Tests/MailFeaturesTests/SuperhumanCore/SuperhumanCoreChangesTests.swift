@@ -123,15 +123,4 @@ import Testing
         await eventually { f.rows.count == before }
         #expect(try await f.env.settings?.get(AppSettings.lastBulkArchive) ?? nil == nil)
     }
-
-    @Test func getMeToZeroIsRefusedInReadOnly() async throws {
-        let f = OverlayFixture(corpus: .rich(threadCount: 20, now: fixedNow), options: .init(safeMode: .readOnly))
-        await f.loaded()
-        let before = f.rows.count
-        _ = await f.run(.getMeToZero)
-        if case .zero = f.center.overlay { Issue.record("the card opened in read-only safe mode") }
-        _ = await f.run(.undoBulkArchive)
-        #expect(f.rows.count == before)
-        #expect(f.env.notices.toasts.allSatisfy { !$0.message.hasPrefix("Marked") && !$0.message.hasPrefix("Moved") })
-    }
 }

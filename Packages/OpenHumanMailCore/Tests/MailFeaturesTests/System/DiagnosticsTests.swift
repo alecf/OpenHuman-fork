@@ -78,8 +78,8 @@ struct DiagnosticsExportTests {
         #expect(!log.contains("MARKER") && !log.contains("@") && !log.contains("no log lines"))
     }
 
-    @Test func theDocumentHasVersionsFlagsSafeModeAndNumberedAccounts() async throws {
-        let f = SystemFixture(corpus: .small, options: .init(remoteAck: .immediate, safeMode: .readOnly))
+    @Test func theDocumentHasVersionsFlagsAndNumberedAccounts() async throws {
+        let f = SystemFixture(corpus: .small, options: .init(remoteAck: .immediate))
         let bytes = try await exporter(f).build()
         let entries = try #require(ZipArchive.read(bytes))
         let decoder = JSONDecoder()
@@ -87,13 +87,12 @@ struct DiagnosticsExportTests {
         let document = try decoder.decode(DiagnosticsDocument.self, from: try #require(entries["diagnostics.json"]))
         #expect(document.app.gitCommit == "abc1234" && document.app.version == "1.0")
         #expect(document.modules == ["notifications": true, "unsubscribe": false])
-        #expect(document.snapshot.safeMode == "readOnly")
         #expect(document.snapshot.accounts.map(\.index) == [1, 2])
     }
 
     @Test func aMisbehavingSourceCannotSmuggleContentThroughTheSnapshot() async throws {
         let hostile = DiagnosticsSnapshot(
-            generatedAt: fixedNow, safeMode: "normal",
+            generatedAt: fixedNow,
             accounts: [.init(index: 1, health: "ok", connectivity: "syncFailing(ada@leaky.example)", threadCount: 1, messageCount: 1,
                              draftCount: 0, pendingOperations: 0, failedOperations: 0)],
             operations: [.init(kind: "Subject: private thing", status: "pending", count: 2)],

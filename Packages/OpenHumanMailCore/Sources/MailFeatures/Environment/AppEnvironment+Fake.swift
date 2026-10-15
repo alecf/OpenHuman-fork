@@ -14,7 +14,7 @@ extension AppEnvironment {
                             waiting: (any WaitingPort)? = nil,
                             notices: NoticeCenter? = nil) -> AppEnvironment {
         let store = FakeMailStore(corpus: corpus, options: options)
-        let rules = FakeImportanceRules(corpus: corpus, safeMode: options.safeMode, now: options.now)
+        let rules = FakeImportanceRules(corpus: corpus, now: options.now)
         let environment = AppEnvironment(data: store, commands: store, accounts: store, settings: store, isFake: true,
                                          navigationStore: navigationStore, notices: notices,
                                          importance: rules,
@@ -23,7 +23,7 @@ extension AppEnvironment {
                                          calendar: calendar, calendarConnection: calendarConnection,
                                          keymapStore: keymapStore, calendarConnections: calendarConnections,
                                          calendarCache: calendarCache,
-                                         waiting: waiting ?? FakeWaitingRules(safeMode: options.safeMode))
+                                         waiting: waiting ?? FakeWaitingRules())
         if options.relatedSearchMatches, !environment.smartSearchEnabled { store.setRelatedSearchMatches(false) }
         environment.autoLabels?.onIndexChange = { [weak rules] index in
             rules?.setAutoLabelLookup { key in index.category(account: key.account, thread: key.gmailThreadID, labelIDs: []) }

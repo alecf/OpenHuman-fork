@@ -121,11 +121,26 @@ enum DraftSupport {
 
     static let queuedNote = "Saved locally. OpenHuman Mail uploads an agent draft to Gmail only after you approve it there."
 
+    static func settle(_ ctx: CLIContext, engine: MailEngine, accounts: [AccountItem], ids: [OperationID], wait: Bool,
+                       note: String) async -> (status: String, exit: CLIStatus, notes: [String]) {
+        if ids.isEmpty { return ("succeeded", .ok, []) }
+        guard ctx.appIsRunning(accounts), wait else { return ("queued", .queued, [note]) }
+        let statuses = await engine.waitForOperations(ids, timeout: ctx.timeout)
+        if statuses.values.contains(where: { $0 == .failed || $0 == .cancelled }) {
+            let store = try? ctx.store()
+            if ids.contains(where: { ((try? store?.operation($0)) ?? nil)?.lastErrorCode == "not_applied_outside_app" }) {
+                return ("refused", .policyBlocked, ["OpenHuman Mail did not apply this to Gmail: it keeps changes from the CLI on this Mac until you review them there."])
+            }
+            return ("failed", .failure, ["The app could not apply the change. Run `openhuman sync status` for details."])
+        }
+        if statuses.values.allSatisfy({ $0 == .succeeded }) { return ("succeeded", .ok, []) }
+        return ("queued", .queued, ["Queued; the app has not confirmed it within the timeout."])
+    }
+
     static func result(_ ctx: CLIContext, engine: MailEngine, mapper: Mapper, draft: DraftListItem, accounts: [AccountItem],
                        wait: Bool) async throws -> CommandResult {
         let ops = try uploadOps(try ctx.store(), draft)
-        let (status, exit, notes) = await WriteSupport.settle(ctx, engine: engine, accounts: accounts, ids: ops, wait: wait,
-                                                              note: queuedNote)
+        let (status, exit, notes) = await settle(ctx, engine: engine, accounts: accounts, ids: ops, wait: wait, note: queuedNote)
         var value = mapper.draft(draft)
         if case .object(var fields) = value {
             fields["sent"] = .bool(false)
@@ -359,7 +374,7 @@ struct DraftsDelete: CLICommand {
     @Argument(help: "Draft id (local UUID or Gmail draft id).") var draftId: String
     @Flag(name: .long, help: "Confirm under --no-input.") var yes = false
 
-    static let queuedNote = "Deleted here. Mail by OpenHuman removes the Gmail copy only in a guarded test run or after you reviewed the draft there."
+    static let queuedNote = "Deleted here. Mail by OpenHuman removes the Gmail copy only after you reviewed the draft there."
 
     func handle(_ ctx: CLIContext) async throws -> CommandResult {
         let draft = try DraftSupport.find(draftId, ctx)
@@ -382,7 +397,7 @@ struct DraftsDelete: CLICommand {
         let engine = try ctx.engine()
         try await engine.discardDraft(draft.id)
         let ops = try DraftSupport.deleteOps(try ctx.store(), draft)
-        let (status, exit, notes) = await WriteSupport.settle(ctx, engine: engine, accounts: [account], ids: ops, wait: write.wait,
+        let (status, exit, notes) = await DraftSupport.settle(ctx, engine: engine, accounts: [account], ids: ops, wait: write.wait,
                                                               note: Self.queuedNote)
         let ids = OutValue.array(ops.map { .int(Int($0.rawValue)) })
         let data = obj(["deleted": .bool(true), "status": .string(status), "draftId": .string(draft.id.rawValue),
@@ -583,7 +598,7 @@ enum ReviewDecision {
                 ops += try DraftSupport.uploadOps(try ctx.store(), draft)
             }
         }
-        let (status, exit, notes) = await WriteSupport.settle(ctx, engine: engine, accounts: [account], ids: ops, wait: wait,
+        let (status, exit, notes) = await DraftSupport.settle(ctx, engine: engine, accounts: [account], ids: ops, wait: wait,
                                                               note: state == .approved ? approvedNote : rejectedNote)
         let after = try drafts.map { try ctx.store().draft($0.id) ?? $0 }
         let data = obj(["review": .string(state.rawValue), "verb": .string(verb), "status": .string(status), "sent": .bool(false),

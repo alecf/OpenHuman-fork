@@ -225,20 +225,17 @@ private func lastMessage(_ adapter: MailStoreAdapter, account: AccountID) async 
         Issue.record("expected the mail window")
         return
     }
-    #expect(environment.isFake)
-    #expect(environment.status.safeMode == .normal)
+    #expect(environment.isFake && !environment.isLiveAccount)
 }
 
-@Test(.timeLimit(.minutes(1))) func adapterPassesSafeModeAndConnectivity() async throws {
+@Test(.timeLimit(.minutes(1))) func adapterPassesConnectivity() async throws {
     let (store, account) = try FixtureStoreSeeder.makeStore(corpus: .make(threadCount: 1, now: now))
-    let adapter = MailStoreAdapter(store: store, safeMode: .readOnly, connectivity: {
+    let adapter = MailStoreAdapter(store: store, connectivity: {
         AsyncStream { $0.yield([account: .needsReauth]); $0.finish() }
     })
-    #expect(adapter.safeMode() == .readOnly)
     var states: [[AccountID: ConnectivityState]] = []
     for await state in adapter.connectivity() { states.append(state) }
     #expect(states == [[account: .needsReauth]])
-    #expect(MailStoreAdapter(store: store).safeMode() == .normal)
     var none = 0
     for await _ in MailStoreAdapter(store: store).connectivity() { none += 1 }
     #expect(none == 0)

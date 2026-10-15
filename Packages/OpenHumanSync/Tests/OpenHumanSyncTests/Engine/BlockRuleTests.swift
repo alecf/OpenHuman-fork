@@ -84,15 +84,15 @@ func blockRuleOps(_ ops: [OperationItem]) -> [OperationItem] {
         await engine.stop()
     }
 
-    @Test func aReadOnlyEngineQueuesNothingAndShowsGmailsState() async throws {
-        let h = try await EngineHarness()
+    @Test func anAccountWithoutModifyQueuesNothingAndShowsGmailsState() async throws {
+        let h = try await EngineHarness(scopes: [GmailScope.readonly])
         try saveBlockRule(h.store, h.account, .sender, "news@acme.example")
-        let engine = h.engine(safeMode: .readOnly)
+        let engine = h.engine()
         await engine.start()
         try await h.waitForSyncs(engine)
         let blocked = await h.gmail.deliver(from: "news@acme.example")
         _ = try await engine.syncNow(h.account, reason: "test")
-        #expect(try h.ops().isEmpty, "read-only never queues a change")
+        #expect(try h.ops().isEmpty, "an account without write access never queues a change")
         #expect(try h.inbox().contains(blocked.threadID))
         #expect((await h.gmail.labelIDs(ofMessage: blocked.messageID) ?? []).contains("INBOX"))
         await engine.stop()

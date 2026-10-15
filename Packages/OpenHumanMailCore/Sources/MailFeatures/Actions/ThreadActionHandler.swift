@@ -185,9 +185,7 @@ public final class ThreadActionHandler: ActionHandler {
     @discardableResult
     public func createLabel(named name: String, account: AccountID, applyTo targets: [ThreadKey],
                             host: (any ActionHost)?) -> Task<Void, Never>? {
-        guard allowsChanges(.createLabel), let commands = environment?.commands, let undo = environment?.undo else {
-            return nil
-        }
+        guard let commands = environment?.commands, let undo = environment?.undo else { return nil }
         let list = (host as? AppRouter)?.accounts.first { $0.id == account }?.list
         let ticket = list?.applyOptimisticLabel(named: name, to: targets)
         let restore: @MainActor () -> Void = { [weak list] in if let ticket { list?.revertOptimistic(ticket) } }
@@ -197,9 +195,6 @@ public final class ThreadActionHandler: ActionHandler {
                 try await undo.perform(Titles.createdLabel(name), threads: targets) {
                     try await commands.createLabel(account, name: name, applyTo: targets)
                 }
-            } catch MailPortError.blockedBySafeMode {
-                restore()
-                feedback.refuse(.createLabel, .safeMode)
             } catch {
                 restore()
                 feedback.failed("Couldn't create label \(name)")
@@ -218,19 +213,16 @@ public final class ThreadActionHandler: ActionHandler {
     func markReadWhenShown(_ key: ThreadKey, shown: [MessageSummary], in state: AccountState) -> Task<Void, Never>? {
         guard let environment, state.reader?.thread == key, shown.contains(where: \.isUnread) else { return nil }
         let through = max(shown.map(\.date).max() ?? .distantPast, state.list?.row(for: key)?.lastMessageAt ?? .distantPast)
-        guard environment.status.safeMode.allowsMailChanges, let commands = environment.commands else {
+        guard let commands = environment.commands else {
             state.markReadLocally(key, through: through)
             return nil
         }
         let command = MailCommand.markRead([key])
         let list = state.list
         let ticket = list?.applyOptimistic(command)
-        return Task { [weak state] in
+        return Task {
             do {
                 _ = try await commands.apply(command)
-            } catch MailPortError.blockedBySafeMode {
-                if let ticket { list?.revertOptimistic(ticket) }
-                state?.markReadLocally(key, through: through)
             } catch {
                 if let ticket { list?.revertOptimistic(ticket) }
                 Log(.app).notice("mark read on open not applied: \(String(describing: type(of: error)))")
@@ -241,7 +233,6 @@ public final class ThreadActionHandler: ActionHandler {
     func apply(_ command: MailCommand, _ request: ActionRequest, title: LocalizedStringResource,
                advances: Bool, failure: String? = nil, steps: MailSteps? = nil,
                consumesChecks: Bool = true, after: Task<Void, Never>? = nil) -> ActionPerformance {
-        guard allowsChanges(request.id) else { return .done }
         guard let commands = environment?.commands, let undo = environment?.undo else {
             feedback.refuse(request.id, .unavailable(ActionCatalog.descriptor(request.id)?.title ?? "This action"))
             return .done
@@ -250,10 +241,9 @@ public final class ThreadActionHandler: ActionHandler {
         let title = request.source == .intent ? Titles.fromShortcuts(title) : title
         let local = applyLocally(command, request, advances: advances, consumesChecks: consumesChecks)
         let feedback = self.feedback
-        let id = request.id
         let task = Task {
             await after?.value
-            await Self.run(command, title: title, id: id, undo: undo, commands: commands, feedback: feedback,
+            await Self.run(command, title: title, undo: undo, commands: commands, feedback: feedback,
                            failure: failure, steps: steps, reopens: local.reopens, onFailure: local.restore)
         }
         return .started(task)
@@ -288,7 +278,7 @@ public final class ThreadActionHandler: ActionHandler {
         }
     }
 
-    private static func run(_ command: MailCommand, title: LocalizedStringResource, id: ActionID,
+    private static func run(_ command: MailCommand, title: LocalizedStringResource,
                             undo: UndoCoordinator, commands: any MailCommanding, feedback: ActionFeedback,
                             failure: String? = nil, steps: MailSteps? = nil, reopens: UndoCoordinator.Entry.Reopen? = nil,
                             onFailure: @MainActor () -> Void = {}) async {
@@ -297,13 +287,10 @@ public final class ThreadActionHandler: ActionHandler {
                 if let steps { return try await steps.perform(commands) }
                 return try await commands.apply(command)
             }
-        } catch MailPortError.blockedBySafeMode {
-            onFailure()
-            feedback.refuse(id, .safeMode)
         } catch {
             onFailure()
             feedback.failed(failure ?? Titles.failure(command)) {
-                await run(command, title: title, id: id, undo: undo, commands: commands, feedback: feedback,
+                await run(command, title: title, undo: undo, commands: commands, feedback: feedback,
                           failure: failure, steps: steps)
             }
         }
@@ -314,24 +301,7 @@ public final class ThreadActionHandler: ActionHandler {
             feedback.refuse(.markDone, .unavailable(String(localized: "Retry")))
             return
         }
-        await Self.run(command, title: Titles.done(command), id: Self.retryID(command), undo: undo, commands: commands,
-                       feedback: feedback)
-    }
-
-    static func retryID(_ command: MailCommand) -> ActionID {
-        switch command {
-        case .moveToInbox, .untrash, .unsnooze: .moveToInbox
-        case .trash: .trash
-        case .markSpam: .spam
-        case .markNotSpam: .notSpam
-        case .star, .unstar: .toggleStar
-        case .markRead, .markUnread: .toggleRead
-        case .modifyLabels: .label
-        case .snooze, .clearSnooze: .snooze
-        case .setReminder: .remind
-        case .cancelReminder: .clearReminder
-        case .markDone: .markDone
-        }
+        await Self.run(command, title: Titles.done(command), undo: undo, commands: commands, feedback: feedback)
     }
 
     static func changing(_ targets: [ThreadKey], _ request: ActionRequest,
@@ -370,10 +340,6 @@ public final class ThreadActionHandler: ActionHandler {
 
     private func startUnsubscribe(_ request: ActionRequest, then followUp: ActionID? = nil) -> ActionPerformance {
         guard let message = request.context.focusedMessage, let environment else { return .notHandled }
-        guard environment.status.safeMode == .normal else {
-            feedback.refuse(request.id, .safeMode)
-            return .done
-        }
         let data = environment.data
         let sender = request.context.senderDomain ?? request.context.sender
         let fromKey = request.source == .keyboard
@@ -441,10 +407,6 @@ public final class ThreadActionHandler: ActionHandler {
                 guard let change else { return UndoToken(payload: Data()) }
                 return try await commands.apply(change)
             }
-        } catch MailPortError.blockedBySafeMode {
-            local?.restore()
-            feedback.refuse(.unsubscribe, .safeMode)
-            return
         } catch {
             local?.restore()
             feedback.failed("Couldn't unsubscribe from \(sender). Nothing was sent.")
@@ -481,10 +443,6 @@ public final class ThreadActionHandler: ActionHandler {
                                  host: (any ActionHost)?) async {
         do {
             try await commands.unsubscribe(message)
-        } catch MailPortError.blockedBySafeMode {
-            await putBack(entry, commands: commands)
-            feedback.refuse(.unsubscribe, .safeMode)
-            return
         } catch {
             await putBack(entry, commands: commands)
             feedback.failed("Couldn't send the unsubscribe request")
@@ -521,11 +479,6 @@ public final class ThreadActionHandler: ActionHandler {
         let plain = "Unsubscribe request sent"
         guard environment.system.preferences.unsubscribeCleanupOffer else {
             environment.notices.post(plain, style: .info, duration: NoticeCenter.infoDuration)
-            return
-        }
-        guard environment.status.safeMode.allowsMailChanges else {
-            environment.notices.post("\(plain). Clean-up is off: \(DisabledReason.safeModeText)", style: .info,
-                                     duration: NoticeCenter.infoDuration)
             return
         }
         let trash = await sweepPlan(sweep, scope: .all)
@@ -584,12 +537,6 @@ public final class ThreadActionHandler: ActionHandler {
             return .notHandled
         }
         return .done
-    }
-
-    private func allowsChanges(_ id: ActionID) -> Bool {
-        guard let environment, !environment.status.safeMode.allowsMailChanges else { return true }
-        feedback.refuse(id, .safeMode)
-        return false
     }
 
     private func callbackRequest(_ id: ActionID, targets: [ThreadKey], host: (any ActionHost)?,

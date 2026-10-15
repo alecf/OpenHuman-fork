@@ -72,18 +72,18 @@ import Testing
         #expect(plans[1].match?.id == "s1" && !plans[1].dropsShortcut, "its own shortcut")
     }
 
-    @Test func readOnlyPreviewsAndRefusesAndOtherFilesAreRefusedInWords() async throws {
+    @Test func withoutAWritePortItPreviewsAndRefusesAndOtherFilesAreRefusedInWords() async throws {
         let a = SettingsFixture()
         try await add(a, "Sign-off", shortcut: "so")
         let file = try await SnippetTransferModel(environment: a.env).export()
-        let readOnly = SettingsFixture(safeMode: .readOnly)
-        let before = try await readOnly.snippets()
-        let model = SnippetTransferModel(environment: readOnly.env)
+        let noPort = SettingsFixture(writePort: false)
+        let before = try await noPort.snippets()
+        let model = SnippetTransferModel(environment: noPort.env)
         let preview = try await model.prepareImport(file)
         #expect(preview.storedItemsNote != nil)
         let line = await model.applyImport()
         #expect(line == preview.storedItemsNote)
-        #expect(try await readOnly.snippets() == before, "nothing stored in read-only")
+        #expect(try await noPort.snippets() == before, "nothing stored")
 
         let settingsFile = try await SettingsTransferModel(environment: a.env).export()
         await #expect(throws: SnippetTransferError.notASnippetsFile) { try await model.prepareImport(settingsFile) }

@@ -124,11 +124,12 @@ import Testing
     static let path = "/calendar/v3/calendars/robin@example.com/events"
 
     static func provider(_ http: FakeHTTPTransport) -> GoogleCalendarProvider {
-        let client = GoogleCalendarClient(calendarID: "robin@example.com", mode: .readOnly,
-                                          grantedScopes: CalendarScopes.requested(for: .readOnly),
+        let client = GoogleCalendarClient(calendarID: "robin@example.com",
+                                          grantedScopes: CalendarScopes.request.read,
                                           tokens: StaticTokenProvider(token: "synthetic-cal-access"), transport: http,
                                           clock: InstantClock(), timeZone: TimeZone(identifier: "America/New_York")!)
-        return GoogleCalendarProvider(client: client, account: "robin@example.com", readOnlyReason: "Read-only.")
+        return GoogleCalendarProvider(client: client, account: "robin@example.com",
+                                      createRefusal: GoogleCalendarSession.reconnectToCreate)
     }
 
     @Test func aWindowReadKeepsVersionsSeriesTransparencyAndTheOwnersAnswer() async throws {

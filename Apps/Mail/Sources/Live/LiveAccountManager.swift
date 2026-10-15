@@ -40,12 +40,10 @@ final class LiveAccountManager: AccountManaging {
 
     struct SessionLink: Sendable {
         let engine: MailEngine
-        let safeMode: SafeMode
         let forgetInWindow: @MainActor @Sendable (AccountID) async -> Void
         let removed: @MainActor @Sendable (AccountID) async -> Void
     }
 
-    let safeMode: SafeMode
     private let store: MailStore
     private let dependencies: Dependencies
     private let vault: OAuthClientVault
@@ -59,8 +57,7 @@ final class LiveAccountManager: AccountManaging {
         SettingKey(name: "oauth.client_key", defaultValue: nil, isSafetyKey: false)
     }
 
-    init(safeMode: SafeMode, store: MailStore, dependencies: Dependencies) {
-        self.safeMode = safeMode
+    init(store: MailStore, dependencies: Dependencies) {
         self.store = store
         self.dependencies = dependencies
         vault = OAuthClientVault(store: dependencies.clientStore, storeDirectory: dependencies.storeDirectory)
@@ -74,9 +71,9 @@ final class LiveAccountManager: AccountManaging {
 
     private var session: SessionLink? { link.withLock { $0 } }
 
-    private func makeFlow(_ client: OAuthClientConfig, mode: SafeMode) -> OAuthFlow {
-        OAuthFlow(client: client, mode: mode, transport: dependencies.transport, receiver: dependencies.makeReceiver(),
-                  browser: dependencies.browser, clock: dependencies.clock)
+    private func makeFlow(_ client: OAuthClientConfig) -> OAuthFlow {
+        OAuthFlow(client: client, scopes: OAuthScopes.mailRequest, transport: dependencies.transport,
+                  receiver: dependencies.makeReceiver(), browser: dependencies.browser, clock: dependencies.clock)
     }
 
     func loadClient() throws(AccountSetupError) -> OAuthClientConfig {
@@ -472,14 +469,14 @@ final class LiveAccountManager: AccountManaging {
         }
         if let session {
             do {
-                try await session.engine.reauthorize(account, using: makeFlow(client, mode: session.safeMode))
+                try await session.engine.reauthorize(account, using: makeFlow(client))
             } catch {
                 throw Self.setupError(error)
             }
             try discardBroaderGrant(email: item.email)
             recordClient(client.clientID, for: account)
         } else {
-            let flow = makeFlow(client, mode: safeMode)
+            let flow = makeFlow(client)
             let result: OAuthResult
             do {
                 result = try await flow.authorize(loginHint: item.email, timeout: dependencies.signInTimeout)
@@ -519,17 +516,17 @@ final class LiveAccountManager: AccountManaging {
         if let session {
             let item: AccountItem
             do {
-                item = try await session.engine.addAccount(using: makeFlow(client, mode: session.safeMode),
+                item = try await session.engine.addAccount(using: makeFlow(client),
                                                            loginHint: loginHint)
             } catch {
                 throw Self.setupError(error)
             }
             try discardBroaderGrant(email: item.email)
             recordClient(client.clientID, for: item.id)
-            Log(.oauth).notice("account \(item.id.rawValue) signed in while Mail runs (\(session.safeMode.rawValue))")
+            Log(.oauth).notice("account \(item.id.rawValue) signed in while Mail runs")
             return item.id
         }
-        let flow = makeFlow(client, mode: safeMode)
+        let flow = makeFlow(client)
         let result: OAuthResult
         do {
             result = try await flow.authorize(loginHint: loginHint, timeout: dependencies.signInTimeout)
@@ -545,7 +542,7 @@ final class LiveAccountManager: AccountManaging {
             try dependencies.tokenStore.save(result.token, account: result.email)
             let id = try store.addAccount(email: result.email, displayName: nil, scopes: result.token.grantedScopes)
             recordClient(result.token.clientID, for: id)
-            Log(.oauth).notice("account \(id.rawValue) signed in (\(safeMode.rawValue))")
+            Log(.oauth).notice("account \(id.rawValue) signed in")
             return id
         } catch {
             Log(.oauth).error("could not store the new account (\(String(describing: type(of: error))))")
@@ -554,14 +551,8 @@ final class LiveAccountManager: AccountManaging {
     }
 
     private func refuseUnsafeGrant(_ scopes: [String]) throws {
-        // Why: defense in depth, a read-only run must never store a token that could change mail, even if the flow stops checking
-        if safeMode == .readOnly, scopes.contains(where: Self.mailWriteScopes.contains) {
-            Log(.oauth).error("read-only sign-in refused: the token carries a mail-write scope")
-            throw AccountSetupError(.refused, "Google granted more than read-only access, so Mail refused the sign-in. "
-                + "Nothing was stored.")
-        }
-        if safeMode != .readOnly, LiveBackend.scopeRefusal(scopes) != nil {
-            Log(.oauth).error("write-mode sign-in refused: the token carries a scope broader than gmail.modify")
+        if LiveBackend.scopeRefusal(scopes) != nil {
+            Log(.oauth).error("sign-in refused: the token carries a scope broader than gmail.modify")
             throw AccountSetupError(.refused, Self.broaderThanModify)
         }
     }
@@ -573,7 +564,7 @@ final class LiveAccountManager: AccountManaging {
         let item = try? store.accounts().first(where: { $0.id == account })
         let client = try item.flatMap { ownClient(email: $0.email, account: $0.id) } ?? signInClient()
         do {
-            try await session.engine.reauthorize(account, using: makeFlow(client, mode: session.safeMode))
+            try await session.engine.reauthorize(account, using: makeFlow(client))
         } catch {
             throw Self.setupError(error)
         }
@@ -656,7 +647,7 @@ final class LiveAccountManager: AccountManaging {
 
     func beginRemoteSignIn(loginHint: String?) async throws -> RemoteSignInChallenge {
         let client = try signInClient()
-        let flow = makeFlow(client, mode: safeMode)
+        let flow = makeFlow(client)
         let session: OAuthFlow.ManualAuthorization
         do { session = try flow.beginManual(loginHint: loginHint) } catch { throw Self.setupError(error) }
         let expiresAt = dependencies.clock.now.addingTimeInterval(
@@ -797,9 +788,6 @@ final class LiveAccountManager: AccountManaging {
                 return AccountSetupError(.failed, "Sign-in timed out. Try again.")
             case .stateMismatch:
                 return AccountSetupError(.failed, "Google didn't return a valid response. Try again.")
-            case .denied(let reason) where reason.hasPrefix("read-only sign-in refused"):
-                return AccountSetupError(.refused, "Google granted more than read-only access, so Mail refused the "
-                    + "sign-in. Nothing was stored.")
             case .denied(let reason) where reason.hasPrefix("write sign-in refused"):
                 return AccountSetupError(.refused, broaderThanModify)
             case .denied("access_denied"):
@@ -833,9 +821,8 @@ final class LiveAccountManager: AccountManaging {
             return AccountSetupError(.failed, "Couldn't reach Google. Check the connection and try again.")
         case let engine as EngineError:
             switch engine {
-            case .blockedBySafeMode:
-                return AccountSetupError(.refused, "Google granted more than read-only access, so Mail refused the "
-                    + "sign-in. Nothing was stored.")
+            case .writeAccessMissing:
+                return AccountSetupError(.refused, LiveBackend.writeAccessNotice)
             case .oauthClientMissing:
                 return clientMissingError(nil)
             case .requiresApp, .sendNotAllowed:

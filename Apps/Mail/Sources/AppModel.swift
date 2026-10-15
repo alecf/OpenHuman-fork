@@ -19,7 +19,6 @@ final class AppModel {
 
     private(set) var screen: Screen
     @ObservationIgnored private(set) var session: SyncSession?
-    @ObservationIgnored private(set) var openedReadOnly = false
 
     var router: AppRouter? {
         if case .mail(let environment) = screen { return environment.router }
@@ -60,22 +59,13 @@ final class AppModel {
         case .signIn(let hint, let notice):
             showSignIn(backend: live, loginHint: hint, notice: notice)
         case .needsWriteAccess(let account):
-            showSignIn(backend: live, loginHint: account.email, notice: LiveBackend.writeAccessNotice,
-                       readOnlyFallback: account)
+            showSignIn(backend: live, loginHint: account.email, notice: LiveBackend.writeAccessNotice)
         }
     }
 
-    private func showSignIn(backend: LiveBackend, loginHint: String, notice: String?,
-                            readOnlyFallback: AccountItem? = nil) {
-        let model = SignInModel(accounts: backend.accounts, safeMode: SafeModeInfo(backend.safeMode),
-                                loginHint: loginHint, notice: notice)
+    private func showSignIn(backend: LiveBackend, loginHint: String, notice: String?) {
+        let model = SignInModel(accounts: backend.accounts, loginHint: loginHint, notice: notice)
         model.onSignedIn = { [weak self] id in self?.signedIn(id) }
-        if let account = readOnlyFallback {
-            model.onOpenReadOnly = { [weak self] in
-                self?.openedReadOnly = true
-                self?.startSession(account, backend: backend, writes: false)
-            }
-        }
         screen = .signIn(model)
     }
 
@@ -89,16 +79,16 @@ final class AppModel {
     }
 
     private func proceed(_ account: AccountItem, backend: LiveBackend) {
-        startSession(account, backend: backend, writes: backend.safeMode == .normal && !openedReadOnly)
+        startSession(account, backend: backend)
     }
 
     func shutdown() async {
         await session?.shutdown()
     }
 
-    private func startSession(_ account: AccountItem, backend: LiveBackend, writes: Bool) {
+    private func startSession(_ account: AccountItem, backend: LiveBackend) {
         do {
-            let session = try backend.makeSession(for: account, writes: writes)
+            let session = try backend.makeSession(for: account)
             self.session = session
             backend.accounts.attach(link(for: session))
             screen = .mail(session.environment)
@@ -120,7 +110,7 @@ final class AppModel {
 
     private func link(for session: SyncSession) -> LiveAccountManager.SessionLink {
         LiveAccountManager.SessionLink(
-            engine: session.engine, safeMode: session.engineSafeMode,
+            engine: session.engine,
             forgetInWindow: { [weak environment = session.environment, weak session] account in
                 if let session, session.account == account { await session.calendar?.forget() }
                 await session?.calendarConnections?.forget(account)

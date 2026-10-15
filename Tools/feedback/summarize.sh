@@ -27,7 +27,7 @@ for path in files:
     attached = [k for k, v in (bundle.get("attachments") or {}).items() if v]
     print(f"== {clean(path.name)}")
     print("   " + clean(f"{bundle.get('createdAt')}  {bundle.get('category')}  route={snap.get('route', '-')}  "
-                         f"safe={snap.get('safeMode', '-')}  data={app.get('dataMode', '-')}  "
+                         f"data={app.get('dataMode', '-')}  "
                          f"build={app.get('version', '?')} {app.get('gitCommit', '?')} {app.get('configuration', '')}"))
     for a in snap.get("accounts") or []:
         print("   " + clean(f"account {a.get('index')} {a.get('idHash')}: {a.get('connectivity') or a.get('syncPhase') or '-'} "

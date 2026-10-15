@@ -117,24 +117,6 @@ struct UnsubscribeModelTests {
         }
     }
 
-    @Test func readOnlyModeRefusesTheActionAndNothingIsHeldOrSent() async throws {
-        let f = SystemFixture(corpus: .small,
-                              options: .init(remoteAck: .immediate, safeMode: .readOnly))
-        f.env.runLaunchTasks()
-        await eventually(timeout: .seconds(15)) { f.env.system.unsubscribe != nil }
-        let model = try #require(f.env.system.unsubscribe)
-        let (row, message, _) = try await listThread(f)
-        let item = try #require(await model.item(for: message, in: row.id))
-        f.env.router.start()
-        model.activate(item, for: message, in: row.id)
-        await eventually(timeout: .seconds(15)) { f.env.notices.toasts.contains { $0.message == StatusModel.blockedText } }
-        #expect(f.env.actions.threadActions?.heldUnsubscribeCount == 0 && f.opener.opened.isEmpty)
-        #expect(f.store.unsubscribeRequests.isEmpty)
-        let ctx = ActionContext(scope: .reader, account: f.account, focusedThread: row.id, focusedMessage: message.id,
-                                safeMode: .readOnly)
-        #expect(f.env.actions.availability(.unsubscribe, host: f.env.router, context: ctx) != .enabled)
-    }
-
     @Test func httpsLinksOpenInTheBrowserAndNothingElseDoes() {
         let f = started()
         let model = SystemFixture.unsubscribeModel(f)

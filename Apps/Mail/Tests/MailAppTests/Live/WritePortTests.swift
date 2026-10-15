@@ -64,7 +64,7 @@ private final class WriteFixture {
     var environment: AppEnvironment { running.session.environment }
     var window: AppRouter { environment.router }
 
-    init(threads: Int, safeMode: SafeMode = .normal, sendAs: [GmailSendAs]? = nil) async throws {
+    init(threads: Int, sendAs: [GmailSendAs]? = nil) async throws {
         corpus = FakeCorpus.make(threadCount: threads, now: Date())
         gmail = FakeGmail(accountEmail: corpus.account.email)
         if let sendAs { await gmail.setSendAs(sendAs) }
@@ -73,8 +73,7 @@ private final class WriteFixture {
         store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: .test,
                                                 appVersion: "0.0.0-test",
                                                 changeNotificationName: "dev.openhuman.tests.writeport.\(UUID().uuidString)"))
-        running = try FakeGmailLaunch.makeSession(safeMode: safeMode, store: store, gmail: gmail,
-                                                  draftsDirectory: store.location.draftsDirectory)
+        running = try FakeGmailLaunch.makeSession(store: store, gmail: gmail, draftsDirectory: store.location.draftsDirectory)
         await running.session.start()
         window.start()
         let rows = threads
@@ -113,7 +112,7 @@ private final class WriteFixture {
         return false
     }
 
-    var writes: [HTTPRequest] { running.wire.requests.filter { !isReadOnlyOnTheWire($0) } }
+    var writes: [HTTPRequest] { running.wire.requests.filter { !isReadOnTheWire($0) } }
 
     func stop() async {
         guard !stopped else { return }
@@ -147,7 +146,6 @@ private func document(_ text: String) -> RichTextDocument {
     #expect(list.index(of: target) == nil)
     await waitFor("INBOX removed in FakeGmail") { await !f.inInbox(target.gmailThreadID) }
     #expect(f.environment.notices.toasts.contains { $0.message.hasPrefix("Marked done") })
-    #expect(f.environment.status.blockedNotice == nil)
 
     #expect(await f.run(.undo))
     await waitFor("INBOX back in FakeGmail") { await f.inInbox(target.gmailThreadID) }
@@ -294,14 +292,13 @@ private func document(_ text: String) -> RichTextDocument {
 @MainActor
 @Test(.timeLimit(.minutes(3))) func theSignatureAndAnUnverifiedAliasReachTheComposer() async throws {
     let me = FakeCorpus.make(threadCount: 1, now: Date()).account.email
-    let f = try await WriteFixture(threads: 3, safeMode: .readOnly, sendAs: [
+    let f = try await WriteFixture(threads: 3, sendAs: [
         GmailSendAs(sendAsEmail: me, displayName: "Robin Example", signature: "<div>Robin Example<br>Example Co.</div>",
                     isPrimary: true, isDefault: true, verificationStatus: "accepted"),
         GmailSendAs(sendAsEmail: "robin@relay.example", displayName: "Robin (Relay)", isDefault: false,
                     verificationStatus: "pending"),
     ])
     defer { Task { await f.stop() } }
-    #expect(f.environment.draftsDirectory == nil, "read-only: the composer keeps nothing under the Store")
     let account = try #require(try await firstValue(f.environment.data.accounts()) { $0.first?.sendAs.count == 2 }.first)
     #expect(account.sendAs.map(\.needsVerification) == [false, true])
 
@@ -310,33 +307,7 @@ private func document(_ text: String) -> RichTextDocument {
     #expect(session.from.email == me.lowercased() && session.signature?.html == "<div>Robin Example<br>Example Co.</div>")
     let relay = try #require(session.fromChoices.first { $0.email == "robin@relay.example" })
     #expect(relay.needsVerification, "shown, flagged, never picked on its own")
-    #expect(!session.canPersist, "read-only: the composer saves nothing")
-    #expect(f.running.wire.requests.allSatisfy(isReadOnlyOnTheWire))
+    #expect(f.writes.isEmpty, "opening an empty composer writes nothing")
     #expect(f.running.wire.requests.contains { $0.url.path().hasSuffix("/settings/sendAs") })
-    await f.stop()
-}
-
-@MainActor
-@Test(.timeLimit(.minutes(3))) func aReadOnlyReplyIsPrefilledFromTheSkeletonWithoutWriting() async throws {
-    let f = try await WriteFixture(threads: 5, safeMode: .readOnly)
-    defer { Task { await f.stop() } }
-    let me = f.corpus.account.email
-    let source = try #require(f.corpus.threads.first {
-        guard let last = $0.detail.messages.last?.from?.email else { return false }
-        return last != me
-    })
-    let sender = try #require(source.detail.messages.last?.from?.email)
-    let row = try #require(f.window.list?.rows.first { $0.subject == source.detail.subject })
-
-    let session = try #require(f.compose.openReply(row.id, mode: .reply))
-    await eventually("the skeleton") { !session.isPreparing && !session.to.tokens.isEmpty }
-    #expect(session.to.tokens.map { $0.email.lowercased() } == [sender.lowercased()])
-    #expect(session.subject.hasPrefix("Re: ") && QuoteSplit.quoteBlockCount(session.quotedHTML) == 1)
-    #expect(QuotePreview(quotedText: session.quotedText, quotedHTML: session.quotedHTML).header.hasSuffix("wrote:"))
-    #expect(session.draftKey == nil && !session.canPersist)
-    #expect(try f.store.drafts(account: nil, states: [.editing, .scheduled, .failed, .sending], limit: 50).isEmpty,
-            "no draft row")
-    #expect(f.writes.isEmpty && f.running.wire.requests.allSatisfy(isReadOnlyOnTheWire))
-    f.compose.close(session)
     await f.stop()
 }

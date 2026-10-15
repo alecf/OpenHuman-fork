@@ -19,7 +19,6 @@ public struct EngineConfiguration: Sendable {
     public var pollInterval: Duration = .seconds(60)
     public var clock: any OHClock
     public var schedulers: Set<ScheduleKind> = Set(ScheduleKind.allCases)
-    public var safeMode: SafeMode = .normal
 
     // generated-init: Tools/ci/gen-public-inits.py
     public init(
@@ -28,8 +27,7 @@ public struct EngineConfiguration: Sendable {
         gmail: GmailClientConfig,
         pollInterval: Duration = .seconds(60),
         clock: any OHClock,
-        schedulers: Set<ScheduleKind> = Set(ScheduleKind.allCases),
-        safeMode: SafeMode = .normal
+        schedulers: Set<ScheduleKind> = Set(ScheduleKind.allCases)
     ) {
         self.role = role
         self.appVersion = appVersion
@@ -37,7 +35,6 @@ public struct EngineConfiguration: Sendable {
         self.pollInterval = pollInterval
         self.clock = clock
         self.schedulers = schedulers
-        self.safeMode = safeMode
     }
     // end generated-init
 }
@@ -56,7 +53,7 @@ public enum EngineError: Error, Equatable, Sendable {
     case requiresApp(String)
     case sendNotAllowed
     case oauthClientMissing
-    case blockedBySafeMode(String)
+    case writeAccessMissing(String)
 }
 
 public enum EngineEvent: Sendable {

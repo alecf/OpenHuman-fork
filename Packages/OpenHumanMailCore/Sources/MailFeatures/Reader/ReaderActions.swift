@@ -71,14 +71,13 @@ public enum ReaderActions {
 
     @MainActor
     public static func context(host: (any ActionHost)?, thread: ThreadKey, lastMessage: MessageKey?,
-                               safeMode: SafeModeInfo, isStarred: Bool = false) -> ActionContext {
+                               isStarred: Bool = false) -> ActionContext {
         var c = (host as? AppRouter)?.contentContext() ?? host?.actionContext() ?? ActionContext()
         c.targets.allStarred = isStarred
         c.scope = .reader
         c.selection = [thread]
         c.focusedThread = thread
         c.focusedMessage = lastMessage
-        c.safeMode = safeMode
         return c
     }
 

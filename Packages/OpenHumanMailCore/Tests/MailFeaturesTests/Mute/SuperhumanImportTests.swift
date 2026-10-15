@@ -59,20 +59,6 @@ import Testing
         #expect(f.router.location == .label(snoozed))
     }
 
-    @Test func readOnlyRefusesTheMuteBeforeAnyChange() async throws {
-        let f = OverlayFixture(corpus: .rich(threadCount: 20, now: fixedNow), options: .init(safeMode: .readOnly))
-        await f.loaded()
-        let model = SuperhumanImportModel(environment: f.env)
-        await model.count()
-        #expect(model.phase == .counted, "counting works in read-only")
-        model.toMute = [try #require(f.rows.first?.id)]
-        let entries = f.env.undo?.stack.count ?? 0
-        #expect(await model.importMuted() == false)
-        guard case .failed(let text) = model.phase else { throw TestFailure("\(model.phase)") }
-        #expect(text.hasPrefix("Read-only"))
-        #expect(f.env.undo?.stack.count == entries)
-    }
-
     @Test func labelNamesMatchExactlyFirstThenIgnoringCase() {
         func label(_ id: Int64, _ name: String) -> LabelInfo {
             LabelInfo(id: id, account: AccountID(1), labelID: GmailLabelID("Label_\(id)"), kind: .user, name: name,

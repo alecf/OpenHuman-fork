@@ -486,7 +486,7 @@
         "priority": "P2",
         "stage": "later",
         "summary": "Modify labels on many messages (planned).",
-        "writeScope": "mail",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -558,8 +558,8 @@
         ],
         "priority": "P1",
         "stage": "1b",
-        "summary": "Mark done (removes INBOX).",
-        "writeScope": "mail",
+        "summary": "Mark done (removes INBOX). Refused: make mail changes in OpenHuman Mail.",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -674,7 +674,7 @@
         "priority": "P1",
         "stage": "1b",
         "summary": "Create a draft for review. It is never sent from the CLI.",
-        "writeScope": "mail",
+        "writeScope": "agentDraft",
         "writes": true
       },
       {
@@ -732,7 +732,7 @@
         "priority": "P2",
         "stage": "1c",
         "summary": "Delete an agent draft that is not approved. Needs --yes under --no-input.",
-        "writeScope": "mail",
+        "writeScope": "agentDraft",
         "writes": true
       },
       {
@@ -846,7 +846,7 @@
         "priority": "P2",
         "stage": "1c",
         "summary": "Create a forward draft for review. It is never sent from the CLI.",
-        "writeScope": "mail",
+        "writeScope": "agentDraft",
         "writes": true
       },
       {
@@ -1031,7 +1031,7 @@
         "priority": "P1",
         "stage": "1b",
         "summary": "Create a reply draft for review. It is never sent from the CLI.",
-        "writeScope": "mail",
+        "writeScope": "agentDraft",
         "writes": true
       },
       {
@@ -1180,7 +1180,7 @@
         "priority": "P1",
         "stage": "1b",
         "summary": "Replace the text of an agent draft; it goes back to review.",
-        "writeScope": "mail",
+        "writeScope": "agentDraft",
         "writes": true
       },
       {
@@ -1418,7 +1418,7 @@
         "priority": "P2",
         "stage": "later",
         "summary": "Create a label (planned).",
-        "writeScope": "mail",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -1586,8 +1586,8 @@
         ],
         "priority": "P1",
         "stage": "1b",
-        "summary": "Back to the inbox.",
-        "writeScope": "mail",
+        "summary": "Back to the inbox. Refused: make mail changes in OpenHuman Mail.",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -1612,7 +1612,7 @@
         "priority": "P2",
         "stage": "later",
         "summary": "Not spam (planned).",
-        "writeScope": "mail",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -1660,8 +1660,8 @@
         ],
         "priority": "P1",
         "stage": "1b",
-        "summary": "Mark read.",
-        "writeScope": "mail",
+        "summary": "Mark read. Refused: make mail changes in OpenHuman Mail.",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -1728,8 +1728,8 @@
         ],
         "priority": "P1",
         "stage": "1b",
-        "summary": "Remind me about a thread. Reminders are kept on this Mac only.",
-        "writeScope": "mail",
+        "summary": "Remind me about a thread. Refused: make mail changes in OpenHuman Mail.",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -1833,7 +1833,7 @@
         "priority": "P2",
         "stage": "1c",
         "summary": "Approve agent drafts (Review: keep). It never sends. A person's decision: interactive terminal only.",
-        "writeScope": "mail",
+        "writeScope": "agentDraft",
         "writes": true
       },
       {
@@ -1951,7 +1951,7 @@
         "priority": "P2",
         "stage": "1c",
         "summary": "Reject agent drafts and delete them (Review: discard). A person's decision: interactive terminal only.",
-        "writeScope": "mail",
+        "writeScope": "agentDraft",
         "writes": true
       },
       {
@@ -2495,8 +2495,8 @@
         ],
         "priority": "P1",
         "stage": "1b",
-        "summary": "Snooze until a time (writes Gmail schedule labels via the queue).",
-        "writeScope": "mail",
+        "summary": "Snooze until a time. Refused: make mail changes in OpenHuman Mail.",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -2531,7 +2531,7 @@
         "priority": "P2",
         "stage": "later",
         "summary": "Report spam (planned; needs --yes under --no-input).",
-        "writeScope": "mail",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -2789,8 +2789,8 @@
         ],
         "priority": "P1",
         "stage": "1b",
-        "summary": "Star.",
-        "writeScope": "mail",
+        "summary": "Star. Refused: make mail changes in OpenHuman Mail.",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -2903,7 +2903,7 @@
         "priority": "P2",
         "stage": "later",
         "summary": "Add or remove labels on threads (planned).",
-        "writeScope": "mail",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -2938,7 +2938,7 @@
         "priority": "P2",
         "stage": "later",
         "summary": "Move threads to Trash (planned; needs --yes under --no-input).",
-        "writeScope": "mail",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -2949,7 +2949,7 @@
             "name": "token",
             "optional": false,
             "repeatable": false,
-            "summary": "The undo token from a triage command's output (data.undo).",
+            "summary": "An undo token.",
             "valueName": "token"
           }
         ],
@@ -2986,8 +2986,8 @@
         ],
         "priority": "P2",
         "stage": "1c",
-        "summary": "Take back a triage change by the undo token it printed (data.undo).",
-        "writeScope": "mail",
+        "summary": "Take back a triage change. Refused: make mail changes in OpenHuman Mail.",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -3035,8 +3035,8 @@
         ],
         "priority": "P1",
         "stage": "1b",
-        "summary": "Mark unread.",
-        "writeScope": "mail",
+        "summary": "Mark unread. Refused: make mail changes in OpenHuman Mail.",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -3084,8 +3084,8 @@
         ],
         "priority": "P1",
         "stage": "1b",
-        "summary": "Cancel the thread's reminder.",
-        "writeScope": "mail",
+        "summary": "Cancel the thread's reminder. Refused: make mail changes in OpenHuman Mail.",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -3133,8 +3133,8 @@
         ],
         "priority": "P1",
         "stage": "1b",
-        "summary": "Wake a snoozed thread now.",
-        "writeScope": "mail",
+        "summary": "Wake a snoozed thread now. Refused: make mail changes in OpenHuman Mail.",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -3182,8 +3182,8 @@
         ],
         "priority": "P1",
         "stage": "1b",
-        "summary": "Remove the star.",
-        "writeScope": "mail",
+        "summary": "Remove the star. Refused: make mail changes in OpenHuman Mail.",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -3208,7 +3208,7 @@
         "priority": "P2",
         "stage": "later",
         "summary": "Restore threads from Trash (planned).",
-        "writeScope": "mail",
+        "writeScope": "mailChange",
         "writes": true
       },
       {
@@ -3454,7 +3454,7 @@
         ],
         "priority": "P3",
         "stage": "1c",
-        "summary": "Local MCP server on stdin/stdout: read tools, agent drafts into review, local triage with undo. No send tool.",
+        "summary": "Local MCP server on stdin/stdout: read tools and agent drafts into review. No send or mail-change tool.",
         "writeScope": "none",
         "writes": false
       },
@@ -3601,7 +3601,7 @@
       },
       {
         "code": 5,
-        "meaning": "read-only mode, safe mode, send_not_supported, not_supported, reserved_label or command not allowed",
+        "meaning": "read-only run (--readonly), mail_changes_in_app, send_not_supported, not_supported, reserved_label or command not allowed",
         "name": "policy_blocked"
       },
       {

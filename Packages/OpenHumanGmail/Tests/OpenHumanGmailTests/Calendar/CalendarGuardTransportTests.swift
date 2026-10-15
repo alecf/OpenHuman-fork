@@ -14,10 +14,9 @@ import Testing
         HTTPRequest(method: method, url: URL(string: url)!, headers: headers, body: body)
     }
 
-    private func guardFor(_ mode: SafeMode, scopes: [String]? = nil, wire: ScriptedTransport = ScriptedTransport(),
+    private func guardFor(_ scopes: [String] = CalendarScopes.request.write, wire: ScriptedTransport = ScriptedTransport(),
                           clock: any OHClock = SystemClock()) -> CalendarGuardTransport {
-        CalendarGuardTransport(wrapping: wire, calendarID: Self.me, mode: mode,
-                               grantedScopes: scopes ?? CalendarScopes.requested(for: mode), clock: clock)
+        CalendarGuardTransport(wrapping: wire, calendarID: Self.me, grantedScopes: scopes, clock: clock)
     }
 
     private func numberingWire() -> ScriptedTransport {
@@ -36,26 +35,23 @@ import Testing
         try! JSONSerialization.data(withJSONObject: object)
     }
 
-    @Test func readsPassInEveryMode() {
-        for mode in SafeMode.allCases {
-            let calendar = guardFor(mode)
-            #expect(calendar.refusalReason(for: request("GET", Self.events + "?timeMin=x&singleEvents=true")) == nil, "\(mode)")
+    @Test func readsPassWithEitherGrant() {
+        for scopes in [CalendarScopes.request.write, CalendarScopes.request.read] {
+            let calendar = guardFor(scopes)
+            #expect(calendar.refusalReason(for: request("GET", Self.events + "?timeMin=x&singleEvents=true")) == nil, "\(scopes)")
             #expect(calendar.refusalReason(for: request("POST", Self.base + "/freeBusy", body: Data("{}".utf8))) == nil,
                     "freebusy.query is a read sent as a POST")
         }
     }
 
-    @Test func anInsertPassesOnlyInWriteModeWithCalendarEvents() {
+    @Test func anInsertPassesOnlyWithCalendarEvents() {
         let insert = request("POST", Self.events + "?sendUpdates=none", body: Data("{}".utf8))
-        #expect(guardFor(.normal).refusalReason(for: insert) == nil)
-        #expect(guardFor(.normal).allowsWrites)
-        #expect(guardFor(.readOnly).refusalReason(for: insert) != nil, "read-only")
-        #expect(guardFor(.writeAllowlist).refusalReason(for: insert) != nil, "write-allowlist never creates events")
-        #expect(guardFor(.readOnly, scopes: CalendarScopes.requested(for: .normal)).refusalReason(for: insert) != nil,
-                "a write grant in a read-only run")
-        #expect(guardFor(.normal, scopes: CalendarScopes.requested(for: .readOnly)).refusalReason(for: insert) != nil,
-                "a read grant in a write run")
-        #expect(guardFor(.normal).refusalReason(for: request("POST", Self.base + "/calendars/someone@example.com/events")) != nil,
+        #expect(guardFor().refusalReason(for: insert) == nil)
+        #expect(guardFor().allowsWrites)
+        #expect(!guardFor(CalendarScopes.request.read).allowsWrites)
+        #expect(guardFor(CalendarScopes.request.read).refusalReason(for: insert) == "creating events needs calendar.events",
+                "a read grant never creates events")
+        #expect(guardFor().refusalReason(for: request("POST", Self.base + "/calendars/someone@example.com/events")) != nil,
                 "only the account's own calendar")
     }
 
@@ -64,9 +60,9 @@ import Testing
             request.method == "POST" ? jsonResponse(200, ["id": "ev1", "status": "confirmed"])
                                      : HTTPResponse(status: 204, headers: [:], body: Data())
         }
-        let calendar = guardFor(.normal, wire: wire)
+        let calendar = guardFor(wire: wire)
         let delete = request("DELETE", Self.events + "/ev1?sendUpdates=none")
-        await #expect(throws: TransportError.blockedBySafeMode("DELETE /calendar/v3/calendars/<redacted>/events/ev1")) {
+        await #expect(throws: TransportError.refusedByGuard("DELETE /calendar/v3/calendars/<redacted>/events/ev1")) {
             _ = try await calendar.send(delete)
         }
         #expect(wire.requests.isEmpty, "refused before the wire")
@@ -77,12 +73,12 @@ import Testing
         #expect(calendar.createdEventIDs.isEmpty)
         await #expect(throws: TransportError.self) { _ = try await calendar.send(delete) }
         #expect(wire.requests.count == 2, "a second delete of the same event is refused")
-        #expect(guardFor(.readOnly).refusalReason(for: delete) != nil)
+        #expect(guardFor(CalendarScopes.request.read).refusalReason(for: delete) != nil)
     }
 
     @Test func anEventCreatedWithAttendeesIsNeverDeleted() async throws {
         let wire = numberingWire()
-        let calendar = guardFor(.normal, wire: wire)
+        let calendar = guardFor(wire: wire)
         _ = try await calendar.send(request("POST", Self.events + "?sendUpdates=none",
                                             body: insertBody(["summary": "Lunch", "attendees": [["email": "alice@example.com"]]])))
         _ = try await calendar.send(request("POST", Self.events + "?sendUpdates=none", body: Data("not json".utf8)))
@@ -98,7 +94,7 @@ import Testing
     @Test func anAttendeeLessEventCanBeDeletedOnlyInsideTheUndoWindow() async throws {
         let wire = numberingWire()
         let clock = TestClock()
-        let calendar = guardFor(.normal, wire: wire, clock: clock)
+        let calendar = guardFor(wire: wire, clock: clock)
         let body = insertBody(["summary": "Focus", "attendees": [Any]()])
         _ = try await calendar.send(request("POST", Self.events, body: body))
         _ = try await calendar.send(request("POST", Self.events, body: insertBody(["summary": "Focus"])))
@@ -115,7 +111,7 @@ import Testing
 
     @Test func everythingElseIsRefusedBeforeTheWire() async throws {
         let wire = ScriptedTransport()
-        let calendar = guardFor(.normal, wire: wire)
+        let calendar = guardFor(wire: wire)
         let refused: [HTTPRequest] = [
             request("GET", "https://gmail.googleapis.com/calendar/v3/calendars/robin@example.com/events"),
             request("GET", "http://www.googleapis.com/calendar/v3/calendars/robin@example.com/events"),
@@ -152,11 +148,11 @@ import Testing
     }
 
     @Test func theRefusalNamesNoAddress() async throws {
-        let calendar = guardFor(.readOnly)
+        let calendar = guardFor(CalendarScopes.request.read)
         do {
             _ = try await calendar.send(request("POST", Self.events, body: Data("{}".utf8)))
-            Issue.record("an insert passed in read-only")
-        } catch TransportError.blockedBySafeMode(let summary) {
+            Issue.record("an insert passed with a read grant")
+        } catch TransportError.refusedByGuard(let summary) {
             #expect(summary == "POST /calendar/v3/calendars/<redacted>/events")
             #expect(!summary.contains("@") && !summary.contains("example"))
         }

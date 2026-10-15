@@ -9,12 +9,11 @@ import Testing
 @MainActor
 @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["OH_SNAPSHOT_DIR"] != nil))
 struct WindowSnapshotTests {
-    @Test func readOnlyWindowOverFakeGmail() async throws {
+    @Test func windowOverFakeGmail() async throws {
         let corpus = FakeCorpus.make(threadCount: 60)
         let gmail = FakeGmail(accountEmail: corpus.account.email)
         await FakeGmailLaunch.seed(gmail, corpus: corpus)
-        let running = try FakeGmailLaunch.makeSession(safeMode: .readOnly, store: try MailStore.openInMemoryForTesting(),
-                                                      gmail: gmail)
+        let running = try FakeGmailLaunch.makeSession(store: try MailStore.openInMemoryForTesting(), gmail: gmail)
         let environment = running.session.environment
         await running.session.start()
         let hosting = NSHostingController(rootView: MailWindowView(environment: environment))
@@ -31,7 +30,7 @@ struct WindowSnapshotTests {
         view.cacheDisplay(in: view.bounds, to: rep)
         let png = try #require(rep.representation(using: .png, properties: [:]))
         let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["OH_SNAPSHOT_DIR"] ?? "/tmp")
-        try png.write(to: dir.appendingPathComponent("window-fake-gmail-read-only.png"))
+        try png.write(to: dir.appendingPathComponent("window-fake-gmail.png"))
         window.orderOut(nil)
         await running.session.stop()
     }

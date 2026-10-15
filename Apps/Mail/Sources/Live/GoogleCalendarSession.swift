@@ -21,7 +21,6 @@ final class GoogleCalendarSession: CalendarConnecting, Sendable {
     }
 
     let account: String
-    let mode: SafeMode
     let provider: GoogleCalendarProvider?
     private let dependencies: Dependencies
     private let credentials: AccountCredentials
@@ -37,10 +36,9 @@ final class GoogleCalendarSession: CalendarConnecting, Sendable {
         var grant: [String]?
     }
 
-    init(account email: String, mode: SafeMode, dependencies: Dependencies) {
+    init(account email: String, dependencies: Dependencies) {
         let key = AccountCredentials.accountKey(email)
         account = key
-        self.mode = mode
         self.dependencies = dependencies
         let relay = TokenEventRelay()
         let fetches = FetchRelay()
@@ -71,11 +69,11 @@ final class GoogleCalendarSession: CalendarConnecting, Sendable {
         }
         let stored = token?.grantedScopes
         if let stored, CalendarScopes.isUsable(stored) {
-            let client = GoogleCalendarClient(calendarID: key, mode: mode, grantedScopes: stored,
+            let client = GoogleCalendarClient(calendarID: key, grantedScopes: stored,
                                               tokens: credentials.tokenManager(for: key),
                                               transport: dependencies.apiTransport, clock: dependencies.clock)
             provider = GoogleCalendarProvider(client: client, account: key,
-                                              readOnlyReason: Self.readOnlyReason(mode: mode, grant: stored),
+                                              createRefusal: Self.createRefusal(grant: stored),
                                               onFetch: { fetches.send($0) })
             runningGrant = stored
         } else {
@@ -88,7 +86,7 @@ final class GoogleCalendarSession: CalendarConnecting, Sendable {
         if status == .needsReconnect, problem == nil { problem = Self.unusableProblem }
         state = Mutex(State(current: CalendarConnectionState(
             status: status, account: key,
-            canCreateEvents: stored.map { CalendarScopes.allowsWrites(mode: mode, granted: $0) } ?? false,
+            canCreateEvents: stored.map { CalendarScopes.allowsWrites(granted: $0) } ?? false,
             clientShortID: token.map { OAuthClientConfig.shortID(clientID: $0.clientID) }, problem: problem,
             scopes: stored ?? []), grant: status == .connected ? stored : nil))
         relay.set { [weak self] event in self?.handle(event) }
@@ -178,12 +176,12 @@ final class GoogleCalendarSession: CalendarConnecting, Sendable {
         if let provider, let runningGrant, Set(runningGrant) == Set(grant) { return provider }
         return lateProvider.withLock { late -> GoogleCalendarProvider in
             if let late, Set(late.grant) == Set(grant) { return late.provider }
-            let client = GoogleCalendarClient(calendarID: account, mode: mode, grantedScopes: grant,
+            let client = GoogleCalendarClient(calendarID: account, grantedScopes: grant,
                                               tokens: credentials.tokenManager(for: account),
                                               transport: dependencies.apiTransport, clock: dependencies.clock)
             let fetches = self.fetches
             let made = GoogleCalendarProvider(client: client, account: account,
-                                              readOnlyReason: Self.readOnlyReason(mode: mode, grant: grant),
+                                              createRefusal: Self.createRefusal(grant: grant),
                                               onFetch: { fetches.send($0) })
             late = (grant, made)
             return made
@@ -199,10 +197,11 @@ final class GoogleCalendarSession: CalendarConnecting, Sendable {
         for watcher in watchers { watcher.yield(current) }
     }
 
-    static func readOnlyReason(mode: SafeMode, grant: [String]) -> String? {
-        if CalendarScopes.allowsWrites(mode: mode, granted: grant) { return nil }
-        if mode == .readOnly { return "Read-only safe mode: Mail never creates calendar events." }
-        return "Connected read-only. To create events, turn Connect Google Calendar off and on again (Settings › Calendar)."
+    static let reconnectToCreate = "Reconnect Google Calendar to create events: turn Connect Google Calendar off and on "
+        + "again (Settings › Calendar)."
+
+    static func createRefusal(grant: [String]) -> String? {
+        CalendarScopes.allowsWrites(granted: grant) ? nil : reconnectToCreate
     }
 
     func connectionStates() -> AsyncStream<CalendarConnectionState> {
@@ -225,7 +224,7 @@ final class GoogleCalendarSession: CalendarConnecting, Sendable {
         }
         guard started else { throw CalendarError.refused("Mail is already waiting for Google in your browser.") }
         defer { state.withLock { $0.connecting = false } }
-        let consent = CalendarConsent(client: dependencies.client, mode: mode, transport: dependencies.tokenTransport,
+        let consent = CalendarConsent(client: dependencies.client, transport: dependencies.tokenTransport,
                                       receiver: dependencies.makeReceiver(), browser: dependencies.browser,
                                       clock: dependencies.clock)
         let token: StoredToken
@@ -304,7 +303,7 @@ final class GoogleCalendarSession: CalendarConnecting, Sendable {
             s.current.problem = problem
             if let clientID { s.current.clientShortID = OAuthClientConfig.shortID(clientID: clientID) }
             if status == .disconnected { s.current.clientShortID = nil }
-            s.current.canCreateEvents = grant.map { CalendarScopes.allowsWrites(mode: mode, granted: $0) } ?? false
+            s.current.canCreateEvents = grant.map { CalendarScopes.allowsWrites(granted: $0) } ?? false
             s.current.scopes = grant ?? []
             s.grant = status == .connected ? grant : nil
             s.current.needsRestart = false

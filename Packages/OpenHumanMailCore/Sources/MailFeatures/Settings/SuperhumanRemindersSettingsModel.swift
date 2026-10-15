@@ -210,7 +210,7 @@ public final class SuperhumanRemindersSettingsModel {
         return emails.filter { !(dismissed[$0.id.account]?.contains($0.id.gmailMessageID.rawValue) ?? false) }
     }
 
-    private var canWriteMail: Bool { availability.canEditStoredItems }
+    private var canWriteMail: Bool { availability.hasCommands }
 
     public static let sectionTitle = "Superhuman reminders"
     public static let hideTitle = "Hide Superhuman reminder emails"

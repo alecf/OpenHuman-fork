@@ -23,20 +23,18 @@ struct InlineReplySnapshotTests {
 
     @Test(arguments: [(640.0, AppearanceMode.light), (1100.0, .light), (640.0, .dark), (1100.0, .dark)])
     func inlineReply(width: Double, mode: AppearanceMode) async throws {
-        for safeMode in [SafeModeInfo.normal, .readOnly] {
-            let w = try await InlineReplyWindow.make(safeMode: safeMode, size: NSSize(width: width, height: 820), mode: mode)
-            let (thread, _) = try await w.conversationWithAMiddleSender()
-            _ = try await w.open(thread)
-            #expect(w.router.perform(.reply))
-            let composer = try await w.inlineComposer()
-            let tag = "\(Int(width))-\(mode.rawValue)-\(safeMode == .readOnly ? "readonly" : "normal")"
-            try await shoot(w, "reply-\(tag)-empty")
-            let editor = try #require(w.editors.first)
-            editor.insertText("Thanks, Thursday works for me.\nI'll bring the numbers.", replacementRange: editor.selectedRange())
-            composer.session.isQuoteExpanded = true
-            try await shoot(w, "reply-\(tag)-typed-quote")
-            w.close()
-        }
+        let w = try await InlineReplyWindow.make(size: NSSize(width: width, height: 820), mode: mode)
+        let (thread, _) = try await w.conversationWithAMiddleSender()
+        _ = try await w.open(thread)
+        #expect(w.router.perform(.reply))
+        let composer = try await w.inlineComposer()
+        let tag = "\(Int(width))-\(mode.rawValue)"
+        try await shoot(w, "reply-\(tag)-empty")
+        let editor = try #require(w.editors.first)
+        editor.insertText("Thanks, Thursday works for me.\nI'll bring the numbers.", replacementRange: editor.selectedRange())
+        composer.session.isQuoteExpanded = true
+        try await shoot(w, "reply-\(tag)-typed-quote")
+        w.close()
     }
 
     @Test func replyToAMiddleMessageAndTheFullComposer() async throws {

@@ -1,12 +1,6 @@
 import Foundation
 import OpenHumanCore
 
-public enum SafeModeInfo: Sendable, Hashable {
-    case normal, readOnly, writeAllowlist
-
-    public var allowsMailChanges: Bool { self != .readOnly }
-}
-
 public enum ConnectivityState: Sendable, Hashable {
     case online(syncing: Bool, lastSyncAt: Date?)
     case offline(since: Date?)

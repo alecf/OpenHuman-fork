@@ -7,8 +7,6 @@ import Testing
 @testable import OpenHumanCLIKit
 
 @Suite struct ReviewDecisionTests {
-    static let env = Harness.write
-
     func cliDraft(_ h: Harness, subject: String = "Hello", body: String = "First line\nSecond line") throws -> DraftID {
         try h.store.createDraft(account: h.account, mode: .new, replyTo: nil,
                                 content: DraftContent(to: [EmailAddress(email: "x@example.com")], cc: [], bcc: [], subject: subject,
@@ -17,7 +15,7 @@ import Testing
     }
 
     func approve(_ h: Harness, _ ids: [String], typed: String? = "me@example.com", tty: Bool = true, extra: [String] = []) async -> Run {
-        await h.run(["gmail", "review", "approve"] + ids + extra + ["--json"], environment: Self.env, stdinTTY: tty, readLine: typed)
+        await h.run(["gmail", "review", "approve"] + ids + extra + ["--json"], stdinTTY: tty, readLine: typed)
     }
 
     @Test func showWithDiffComparesTheReviewersTextWithTheAgents() async throws {
@@ -106,7 +104,7 @@ import Testing
     @Test func rejectMarksRejectedAndDeletesTheDraft() async throws {
         let h = try Harness()
         let id = try cliDraft(h)
-        let r = await h.run(["gmail", "review", "reject", id.rawValue, "--json"], environment: Self.env, stdinTTY: true, readLine: "ME@example.com")
+        let r = await h.run(["gmail", "review", "reject", id.rawValue, "--json"], stdinTTY: true, readLine: "ME@example.com")
         #expect(r.code == 0 || r.code == 6, "\(r.code) \(r.err)")
         #expect(r.data["review"] as? String == "rejected" && r.data["sent"] as? Bool == false)
         let draft = try #require(try h.store.draft(id))
@@ -143,12 +141,9 @@ final class OpenedURLs: @unchecked Sendable {
 }
 
 @Suite struct DraftForwardDeleteTests {
-    static let env = Harness.write
-
     @Test func forwardMakesAPendingCliForwardDraftAndNeverSends() async throws {
         let h = try Harness()
-        let r = await h.run(["gmail", "drafts", "forward", "m1", "--to", "Dana <dana@example.com>", "--body", "FYI", "--note", "n", "--json"],
-                            environment: Self.env)
+        let r = await h.run(["gmail", "drafts", "forward", "m1", "--to", "Dana <dana@example.com>", "--body", "FYI", "--note", "n", "--json"])
         #expect(r.code == 6, "\(r.code) \(r.err)")
         #expect(r.data["mode"] as? String == "forward" && r.data["origin"] as? String == "cli" && r.data["review"] as? String == "pending")
         #expect(r.data["sent"] as? Bool == false && r.data["reviewLink"] as? String != nil)
@@ -158,35 +153,35 @@ final class OpenedURLs: @unchecked Sendable {
         #expect(draft.content.bodyHTML.hasPrefix("<div dir=\"ltr\">FYI</div>") && draft.content.bodyHTML.contains("Forwarded message"))
         #expect(try h.operations().map(\.kind) == [.upsertDraft])
         let before = try h.store.drafts(account: h.account, states: [], limit: 50).count
-        #expect((await h.run(["gmail", "drafts", "forward", "m1", "--json"], environment: Self.env)).errorCode == "recipient_required")
-        #expect((await h.run(["gmail", "drafts", "forward", "nope", "--to", "a@example.com", "--json"], environment: Self.env)).code == 3)
-        #expect((await h.run(["gmail", "drafts", "forward", "m1", "--to", "bad", "--json"], environment: Self.env)).errorCode == "bad_address")
-        let dry = await h.run(["gmail", "drafts", "forward", "m1", "--to", "a@example.com", "--dry-run", "--json"], environment: Self.env)
+        #expect((await h.run(["gmail", "drafts", "forward", "m1", "--json"])).errorCode == "recipient_required")
+        #expect((await h.run(["gmail", "drafts", "forward", "nope", "--to", "a@example.com", "--json"])).code == 3)
+        #expect((await h.run(["gmail", "drafts", "forward", "m1", "--to", "bad", "--json"])).errorCode == "bad_address")
+        let dry = await h.run(["gmail", "drafts", "forward", "m1", "--to", "a@example.com", "--dry-run", "--json"])
         #expect(dry.code == 0 && dry.data["dryRun"] as? Bool == true && dry.data["forwardOf"] as? String == "m1")
         #expect(try h.store.drafts(account: h.account, states: [], limit: 50).count == before)
     }
 
     @Test func deleteRemovesAnUnapprovedAgentDraftOnly() async throws {
         let h = try Harness()
-        _ = await h.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "x", "--json"], environment: Self.env)
+        _ = await h.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "x", "--json"])
         let draft = try #require(try h.store.drafts(account: h.account, states: [], limit: 50).first)
-        let unconfirmed = await h.run(["gmail", "drafts", "delete", draft.id.rawValue, "--json"], environment: Self.env)
+        let unconfirmed = await h.run(["gmail", "drafts", "delete", draft.id.rawValue, "--json"])
         #expect(unconfirmed.code == 2 && unconfirmed.errorCode == "confirmation_required")
         #expect(try #require(try h.store.draft(draft.id)).state == .editing)
-        let r = await h.run(["gmail", "drafts", "delete", draft.id.rawValue, "--yes", "--json"], environment: Self.env)
+        let r = await h.run(["gmail", "drafts", "delete", draft.id.rawValue, "--yes", "--json"])
         #expect(r.code == 0 && r.data["deleted"] as? Bool == true && r.data["status"] as? String == "succeeded", "\(r.code) \(r.err)")
         #expect(try #require(try h.store.draft(draft.id)).state == .discarded)
         #expect(!(try h.operations()).contains { $0.kind == .deleteDraft || $0.kind == .sendDraft })
         let own = try h.store.createDraft(account: h.account, mode: .new, replyTo: nil,
                                           content: DraftContent(to: [], cc: [], bcc: [], subject: "mine", bodyHTML: "<div>x</div>", attachments: []),
                                           origin: .user, reviewState: .none, agentNote: nil, extraHeaders: [:])
-        let mine = await h.run(["gmail", "drafts", "delete", own.rawValue, "--yes", "--json"], environment: Self.env)
+        let mine = await h.run(["gmail", "drafts", "delete", own.rawValue, "--yes", "--json"])
         #expect(mine.code == 5 && mine.errorCode == "not_agent_draft")
         let approved = try h.store.createDraft(account: h.account, mode: .new, replyTo: nil,
                                                content: DraftContent(to: [], cc: [], bcc: [], subject: "ok", bodyHTML: "<div>x</div>", attachments: []),
                                                origin: .agent, reviewState: .pending, agentNote: nil, extraHeaders: [:])
         try h.store.setReviewState(approved, .approved)
-        let kept = await h.run(["gmail", "drafts", "delete", approved.rawValue, "--yes", "--json"], environment: Self.env)
+        let kept = await h.run(["gmail", "drafts", "delete", approved.rawValue, "--yes", "--json"])
         #expect(kept.code == 5 && kept.errorCode == "draft_approved")
         #expect(try #require(try h.store.draft(own)).state == .editing)
         #expect(try #require(try h.store.draft(approved)).state == .editing)
@@ -194,7 +189,7 @@ final class OpenedURLs: @unchecked Sendable {
 
     @Test func showIsAnAliasOfGet() async throws {
         let h = try Harness()
-        _ = await h.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "x", "--json"], environment: Self.env)
+        _ = await h.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "x", "--json"])
         let draft = try #require(try h.store.drafts(account: h.account, states: [], limit: 50).first)
         let shown = await h.run(["gmail", "drafts", "show", draft.id.rawValue, "--json"])
         #expect(shown.code == 0 && shown.json["command"] as? String == "gmail.drafts.get" && shown.data["draftId"] as? String == draft.id.rawValue)

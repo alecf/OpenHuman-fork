@@ -84,12 +84,6 @@ private func declaredNames(in folder: URL, topLevelOnly: Bool) throws -> Set<Str
                                                           "done", "waiting"])
 }
 
-@Test func safeModeAllowsChangesExceptReadOnly() {
-    #expect(SafeModeInfo.normal.allowsMailChanges)
-    #expect(SafeModeInfo.writeAllowlist.allowsMailChanges)
-    #expect(!SafeModeInfo.readOnly.allowsMailChanges)
-}
-
 @Test func aStoredUndoSendValueIsClampedIntoTheSettingsRange() {
     #expect(AppSettings.undoSendSecondsRange == 0...60)
     #expect(AppSettings.undoSendHold(Int.max) == 60)
@@ -138,8 +132,7 @@ private func declaredNames(in folder: URL, topLevelOnly: Bool) throws -> Set<Str
                                    pendingReviewCount: 0, failedOperationCount: 0)
     #expect(counts.otherUnread == 4)
     #expect(SnippetInfo(name: "n", bodyHTML: "b").isNew)
-    #expect(MailPortError.blockedBySafeMode.description == "Read-only: Mail can't change your mail")
-    #expect(MailPortError.blockedBySafeMode.description == MailPortError.readOnlyText)
+    #expect(MailPortError.notAllowed("permanent delete").description == "Not allowed: permanent delete")
 }
 
 @Test func unimplementedMembersFailLoudly() async throws {
@@ -152,7 +145,6 @@ private func declaredNames(in folder: URL, topLevelOnly: Bool) throws -> Set<Str
         func body(_ key: MessageKey) -> AsyncThrowingStream<BodyLoadState, Error> { AsyncThrowingStream { $0.finish() } }
     }
     let source = Minimal()
-    #expect(source.safeMode() == .normal)
     await #expect(throws: MailPortError.unsupported("labels")) {
         for try await _ in source.labels(AccountID(1)) {}
     }

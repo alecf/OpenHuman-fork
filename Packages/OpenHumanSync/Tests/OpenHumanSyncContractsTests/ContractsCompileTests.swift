@@ -17,8 +17,7 @@ import OpenHumanSync
         let events: [SystemEvent] = [.didWake, .networkReachable(false), .willTerminate]
         #expect(events.count == 3)
         #expect(EngineError.requiresApp("sync") != .sendNotAllowed)
-        #expect(EngineError.blockedBySafeMode("send") != .sendNotAllowed)
-        #expect(config.safeMode == .normal)
+        #expect(EngineError.writeAccessMissing("send") != .sendNotAllowed)
         let ref = ThreadRef(accountID: AccountID(1), rowID: ThreadRowID(rawValue: 1), gmailThreadID: GmailThreadID("t"))
         let engineEvents: [EngineEvent] = [
             .snoozeWoke(ref, overdueBy: .seconds(5)), .reminderFired(ref, overdueBy: .zero),

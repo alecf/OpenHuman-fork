@@ -5,12 +5,11 @@ import Testing
 @testable import OpenHumanCLIKit
 
 @Suite struct SnippetCommandTests {
-    static let env = Harness.write
     static let appFile = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("OpenHumanCore/Tests/OpenHumanCoreTests/Fixtures/snippets-v2.json")
 
-    func add(_ h: Harness, _ args: [String], environment: [String: String] = Harness.write) async -> Run {
+    func add(_ h: Harness, _ args: [String], environment: [String: String] = [:]) async -> Run {
         await h.run(["gmail", "snippets", "add"] + args + ["--json"], environment: environment)
     }
 
@@ -44,7 +43,7 @@ import Testing
         #expect(v1.version == 1)
         let url = h.directory.appendingPathComponent("v1.json")
         try v1.encoded().write(to: url)
-        let done = await h.run(["gmail", "snippets", "import", url.path, "--yes", "--json"], environment: Self.env)
+        let done = await h.run(["gmail", "snippets", "import", url.path, "--yes", "--json"])
         #expect(done.code == 0 && done.data["toReplace"] as? Int == 1, "\(done.code) \(done.err)")
         let after = try #require(try h.store.snippets(account: nil).first { $0.id == before.id })
         #expect(after.bodyHTML == "<p>New</p>")
@@ -54,10 +53,10 @@ import Testing
     @Test func theAppsVersion2FileImportsWithBccAndFilesAndExportsUnchanged() async throws {
         let h = try Harness()
         let appFile = try Data(contentsOf: Self.appFile)
-        let preview = await h.run(["gmail", "snippets", "import", Self.appFile.path, "--dry-run", "--json"], environment: Self.env)
+        let preview = await h.run(["gmail", "snippets", "import", Self.appFile.path, "--dry-run", "--json"])
         #expect(preview.code == 0 && preview.data["toAdd"] as? Int == 2, "\(preview.code) \(preview.err)")
         #expect(preview.data["withRecipients"] as? Int == 1 && preview.data["files"] as? Int == 1 && preview.data["filesDropped"] as? Int == 0)
-        let done = await h.run(["gmail", "snippets", "import", Self.appFile.path, "--yes", "--json"], environment: Self.env)
+        let done = await h.run(["gmail", "snippets", "import", Self.appFile.path, "--yes", "--json"])
         #expect(done.code == 0 && done.data["saved"] as? Int == 2, "\(done.code) \(done.err)")
         let onboarding = try #require(try h.store.snippets(account: nil).first { $0.name == "Onboarding" })
         #expect(onboarding.to == [EmailAddress(name: "Dana Ruiz", email: "dana@example.com")])
@@ -76,17 +75,15 @@ import Testing
         #expect((entry["files"] as? [[String: Any]])?.first?["filename"] as? String == "guide.txt")
     }
 
-    @Test func addFollowsTheSafeModeLikeTheAppsSettings() async throws {
+    @Test func addHonoursReadonlyAndDryRun() async throws {
         let h = try Harness()
-        let blocked = await add(h, ["Thanks", "--body", "Thank you"], environment: [:])
-        #expect(blocked.code == 5 && blocked.errorCode == "blocked_by_safe_mode")
         let readonly = await add(h, ["Thanks", "--body", "Thank you", "--readonly"])
         #expect(readonly.code == 5 && readonly.errorCode == "readonly")
-        let dry = await add(h, ["Thanks", "--body", "Thank you", "--dry-run"], environment: [:])
+        let dry = await add(h, ["Thanks", "--body", "Thank you", "--dry-run"])
         #expect(dry.code == 0 && dry.data["dryRun"] as? Bool == true)
         #expect(try h.store.snippets(account: nil).isEmpty)
-        let allowlist = await add(h, ["Thanks", "--body", "Thank you"], environment: ["OPENHUMAN_SAFE_MODE": "write-allowlist"])
-        #expect(allowlist.code == 0 && allowlist.data["status"] as? String == "added", "\(allowlist.code) \(allowlist.err)")
+        let added = await add(h, ["Thanks", "--body", "Thank you"])
+        #expect(added.code == 0 && added.data["status"] as? String == "added", "\(added.code) \(added.err)")
         #expect(try h.store.snippets(account: nil).count == 1)
         #expect(try h.operations().isEmpty)
     }
@@ -128,9 +125,9 @@ import Testing
 
         let replaced = await add(h, ["Thanks", "--body", "New text", "--replace"])
         #expect(replaced.code == 0 && replaced.data["status"] as? String == "replaced" && replaced.data["snippetId"] as? String == id)
-        let unconfirmed = await h.run(["gmail", "snippets", "delete", "Thanks", "--json"], environment: Self.env)
+        let unconfirmed = await h.run(["gmail", "snippets", "delete", "Thanks", "--json"])
         #expect(unconfirmed.code == 2 && unconfirmed.errorCode == "confirmation_required")
-        let deleted = await h.run(["gmail", "snippets", "delete", "Thanks", "--yes", "--json"], environment: Self.env)
+        let deleted = await h.run(["gmail", "snippets", "delete", "Thanks", "--yes", "--json"])
         #expect(deleted.code == 0 && deleted.data["deleted"] as? Bool == true)
         #expect(try h.store.snippets(account: nil).map(\.name) == ["Mine"])
         #expect(try h.operations().isEmpty)
@@ -180,16 +177,13 @@ import Testing
         let url = h.directory.appendingPathComponent("incoming.json")
         try incoming.encoded().write(to: url)
 
-        let preview = await h.run(["gmail", "snippets", "import", url.path, "--dry-run", "--json"], environment: [:])
+        let preview = await h.run(["gmail", "snippets", "import", url.path, "--dry-run", "--json"])
         #expect(preview.code == 0 && preview.data["status"] as? String == "dry_run", "\(preview.code) \(preview.err)")
         #expect(preview.data["toAdd"] as? Int == 1 && preview.data["toReplace"] as? Int == 1 && preview.data["shortcutsDropped"] as? Int == 1)
         #expect(try h.store.snippets(account: nil).count == 2)
-        let unconfirmed = await h.run(["gmail", "snippets", "import", url.path, "--json"], environment: Self.env)
+        let unconfirmed = await h.run(["gmail", "snippets", "import", url.path, "--json"])
         #expect(unconfirmed.code == 2 && unconfirmed.errorCode == "confirmation_required")
-        let blocked = await h.run(["gmail", "snippets", "import", url.path, "--yes", "--json"], environment: [:])
-        #expect(blocked.code == 5 && blocked.errorCode == "blocked_by_safe_mode")
-
-        let done = await h.run(["gmail", "snippets", "import", url.path, "--yes", "--json"], environment: Self.env)
+        let done = await h.run(["gmail", "snippets", "import", url.path, "--yes", "--json"])
         #expect(done.code == 0 && done.data["status"] as? String == "imported" && done.data["saved"] as? Int == 2, "\(done.code) \(done.err)")
         let stored = try h.store.snippets(account: nil)
         #expect(stored.map(\.name).sorted() == ["Intro", "Keep me", "THANKS"])
@@ -205,13 +199,13 @@ import Testing
         let h = try Harness()
         let settings = h.directory.appendingPathComponent("settings.json")
         try Data(#"{"format":"openhuman-settings","version":1,"snippets":[]}"#.utf8).write(to: settings)
-        let wrong = await h.run(["gmail", "snippets", "import", settings.path, "--yes", "--json"], environment: Self.env)
+        let wrong = await h.run(["gmail", "snippets", "import", settings.path, "--yes", "--json"])
         #expect(wrong.code == 2 && wrong.errorCode == "not_a_snippets_file")
         let newer = h.directory.appendingPathComponent("newer.json")
         try Data(#"{"format":"openhuman-snippets","version":3,"snippets":[]}"#.utf8).write(to: newer)
-        let tooNew = await h.run(["gmail", "snippets", "import", newer.path, "--yes", "--json"], environment: Self.env)
+        let tooNew = await h.run(["gmail", "snippets", "import", newer.path, "--yes", "--json"])
         #expect(tooNew.code == 9 && tooNew.errorCode == "snippets_file_too_new")
-        let missing = await h.run(["gmail", "snippets", "import", "/nonexistent/x.json", "--yes", "--json"], environment: Self.env)
+        let missing = await h.run(["gmail", "snippets", "import", "/nonexistent/x.json", "--yes", "--json"])
         #expect(missing.code == 2 && missing.errorCode == "bad_file")
         #expect(try h.store.snippets(account: nil).isEmpty)
     }

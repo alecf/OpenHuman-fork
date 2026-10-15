@@ -17,7 +17,7 @@ private func firstThread(_ store: MailStore, _ account: AccountID) async throws 
 @Test(.timeLimit(.minutes(1))) func aChoiceIsStoredAndEachUndoPutsThePreviousOneBack() async throws {
     let (store, account) = try FixtureStoreSeeder.makeStore(corpus: FakeCorpus.make(threadCount: 5, now: now))
     let thread = try await firstThread(store, account)
-    let port = MailStoreWaiting(store: store, safeMode: .normal)
+    let port = MailStoreWaiting(store: store)
 
     let first = try await port.setChoice(.waiting, for: thread)
     #expect(try WaitingReceipt(token: first).restore == nil, "there was no choice before")
@@ -34,14 +34,9 @@ private func firstThread(_ store: MailStore, _ account: AccountID) async throws 
     #expect(try store.setWaitingOverride(MailStoreWaiting.ref(thread), nil) == nil, "undo cleared the choice")
 }
 
-@Test(.timeLimit(.minutes(1))) func readOnlySafeModeRefusesBeforeTheStoreAndAnUnknownThreadIsNotFound() async throws {
+@Test(.timeLimit(.minutes(1))) func anUnknownThreadIsNotFound() async throws {
     let (store, account) = try FixtureStoreSeeder.makeStore(corpus: FakeCorpus.make(threadCount: 5, now: now))
-    let thread = try await firstThread(store, account)
-    let readOnly = MailStoreWaiting(store: store, safeMode: .readOnly)
-    await #expect(throws: MailPortError.blockedBySafeMode) { try await readOnly.setChoice(.notWaiting, for: thread) }
-    #expect(try store.setWaitingOverride(MailStoreWaiting.ref(thread), nil) == nil, "nothing was stored")
-
-    let port = MailStoreWaiting(store: store, safeMode: .normal)
+    let port = MailStoreWaiting(store: store)
     let unknown = ThreadKey(account: account, rowID: 987_654, gmailThreadID: GmailThreadID("absent"))
     await #expect(throws: MailPortError.notFound("thread")) { try await port.setChoice(.notWaiting, for: unknown) }
     await #expect(throws: MailPortError.self) { try await port.undo(UndoToken(payload: Data("x".utf8))) }

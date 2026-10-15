@@ -134,7 +134,7 @@ public final class SnippetTransferModel {
         guard let bundle = pending else { return String(localized: "Nothing to import.") }
         pending = nil
         preview = nil
-        guard let commands, availability.canEditStoredItems else {
+        guard let commands, availability.hasCommands else {
             let text = availability.storedItemsNote ?? String(localized: "Snippets can't be saved here.")
             message = text
             return text

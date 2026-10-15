@@ -17,11 +17,11 @@ private func at(_ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0, _ 
     private static let me = "robin@example.com"
     private static let eventsPath = "/calendar/v3/calendars/robin@example.com/events"
 
-    private func client(_ http: FakeHTTPTransport, mode: SafeMode = .readOnly, scopes: [String]? = nil,
+    private func client(_ http: FakeHTTPTransport, scopes: [String] = CalendarScopes.request.read,
                         tokens: StaticTokenProvider = StaticTokenProvider(token: "synthetic-cal-access"),
                         clock: InstantClock = InstantClock(),
                         budget: CalendarRequestBudget = CalendarRequestBudget()) -> GoogleCalendarClient {
-        GoogleCalendarClient(calendarID: Self.me, mode: mode, grantedScopes: scopes ?? CalendarScopes.requested(for: mode),
+        GoogleCalendarClient(calendarID: Self.me, grantedScopes: scopes,
                              tokens: tokens, transport: http, clock: clock, budget: budget, timeZone: newYork,
                              makeRequestID: { "synthetic-request-1" })
     }
@@ -147,7 +147,7 @@ private func at(_ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0, _ 
         #expect((sent["items"] as? [[String: String]]) == [["id": Self.me]])
     }
 
-    @Test func anInsertSendsTheEventAndAMeetRequestInWriteMode() async throws {
+    @Test func anInsertSendsTheEventAndAMeetRequestWithAWriteGrant() async throws {
         let http = FakeHTTPTransport()
         http.on("POST", Self.eventsPath) { _ in
             FakeHTTPTransport.json(200, [
@@ -158,7 +158,7 @@ private func at(_ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0, _ 
                 "conferenceData": ["createRequest": ["requestId": "synthetic-request-1", "status": ["statusCode": "pending"]]],
             ])
         }
-        let calendar = client(http, mode: .normal)
+        let calendar = client(http, scopes: CalendarScopes.request.write)
         #expect(calendar.allowsWrites)
         let created = try await calendar.insertEvent(
             GoogleEventInsert(title: "Lunch", start: at(10, 15, 12, 30), end: at(10, 15, 13), timeZone: "America/New_York",
@@ -184,7 +184,7 @@ private func at(_ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0, _ 
             FakeHTTPTransport.json(200, ["id": "new2", "start": ["dateTime": "2026-10-15T16:30:00Z"],
                                          "end": ["dateTime": "2026-10-15T17:00:00Z"]])
         }
-        _ = try await client(http, mode: .normal).insertEvent(
+        _ = try await client(http, scopes: CalendarScopes.request.write).insertEvent(
             GoogleEventInsert(title: "Focus", start: at(10, 15, 12, 30), end: at(10, 15, 13), timeZone: "America/New_York"),
             sendUpdates: .none, addMeet: false)
         let request = try #require(http.requests.first)
@@ -195,7 +195,7 @@ private func at(_ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0, _ 
     @Test func aCreatedEventWhoseAnswerIsUnreadableStillCountsAsCreated() async throws {
         let http = FakeHTTPTransport()
         http.on("POST", Self.eventsPath) { _ in HTTPResponse(status: 200, headers: [:], body: Data("not json".utf8)) }
-        let created = try await client(http, mode: .normal).insertEvent(
+        let created = try await client(http, scopes: CalendarScopes.request.write).insertEvent(
             GoogleEventInsert(title: "Focus", start: at(10, 15, 12), end: at(10, 15, 13), timeZone: "America/New_York"),
             sendUpdates: .none, addMeet: false)
         #expect(created.id.isEmpty && created.title == "Focus" && created.start == at(10, 15, 12))
@@ -208,7 +208,7 @@ private func at(_ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0, _ 
             let http = FakeHTTPTransport()
             http.failNext(failure)
             await #expect(throws: GoogleCalendarError.unclear, "\(failure)") {
-                _ = try await client(http, mode: .normal).insertEvent(insert, sendUpdates: .all, addMeet: false)
+                _ = try await client(http, scopes: CalendarScopes.request.write).insertEvent(insert, sendUpdates: .all, addMeet: false)
             }
             #expect(http.requests.count == 1, "never repeated: \(failure)")
         }
@@ -216,7 +216,7 @@ private func at(_ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0, _ 
             let http = FakeHTTPTransport()
             http.on("POST", Self.eventsPath) { _ in FakeHTTPTransport.json(status, ["error": ["code": status]]) }
             await #expect(throws: GoogleCalendarError.unclear) {
-                _ = try await client(http, mode: .normal).insertEvent(insert, sendUpdates: .all, addMeet: false)
+                _ = try await client(http, scopes: CalendarScopes.request.write).insertEvent(insert, sendUpdates: .all, addMeet: false)
             }
             #expect(http.requests.count == 1)
         }
@@ -224,26 +224,24 @@ private func at(_ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0, _ 
             let http = FakeHTTPTransport()
             http.failNext(failure)
             await #expect(throws: GoogleCalendarError.transport(failure)) {
-                _ = try await client(http, mode: .normal).insertEvent(insert, sendUpdates: .all, addMeet: false)
+                _ = try await client(http, scopes: CalendarScopes.request.write).insertEvent(insert, sendUpdates: .all, addMeet: false)
             }
         }
         let http = FakeHTTPTransport()
         http.on("GET", Self.eventsPath) { _ in FakeHTTPTransport.json(503, ["error": ["code": 503]]) }
         await #expect(throws: GoogleCalendarError.server(status: 503)) {
-            _ = try await client(http, mode: .normal).listEvents(from: at(10, 14), to: at(10, 15))
+            _ = try await client(http, scopes: CalendarScopes.request.write).listEvents(from: at(10, 14), to: at(10, 15))
         }
         #expect(GoogleCalendarError.unclear.code == "unclear")
     }
 
-    @Test func readOnlyNeverSendsAWrite() async throws {
+    @Test func aGrantWithoutCalendarEventsNeverSendsAWrite() async throws {
         let http = FakeHTTPTransport()
         let insert = GoogleEventInsert(title: "x", start: at(10, 15, 12), end: at(10, 15, 13), timeZone: "UTC")
-        for (mode, scopes) in [(SafeMode.readOnly, CalendarScopes.requested(for: .normal)),
-                               (.writeAllowlist, CalendarScopes.requested(for: .normal)),
-                               (.normal, CalendarScopes.requested(for: .readOnly))] {
-            let calendar = client(http, mode: mode, scopes: scopes)
+        for scopes in [CalendarScopes.request.read, [CalendarScope.events]] {
+            let calendar = client(http, scopes: scopes)
             #expect(!calendar.allowsWrites)
-            await #expect(throws: GoogleCalendarError.blockedBySafeMode("POST /calendar/v3/calendars/<redacted>/events")) {
+            await #expect(throws: GoogleCalendarError.refusedByGuard("POST /calendar/v3/calendars/<redacted>/events")) {
                 _ = try await calendar.insertEvent(insert, sendUpdates: .none, addMeet: true)
             }
         }
@@ -263,7 +261,7 @@ private func at(_ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0, _ 
         }
         http.on("DELETE", Self.eventsPath + "/made1") { _ in HTTPResponse(status: 204, headers: [:], body: Data()) }
         http.on("DELETE", Self.eventsPath + "/made2") { _ in FakeHTTPTransport.json(410, ["error": ["code": 410]]) }
-        let calendar = client(http, mode: .normal)
+        let calendar = client(http, scopes: CalendarScopes.request.write)
         await #expect(throws: GoogleCalendarError.self) { try await calendar.deleteEvent(id: "someone-elses") }
         #expect(http.requests.isEmpty, "an event Mail did not create is never deleted")
         let insert = GoogleEventInsert(title: "x", start: at(10, 15, 12), end: at(10, 15, 13), timeZone: "UTC")

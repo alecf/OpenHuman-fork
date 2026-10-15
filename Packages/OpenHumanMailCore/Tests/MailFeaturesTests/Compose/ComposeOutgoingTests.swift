@@ -175,16 +175,4 @@ import Testing
         #expect(await reminder(f, thread) == before, "a discarded draft's reminder is never set")
         #expect(!f.toasts.contains { $0.hasPrefix("Reminder set for") })
     }
-
-    @Test func readOnlyShowsRemindMeDisabledWithTheReasonAndOpensNothing() async throws {
-        let f = ComposeFixture(safeMode: .readOnly)
-        await f.loaded()
-        #expect(await f.run(.reply))
-        let session = try #require(f.compose.windowSession)
-        await session.settle()
-        let button = try #require(f.compose.remindButton(for: session))
-        #expect(!button.isEnabled && button.help == DisabledReason.safeModeText)
-        #expect(f.compose.remind(from: session), "refused with the reason")
-        #expect(f.timePicker == nil && f.recorder.calls.isEmpty)
-    }
 }

@@ -2,12 +2,11 @@ import ArgumentParser
 import Foundation
 import OpenHumanCore
 import OpenHumanStore
-import OpenHumanSync
 
-enum WriteSupport {
-    static let queuedNote = "Queued locally. OpenHuman Mail applies changes queued by the CLI to Gmail only in a guarded test run; otherwise it refuses them and reverts the local change. Queued changes expire after 24 hours."
+enum MailChangePreview {
+    static let refusedNote = "Without --dry-run this command exits 5 mail_changes_in_app: make mail changes in OpenHuman Mail."
 
-    static func resolveThreads(_ ctx: CLIContext, ids: [String]) throws -> (accounts: [AccountItem], refs: [ThreadRef]) {
+    static func resolveThreads(_ ctx: CLIContext, ids: [String]) throws -> [ThreadRef] {
         let clean = ids.map { $0.trimmingCharacters(in: .whitespaces) }
         guard !clean.isEmpty else { throw CLIError.usage("At least one thread id is required.", code: "ids_required") }
         guard clean.count <= 100 else { throw CLIError.usage("At most 100 ids per command.", code: "too_many_ids") }
@@ -31,128 +30,92 @@ enum WriteSupport {
                            details: ["ids": .strings(missing)])
         }
         for account in used { try ctx.requireWritable(account) }
-        return (used, refs)
-    }
-
-    static func settle(_ ctx: CLIContext, engine: MailEngine, accounts: [AccountItem], ids: [OperationID], wait: Bool,
-                       note: String = queuedNote) async -> (status: String, exit: CLIStatus, notes: [String]) {
-        if ids.isEmpty { return ("succeeded", .ok, []) }
-        guard ctx.appIsRunning(accounts), wait else { return ("queued", .queued, [note]) }
-        let statuses = await engine.waitForOperations(ids, timeout: ctx.timeout)
-        if statuses.values.contains(where: { $0 == .failed || $0 == .cancelled }) {
-            let store = try? ctx.store()
-            if ids.contains(where: { ((try? store?.operation($0)) ?? nil)?.lastErrorCode == "safe_mode_blocked" }) {
-                return ("refused", .policyBlocked, ["OpenHuman Mail did not send this to Gmail: it applies changes queued by the CLI only in a guarded test run."])
-            }
-            return ("failed", .failure, ["The app could not apply the change. Run `openhuman sync status` for details."])
-        }
-        if statuses.values.allSatisfy({ $0 == .succeeded }) { return ("succeeded", .ok, []) }
-        return ("queued", .queued, ["Queued; the app has not confirmed it within the timeout."])
-    }
-
-    static func undoToken(_ receipt: ActionReceipt) -> String? {
-        guard receipt.undo != nil, let data = try? JSONEncoder().encode(receipt) else { return nil }
-        return data.base64EncodedString()
+        return refs
     }
 }
 
-protocol TriageCommand: CLICommand {
+protocol MailChangeCommand: CLICommand {
     static var verb: String { get }
-    var write: WriteOptions { get }
-    var threadIds: [String] { get }
-    func action(_ refs: [ThreadRef], _ ctx: CLIContext) throws -> MailAction
     static var dataNote: String? { get }
+    var threadIds: [String] { get }
+    func checkArguments(_ ctx: CLIContext) throws
 }
 
-extension TriageCommand {
+extension MailChangeCommand {
     static var dataNote: String? { nil }
+    func checkArguments(_ ctx: CLIContext) throws {}
 
     func handle(_ ctx: CLIContext) async throws -> CommandResult {
-        let (accounts, refs) = try WriteSupport.resolveThreads(ctx, ids: threadIds)
+        guard ctx.dryRun else { throw Policy.mailChangesInApp }
+        let refs = try MailChangePreview.resolveThreads(ctx, ids: threadIds)
         let mapper = try Mapper(store: ctx.store())
-        let mailAction = try action(refs, ctx)
+        try checkArguments(ctx)
         let threads = refs.map { r in
             obj(["threadId": .string(r.gmailThreadID.rawValue), "account": .string(mapper.email(r.accountID)),
                  "link": .string(mapper.threadLink(r.accountID, r.gmailThreadID))])
         }
-        let columns = CommandCatalog.opColumns
-        if ctx.dryRun {
-            let data = obj(["verb": .string(Self.verb), "dryRun": .bool(true), "status": .string("dry_run"), "threads": .array(threads),
-                            "operationIds": .array([]), "note": OutValue.optString(Self.dataNote)])
-            return CommandResult(data: data, table: Table(columns: columns, rows: [[.string("dry_run"), .array([]), .strings(refs.map(\.gmailThreadID.rawValue))]]))
-        }
-        let engine = try ctx.engine()
-        let receipt = try await engine.perform(mailAction, origin: .cli)
-        let (status, exit, notes) = await WriteSupport.settle(ctx, engine: engine, accounts: accounts, ids: receipt.operationIDs, wait: write.wait)
-        let data = obj([
-            "verb": .string(Self.verb), "status": .string(status), "threads": .array(threads),
-            "operationIds": .array(receipt.operationIDs.map { .int(Int($0.rawValue)) }),
-            "undo": OutValue.optString(WriteSupport.undoToken(receipt)), "note": OutValue.optString(Self.dataNote),
-        ])
-        return CommandResult(data: data, table: Table(columns: columns, rows: [[.string(status), .array(receipt.operationIDs.map { .int(Int($0.rawValue)) }),
-                                                                              .strings(refs.map(\.gmailThreadID.rawValue))]]),
-                             status: exit, notes: notes)
+        let data = obj(["verb": .string(Self.verb), "dryRun": .bool(true), "status": .string("dry_run"), "threads": .array(threads),
+                        "operationIds": .array([]), "note": OutValue.optString(Self.dataNote)])
+        return CommandResult(data: data, table: Table(columns: CommandCatalog.opColumns,
+                                                      rows: [[.string("dry_run"), .array([]), .strings(refs.map(\.gmailThreadID.rawValue))]]),
+                             notes: [MailChangePreview.refusedNote])
     }
 }
 
-struct GmailDone: TriageCommand {
+struct GmailDone: MailChangeCommand {
     static let path = "gmail.done"
     static let verb = "done"
-    static let configuration = CommandConfiguration(commandName: "done", abstract: "Mark done (removes INBOX).", aliases: ["archive"])
+    static let configuration = CommandConfiguration(commandName: "done", abstract: "Mark done (removes INBOX). Refused: make mail changes in OpenHuman Mail.",
+                                                    aliases: ["archive"])
     @OptionGroup var global: GlobalOptions
     @OptionGroup var write: WriteOptions
     @Argument(help: "Gmail thread ids.") var threadIds: [String]
-    func action(_ refs: [ThreadRef], _ ctx: CLIContext) throws -> MailAction { .archive(refs) }
 }
 
-struct GmailMoveToInbox: TriageCommand {
+struct GmailMoveToInbox: MailChangeCommand {
     static let path = "gmail.move-to-inbox"
     static let verb = "move-to-inbox"
-    static let configuration = CommandConfiguration(commandName: "move-to-inbox", abstract: "Back to the inbox.", aliases: ["unarchive"])
+    static let configuration = CommandConfiguration(commandName: "move-to-inbox", abstract: "Back to the inbox. Refused: make mail changes in OpenHuman Mail.",
+                                                    aliases: ["unarchive"])
     @OptionGroup var global: GlobalOptions
     @OptionGroup var write: WriteOptions
     @Argument(help: "Gmail thread ids.") var threadIds: [String]
-    func action(_ refs: [ThreadRef], _ ctx: CLIContext) throws -> MailAction { .moveToInbox(refs) }
 }
 
-struct GmailRead: TriageCommand {
+struct GmailRead: MailChangeCommand {
     static let path = "gmail.read"
     static let verb = "read"
-    static let configuration = CommandConfiguration(commandName: "read", abstract: "Mark read.")
+    static let configuration = CommandConfiguration(commandName: "read", abstract: "Mark read. Refused: make mail changes in OpenHuman Mail.")
     @OptionGroup var global: GlobalOptions
     @OptionGroup var write: WriteOptions
     @Argument(help: "Gmail thread ids.") var threadIds: [String]
-    func action(_ refs: [ThreadRef], _ ctx: CLIContext) throws -> MailAction { .markRead(refs) }
 }
 
-struct GmailUnread: TriageCommand {
+struct GmailUnread: MailChangeCommand {
     static let path = "gmail.unread"
     static let verb = "unread"
-    static let configuration = CommandConfiguration(commandName: "unread", abstract: "Mark unread.")
+    static let configuration = CommandConfiguration(commandName: "unread", abstract: "Mark unread. Refused: make mail changes in OpenHuman Mail.")
     @OptionGroup var global: GlobalOptions
     @OptionGroup var write: WriteOptions
     @Argument(help: "Gmail thread ids.") var threadIds: [String]
-    func action(_ refs: [ThreadRef], _ ctx: CLIContext) throws -> MailAction { .markUnread(refs) }
 }
 
-struct GmailStar: TriageCommand {
+struct GmailStar: MailChangeCommand {
     static let path = "gmail.star"
     static let verb = "star"
-    static let configuration = CommandConfiguration(commandName: "star", abstract: "Star.")
+    static let configuration = CommandConfiguration(commandName: "star", abstract: "Star. Refused: make mail changes in OpenHuman Mail.")
     @OptionGroup var global: GlobalOptions
     @OptionGroup var write: WriteOptions
     @Argument(help: "Gmail thread ids.") var threadIds: [String]
-    func action(_ refs: [ThreadRef], _ ctx: CLIContext) throws -> MailAction { .star(refs) }
 }
 
-struct GmailUnstar: TriageCommand {
+struct GmailUnstar: MailChangeCommand {
     static let path = "gmail.unstar"
     static let verb = "unstar"
-    static let configuration = CommandConfiguration(commandName: "unstar", abstract: "Remove the star.")
+    static let configuration = CommandConfiguration(commandName: "unstar", abstract: "Remove the star. Refused: make mail changes in OpenHuman Mail.")
     @OptionGroup var global: GlobalOptions
     @OptionGroup var write: WriteOptions
     @Argument(help: "Gmail thread ids.") var threadIds: [String]
-    func action(_ refs: [ThreadRef], _ ctx: CLIContext) throws -> MailAction { .unstar(refs) }
 }
 
 func parseFuture(_ text: String, _ ctx: CLIContext) throws -> Date {
@@ -163,53 +126,49 @@ func parseFuture(_ text: String, _ ctx: CLIContext) throws -> Date {
     return parsed
 }
 
-struct GmailSnooze: TriageCommand {
+struct GmailSnooze: MailChangeCommand {
     static let path = "gmail.snooze"
     static let verb = "snooze"
-    static let configuration = CommandConfiguration(commandName: "snooze", abstract: "Snooze until a time (writes Gmail schedule labels via the queue).")
+    static let configuration = CommandConfiguration(commandName: "snooze", abstract: "Snooze until a time. Refused: make mail changes in OpenHuman Mail.")
     @OptionGroup var global: GlobalOptions
     @OptionGroup var write: WriteOptions
     @Argument(help: "Gmail thread ids.") var threadIds: [String]
     @Option(name: .long, help: "ISO 8601, `tomorrow 8am`, `+2h`, `monday`.") var until: String
-    func action(_ refs: [ThreadRef], _ ctx: CLIContext) throws -> MailAction { .snooze(refs, until: try parseFuture(until, ctx)) }
+    func checkArguments(_ ctx: CLIContext) throws { _ = try parseFuture(until, ctx) }
 }
 
-struct GmailUnsnooze: TriageCommand {
+struct GmailUnsnooze: MailChangeCommand {
     static let path = "gmail.unsnooze"
     static let verb = "unsnooze"
-    static let configuration = CommandConfiguration(commandName: "unsnooze", abstract: "Wake a snoozed thread now.")
+    static let configuration = CommandConfiguration(commandName: "unsnooze", abstract: "Wake a snoozed thread now. Refused: make mail changes in OpenHuman Mail.")
     @OptionGroup var global: GlobalOptions
     @OptionGroup var write: WriteOptions
     @Argument(help: "Gmail thread ids.") var threadIds: [String]
-    func action(_ refs: [ThreadRef], _ ctx: CLIContext) throws -> MailAction { .unsnooze(refs) }
 }
 
-struct GmailRemind: TriageCommand {
+struct GmailRemind: MailChangeCommand {
     static let path = "gmail.remind"
     static let verb = "remind"
     static let dataNote: String? = "Reminders are kept on this Mac only."
-    static let configuration = CommandConfiguration(commandName: "remind", abstract: "Remind me about a thread. Reminders are kept on this Mac only.")
+    static let configuration = CommandConfiguration(commandName: "remind", abstract: "Remind me about a thread. Refused: make mail changes in OpenHuman Mail.")
     @OptionGroup var global: GlobalOptions
     @OptionGroup var write: WriteOptions
     @Argument(help: "Gmail thread id.") var threadId: String
     @Option(name: .long, help: "ISO 8601, `tomorrow 8am`, `+2h`, `monday`.") var at: String
     @Flag(name: .long, help: "Only remind when nobody has replied.") var ifNoReply = false
     var threadIds: [String] { [threadId] }
-    func action(_ refs: [ThreadRef], _ ctx: CLIContext) throws -> MailAction {
-        .setReminder(refs[0], dueAt: try parseFuture(at, ctx), condition: ifNoReply ? .ifNoReply : .always)
-    }
+    func checkArguments(_ ctx: CLIContext) throws { _ = try parseFuture(at, ctx) }
 }
 
-struct GmailUnremind: TriageCommand {
+struct GmailUnremind: MailChangeCommand {
     static let path = "gmail.unremind"
     static let verb = "unremind"
     static let dataNote: String? = "Reminders are kept on this Mac only."
-    static let configuration = CommandConfiguration(commandName: "unremind", abstract: "Cancel the thread's reminder.")
+    static let configuration = CommandConfiguration(commandName: "unremind", abstract: "Cancel the thread's reminder. Refused: make mail changes in OpenHuman Mail.")
     @OptionGroup var global: GlobalOptions
     @OptionGroup var write: WriteOptions
     @Argument(help: "Gmail thread id.") var threadId: String
     var threadIds: [String] { [threadId] }
-    func action(_ refs: [ThreadRef], _ ctx: CLIContext) throws -> MailAction { .cancelReminder(refs[0]) }
 }
 
 enum UndoToken {
@@ -269,29 +228,19 @@ enum UndoToken {
 
 struct GmailUndo: CLICommand {
     static let path = "gmail.undo"
-    static let configuration = CommandConfiguration(commandName: "undo",
-                                                    abstract: "Take back a triage change by the undo token it printed (data.undo).")
+    static let configuration = CommandConfiguration(commandName: "undo", abstract: "Take back a triage change. Refused: make mail changes in OpenHuman Mail.")
     @OptionGroup var global: GlobalOptions
     @OptionGroup var write: WriteOptions
-    @Argument(help: "The undo token from a triage command's output (data.undo).") var token: String
+    @Argument(help: "An undo token.") var token: String
 
     func handle(_ ctx: CLIContext) async throws -> CommandResult {
+        guard ctx.dryRun else { throw Policy.mailChangesInApp }
         let receipt = try UndoToken.decode(token)
         let (accounts, threads) = try UndoToken.validate(receipt, ctx)
         for account in accounts { try ctx.requireWritable(account) }
-        let columns = CommandCatalog.opColumns
-        if ctx.dryRun {
-            let data = obj(["verb": .string("undo"), "dryRun": .bool(true), "status": .string("dry_run"), "threadIds": .strings(threads),
-                            "operationIds": .array([])])
-            return CommandResult(data: data, table: Table(columns: columns, rows: [[.string("dry_run"), .array([]), .strings(threads)]]))
-        }
-        let engine = try ctx.engine()
-        let redo = try await engine.undo(receipt)
-        let ops = redo?.operationIDs ?? []
-        let (status, exit, notes) = await WriteSupport.settle(ctx, engine: engine, accounts: accounts, ids: ops, wait: write.wait)
-        let ids = OutValue.array(ops.map { .int(Int($0.rawValue)) })
-        let data = obj(["verb": .string("undo"), "status": .string(status), "threadIds": .strings(threads), "operationIds": ids,
-                        "undo": OutValue.optString(redo.flatMap(WriteSupport.undoToken))])
-        return CommandResult(data: data, table: Table(columns: columns, rows: [[.string(status), ids, .strings(threads)]]), status: exit, notes: notes)
+        let data = obj(["verb": .string("undo"), "dryRun": .bool(true), "status": .string("dry_run"), "threadIds": .strings(threads),
+                        "operationIds": .array([])])
+        return CommandResult(data: data, table: Table(columns: CommandCatalog.opColumns, rows: [[.string("dry_run"), .array([]), .strings(threads)]]),
+                             notes: [MailChangePreview.refusedNote])
     }
 }
