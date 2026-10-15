@@ -69,9 +69,14 @@ func sanitize(_ html: String, allowRemote: Bool = false) -> SanitizedHTML {
     #expect(s.remoteReferences == 2)
     #expect(s.blockedRemote == 2)
     #expect(s.trackers == 0)
-    #expect(s.bodyHTML.contains("<img class=\"oh-blocked\" alt=\"Hero\" width=\"600\">"))
+    #expect(s.bodyHTML.contains("<span class=\"oh-placeholder\">Hero</span>"))
+    #expect(!s.bodyHTML.contains("<img"))
     #expect(s.bodyHTML.contains("<p style=\"color:red\">t</p>"))
     #expect(!s.bodyHTML.contains("images.example"))
+    let original = HTMLSanitizer.sanitize("<img src=\"https://images.example/hero.png\" alt=\"Hero\" width=\"600\">",
+                                          options: SanitizerOptions(trimBlankSpace: false))
+    #expect(original.blockedRemote == 1)
+    #expect(original.bodyHTML == "<img class=\"oh-blocked\" alt=\"Hero\" width=\"600\">")
 }
 
 @Test func remoteImagesStayWhenAllowed() {

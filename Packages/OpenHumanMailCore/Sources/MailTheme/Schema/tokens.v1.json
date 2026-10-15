@@ -127,7 +127,7 @@
     {"name": "footer.height", "layer": "component", "type": "number", "path": ["components", "footer", "height"], "swift": "height", "group": "footer", "groupSwift": "footer", "default": 28, "unit": "pt", "min": 0, "max": 4000},
     {"name": "footer.bg", "layer": "component", "type": "color", "path": ["components", "footer", "bg"], "swift": "bg", "group": "footer", "groupSwift": "footer", "default": "{bg.window}"},
     {"name": "footer.divider", "layer": "component", "type": "color", "path": ["components", "footer", "divider"], "swift": "divider", "group": "footer", "groupSwift": "footer", "default": "{border.hairline}"},
-    {"name": "tab.text", "layer": "component", "type": "color", "path": ["components", "tab", "text"], "swift": "text", "group": "tab", "groupSwift": "tab", "default": "{text.secondary}"},
+    {"name": "tab.text", "layer": "component", "type": "color", "path": ["components", "tab", "text"], "swift": "text", "group": "tab", "groupSwift": "tab", "default": "{text.tertiary}"},
     {"name": "tab.textActive", "layer": "component", "type": "color", "path": ["components", "tab", "textActive"], "swift": "textActive", "group": "tab", "groupSwift": "tab", "default": "{text.primary}"},
     {"name": "tab.count", "layer": "component", "type": "color", "path": ["components", "tab", "count"], "swift": "count", "group": "tab", "groupSwift": "tab", "default": "{text.tertiary}"},
     {"name": "tab.gap", "layer": "component", "type": "number", "path": ["components", "tab", "gap"], "swift": "gap", "group": "tab", "groupSwift": "tab", "default": 20, "unit": "pt", "min": 0, "max": 4000},

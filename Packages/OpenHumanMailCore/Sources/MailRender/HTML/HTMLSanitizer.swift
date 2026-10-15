@@ -70,7 +70,7 @@ public struct SanitizedHTML: Sendable, Equatable {
 }
 
 public enum HTMLSanitizer {
-    public static let version = 4
+    public static let version = 5
 
     static let allowedTags: Set<String> = [
         "a", "abbr", "acronym", "address", "article", "aside", "b", "bdi", "bdo", "big", "blockquote", "br",
@@ -415,6 +415,12 @@ public enum HTMLSanitizer {
                     }
                     return
                 }
+                if cleanup, !options.allowRemoteImages, case .remote = decision {
+                    remote += 1
+                    blocked += 1
+                    emitBlockedImageAlt(attrs["alt"])
+                    return
+                }
             }
             emittedElements += 1
             if emittedElements > options.limits.maxElements { truncated = true; return }
@@ -453,6 +459,21 @@ public enum HTMLSanitizer {
             }
             stack.append(Frame(children: element.getChildNodes(), closeTag: tag, insideQuote: insideQuote || wrap,
                                wrappedInDetails: wrap, depth: frame.depth + 1, element: index, parentTag: tag))
+        }
+
+        mutating func emitBlockedImageAlt(_ alt: String) {
+            guard alt.utf8.count <= options.limits.maxAttributeLength else { return }
+            let text = alt.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            guard Self.hasVisibleCharacter(text) else { return }
+            emittedElements += 1
+            if emittedElements > options.limits.maxElements { truncated = true; return }
+            ops.append(.raw("<span class=\"oh-placeholder\">"))
+            ops.append(.text(text))
+            ops.append(.raw("</span>"))
+            textLength += text.utf16.count
+            seenVisible = true
+            lastBlank = false
+            brRun = 0
         }
 
         static let blankBlockTags: Set<String> = [

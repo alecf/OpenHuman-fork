@@ -263,6 +263,7 @@ public struct ThemeLibrary: Sendable {
             overrides["semantic/color/text.tertiary"] = .reference("text.secondary")
             overrides["components/row/chipBg"] = .reference("text.disabled")
             overrides["components/row/chipText"] = .reference("text.primary")
+            overrides["components/tab/count"] = .reference("text.secondary")
         }
         if let colors = preferences.emailColors { overrides["reader/emailColors"] = .value(.emailColors(colors)) }
         if let font = preferences.uiFont { overrides["typography/family/ui"] = .value(.fontFamily(font)) }

@@ -370,8 +370,8 @@ Reference data for the built-in theme tests.
 | `type.subject` | 22 | 28 | 500 | -0.01 | Conversation subject, modal and window composer title (System themes 20 / 26) |
 | `type.title` | 20 | 26 | 500 | -0.01 | Modal titles, settings page titles |
 | `type.headline` | 15 | 20 | 600 (Semibold) | 0 | Settings section headings |
-| `type.tab` | 18 | 24 | 400 | 0 | Split tabs, both states (visual notes V7; System themes 13 / 18) |
-| `type.tab.active` | 18 | 24 | 400 | 0 | Active split tab: same face, only `tab.textActive` marks it (visual notes V7) |
+| `type.tab` | 18 | 24 | 400 | 0 | Unselected split tabs in `tab.text` (System themes 13 / 18) |
+| `type.tab.active` | 19 | 24 | 400 | 0 | Selected split tab and location titles in `tab.textActive`, one point larger (System themes 14 / 18) |
 | `type.body` | 13 | 18 | 400 | 0 | List rows (read), menus, palette rows, fields |
 | `type.body.strong` | 13 | 18 | 600 | 0 | Senders on every row, "Send" (an unread subject takes `row.unreadWeight`, 400 by default) |
 | `type.palette.input` | 18 | 24 | 400 (SF Mono) | 0 | Palette, snooze and send-later inputs, monospaced (visual notes V32) |

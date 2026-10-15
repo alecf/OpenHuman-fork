@@ -7,7 +7,7 @@ body:
 <div class="wrap"><table class="card" role="presentation" width="560" cellpadding="0" cellspacing="0">
 <tbody><tr><td style="padding:24px 32px;font-family:Helvetica,Arial,sans-serif"><h1>Field notes, issue 41</h1>
 <p class="lead">Three short reads and one long one about city gardens.</p>
-<p><img class="oh-blocked" width="496" height="220" alt="Rooftop garden"></p>
+<p><span class="oh-placeholder">Rooftop garden</span></p>
 <p><a class="btn" href="https://fieldnotes.example/41" rel="noopener noreferrer">Read the issue</a></p>
 <p class="foot">Field Notes, 12 Garden Row. <a href="https://fieldnotes.example/unsubscribe?u=1" style="color:#8a94a6" rel="noopener noreferrer">Unsubscribe</a></p>
 </td></tr></tbody></table></div>
@@ -21,7 +21,7 @@ body:
 <div class="wrap"><table class="card" role="presentation" width="560" cellpadding="0" cellspacing="0">
 <tbody><tr><td style="padding:24px 32px;font-family:Helvetica,Arial,sans-serif"><h1>Field notes, issue 41</h1>
 <p class="lead">Three short reads and one long one about city gardens.</p>
-<p><img class="oh-blocked" width="496" height="220" alt="Rooftop garden"></p>
+<p><span class="oh-placeholder">Rooftop garden</span></p>
 <p><a class="btn" href="https://fieldnotes.example/41" rel="noopener noreferrer">Read the issue</a></p>
 <p class="foot">Field Notes, 12 Garden Row. <a href="https://fieldnotes.example/unsubscribe?u=1" style="color:#8a94a6" rel="noopener noreferrer">Unsubscribe</a></p>
 </td></tr></tbody></table></div>
@@ -34,7 +34,7 @@ body:
 <div class="wrap"><table class="card" role="presentation" width="560" cellpadding="0" cellspacing="0">
 <tbody><tr><td style="padding:24px 32px;font-family:Helvetica,Arial,sans-serif"><h1>Field notes, issue 41</h1>
 <p class="lead">Three short reads and one long one about city gardens.</p>
-<p><img class="oh-blocked" width="496" height="220" alt="Rooftop garden"></p>
+<p><span class="oh-placeholder">Rooftop garden</span></p>
 <p><a class="btn" href="https://fieldnotes.example/41" rel="noopener noreferrer">Read the issue</a></p>
 <p class="foot">Field Notes, 12 Garden Row. <a href="https://fieldnotes.example/unsubscribe?u=1" style="color:#97a2b4 !important" rel="noopener noreferrer">Unsubscribe</a></p>
 </td></tr></tbody></table></div>

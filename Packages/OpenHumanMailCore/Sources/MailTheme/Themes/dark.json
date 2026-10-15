@@ -85,6 +85,7 @@
     }
   },
   "components": {
+    "tab": { "count": "{gray.487}" },
     "thread": { "cardShadow": "0 1 2 0 rgba(0,0,0,0.20)" },
     "row": { "unreadDot": "#88CAFC" },
     "labelChip": {

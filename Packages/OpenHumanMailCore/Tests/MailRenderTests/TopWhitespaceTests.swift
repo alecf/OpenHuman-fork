@@ -134,20 +134,22 @@ private let padding = String(repeating: "&#847;&zwnj;&nbsp;", count: 40)
         #expect(out.contains("\u{00A0}") && out.contains("<br"))
     }
 
-    @Test func blockedImageIsCappedUnlessOriginalSpacing() {
+    @Test func blockedImageCollapsesUnlessOriginalSpacing() {
         let html = "<img src=\"https://img.example/hero.png\" width=\"600\" height=\"400\"><p>Hi</p>"
         let sanitized = HTMLSanitizer.sanitize(html, options: SanitizerOptions())
-        #expect(sanitized.bodyHTML.contains("oh-blocked"))
-        #expect(sanitized.bodyHTML.contains("height=\"400\""), "the declared size is kept for when it loads")
+        #expect(sanitized.bodyHTML == "<p>Hi</p>")
+        #expect(sanitized.blockedRemote == 1)
         let theme = ThemeTokens.light
-        let capped = ReaderDocument.make(sanitized, theme: theme, allowRemoteImages: false)
-        #expect(capped.contains("img.oh-blocked { max-height: 48px !important; }"))
-        #expect(capped.contains(".oh-body:not(.oh-original-spacing)"))
-        #expect(!capped.contains("class=\"oh-body oh-original-spacing"))
-        let original = ReaderDocument.make(sanitized, theme: theme, allowRemoteImages: false, keepOriginalSpacing: true)
+        let trimmed = ReaderDocument.make(sanitized, theme: theme, allowRemoteImages: false)
+        #expect(!trimmed.contains("class=\"oh-body oh-original-spacing"))
+        let kept = HTMLSanitizer.sanitize(html, options: SanitizerOptions(trimBlankSpace: false))
+        #expect(kept.bodyHTML.contains("oh-blocked"))
+        #expect(kept.bodyHTML.contains("height=\"400\""), "original spacing keeps the declared size")
+        let original = ReaderDocument.make(kept, theme: theme, allowRemoteImages: false, keepOriginalSpacing: true)
         #expect(original.contains("class=\"oh-body oh-original-spacing"))
         let loaded = HTMLSanitizer.sanitize(html, options: SanitizerOptions(allowRemoteImages: true))
         #expect(!loaded.bodyHTML.contains("oh-blocked"))
+        #expect(loaded.bodyHTML.contains("src=\"https://img.example/hero.png\""))
     }
 
     @Test func rendererHonoursTheContextFlagAndCacheKey() {

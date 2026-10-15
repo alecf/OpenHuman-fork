@@ -61,7 +61,7 @@
         "trackingEm": 0
       },
       "tab.active": {
-        "size": 13,
+        "size": 14,
         "lineHeight": 18,
         "weight": 400,
         "trackingEm": 0
@@ -152,6 +152,7 @@
     }
   },
   "components": {
+    "tab": { "count": "{ctl}" },
     "row": { "chipBg": "{chip.82}" }
   }
 }

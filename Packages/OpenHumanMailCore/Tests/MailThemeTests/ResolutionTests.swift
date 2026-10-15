@@ -75,6 +75,8 @@ import Testing
         #expect(resolved.component.row.groupHeader == ThemeTokens.light.textSecondary)
         #expect(resolved.component.row.chipBg == ThemeTokens.light.textDisabled)
         #expect(resolved.component.row.chipText == ThemeTokens.light.textPrimary)
+        #expect(resolved.component.tab.text == ThemeTokens.light.textSecondary)
+        #expect(resolved.component.tab.count == ThemeTokens.light.textSecondary)
     }
 
     @Test func unavailableThemeFallsBackToTheBuiltInForTheSlot() {
