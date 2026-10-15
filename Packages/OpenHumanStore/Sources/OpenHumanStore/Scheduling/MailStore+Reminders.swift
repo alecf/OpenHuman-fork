@@ -35,6 +35,7 @@ extension MailStore: ReminderStoring {
             try Self.boost(tids: [tid], at: t, in: db)
             try LabelOverlay.recompute(mids: Set(targets.map(\.mid)), in: db)
             try ThreadAggregator.refresh(tids: [tid], in: db)
+            try ReminderReturns.record(account: account, gmailThreadID: r["gmail_thread_id"], at: t, in: db)
             return ActionReceipt(operationIDs: [OperationID(rawValue: op)], undo: nil)
         }
     }

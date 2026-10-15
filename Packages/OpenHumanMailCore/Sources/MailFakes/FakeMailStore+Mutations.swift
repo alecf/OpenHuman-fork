@@ -201,7 +201,10 @@ extension State {
             if let id = enqueue(wake ? "unsnooze" : "clearSnooze", account: key.account, threads: [key], edits: edits) {
                 operations.append(id)
             }
-            if wake { threads[key]?.boostAt = now }
+            if wake {
+                threads[key]?.boostAt = now
+                threads[key]?.reminderReturnAt = nil
+            }
             if let previous = current.stamps.values.min() { undo.append(.snooze([key], until: previous)) }
         }
         return (operations, Array(undo.reversed()))

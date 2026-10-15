@@ -9,7 +9,11 @@ public struct ThreadRowChip: Sendable, Hashable {
         case label
         case overflow
         case vip
+        case returned
     }
+
+    public static let reminderReturnedTitle = String(localized: "Reminder returned")
+    public static let reminderReturned = ThreadRowChip(kind: .returned, title: reminderReturnedTitle)
 
     public let kind: Kind
     public let title: String
@@ -190,7 +194,7 @@ public struct ThreadRowFormatting: Sendable {
 
     public static func chips(for row: ThreadRow, context: ThreadRowChipContext,
                              autoLabel: String? = nil) -> [ThreadRowChip] {
-        var chips: [ThreadRowChip] = []
+        var chips: [ThreadRowChip] = row.returnedByReminder ? [.reminderReturned] : []
         var currentLabel: GmailLabelID?
         if case .label(let id) = context.location { currentLabel = id }
         if row.isImportant, !context.impliesImportance {
@@ -230,6 +234,12 @@ public struct ThreadRowFormatting: Sendable {
     }
 
     private static let importantTitle = String(localized: "Important")
+
+    public static func withVIPChip(_ chips: [ThreadRowChip], title: String) -> [ThreadRowChip] {
+        var result = chips
+        result.insert(ThreadRowChip(kind: .vip, title: title), at: result.first?.kind == .returned ? 1 : 0)
+        return result
+    }
 
     static func superhumanCategory(of row: ThreadRow, context: ThreadRowChipContext) -> String? {
         let names = row.userLabelIDs.compactMap { context.labels[$0]?.name }
@@ -282,6 +292,7 @@ public struct ThreadRowFormatting: Sendable {
             case .label: parts.append(String(localized: "label \(chip.title)"))
             case .overflow: parts.append(String(localized: "\(chip.title) more labels"))
             case .vip: parts.append(String(localized: "from a VIP"))
+            case .returned: parts.append(chip.title)
             }
         }
         if includeSnippet {

@@ -139,13 +139,14 @@ public struct ThreadRow: Identifiable, Sendable, Hashable {
     public let hasPendingChanges: Bool
     public let categoryLabelIDs: [Int64]
     public let searchMatch: SearchMatchKind?
+    public let returnedByReminder: Bool
 
     public init(id: ThreadKey, subject: String, snippet: String, participantsDisplay: String,
                 participants: [Participant], messageCount: Int, unreadCount: Int, draftCount: Int,
                 attachmentCount: Int, isUnread: Bool, isStarred: Bool, isImportant: Bool, userLabelIDs: [Int64],
                 lastMessageAt: Date, sortAt: Date, snoozedUntil: Date? = nil, reminderAt: Date? = nil,
                 scheduledSendAt: Date? = nil, hasPendingChanges: Bool = false, categoryLabelIDs: [Int64] = [],
-                searchMatch: SearchMatchKind? = nil) {
+                searchMatch: SearchMatchKind? = nil, returnedByReminder: Bool = false) {
         self.id = id
         self.subject = subject
         self.snippet = snippet
@@ -167,6 +168,7 @@ public struct ThreadRow: Identifiable, Sendable, Hashable {
         self.hasPendingChanges = hasPendingChanges
         self.categoryLabelIDs = categoryLabelIDs
         self.searchMatch = searchMatch
+        self.returnedByReminder = returnedByReminder
     }
 }
 
@@ -239,10 +241,11 @@ public struct ConversationDetail: Sendable, Hashable {
     public let snooze: SnoozeState?
     public let reminder: ReminderItem?
     public let isStarred: Bool
+    public let returnedByReminder: Bool
 
     public init(id: ThreadKey, subject: String, messages: [MessageSummary], drafts: [DraftSummary] = [],
                 userLabelIDs: [Int64] = [], snooze: SnoozeState? = nil, reminder: ReminderItem? = nil,
-                isStarred: Bool = false) {
+                isStarred: Bool = false, returnedByReminder: Bool = false) {
         self.id = id
         self.subject = subject
         self.messages = messages
@@ -251,6 +254,7 @@ public struct ConversationDetail: Sendable, Hashable {
         self.snooze = snooze
         self.reminder = reminder
         self.isStarred = isStarred
+        self.returnedByReminder = returnedByReminder
     }
 }
 

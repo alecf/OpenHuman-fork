@@ -324,6 +324,6 @@ extension ThreadRow {
                   userLabelIDs: userLabelIDs ?? self.userLabelIDs, lastMessageAt: lastMessageAt, sortAt: sortAt,
                   snoozedUntil: snoozedUntil ?? self.snoozedUntil, reminderAt: reminderAt ?? self.reminderAt,
                   scheduledSendAt: scheduledSendAt, hasPendingChanges: hasPendingChanges,
-                  categoryLabelIDs: categoryLabelIDs)
+                  categoryLabelIDs: categoryLabelIDs, returnedByReminder: returnedByReminder)
     }
 }

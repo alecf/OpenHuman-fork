@@ -64,6 +64,19 @@ private func first<T: Sendable>(_ stream: AsyncThrowingStream<T, Error>, where p
     #expect(body == .available(expected))
 }
 
+@Test(.timeLimit(.minutes(1))) func theReturnedReminderFlagMapsToRowsAndConversations() {
+    let ref = ThreadRef(accountID: AccountID(1), rowID: ThreadRowID(rawValue: 7), gmailThreadID: GmailThreadID("t7"))
+    var item = ThreadListItem(id: ThreadRowID(rawValue: 7), ref: ref, subject: "Plan", snippet: "s", participantsDisplay: "Dana",
+                              participants: [], messageCount: 1, unreadCount: 0, isUnread: false, draftCount: 0,
+                              attachmentCount: 0, isStarred: false, isImportant: false, userLabelIDs: [],
+                              lastMessageAt: now, sortAt: now, hasPendingChanges: false, returnedByReminder: true)
+    #expect(MailStoreAdapter.row(item).returnedByReminder)
+    #expect(MailStoreAdapter.conversation(ThreadDetail(thread: item, messages: [], labels: [], drafts: [])).returnedByReminder)
+    item.returnedByReminder = false
+    #expect(!MailStoreAdapter.row(item).returnedByReminder)
+    #expect(!MailStoreAdapter.conversation(ThreadDetail(thread: item, messages: [], labels: [], drafts: [])).returnedByReminder)
+}
+
 @Test(.timeLimit(.minutes(1))) func aConversationOnlyInTrashOrSpamShowsItsMessages() async throws {
     let (store, account) = try FixtureStoreSeeder.makeStore(corpus: FakeCorpus.make(threadCount: 2, now: now))
     let adapter = MailStoreAdapter(store: store)

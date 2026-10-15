@@ -3,7 +3,7 @@ import MailTheme
 extension ThreadRowChip {
     public var hue: LabelChipHue {
         switch kind {
-        case .important, .vip, .overflow:
+        case .important, .vip, .overflow, .returned:
             .neutral
         case .category:
             isFallback ? .neutral : LabelChipHue.category(title)

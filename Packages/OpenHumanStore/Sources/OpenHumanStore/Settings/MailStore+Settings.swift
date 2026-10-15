@@ -32,10 +32,7 @@ extension MailStore: SettingsStoring {
                 previous = try String.fetchOne(db, sql: "SELECT value_json FROM settings WHERE scope = ? AND key = ?",
                                                arguments: [Self.scopeString(scope), key.name])
             }
-            try db.execute(sql: """
-                INSERT INTO settings (scope, key, value_json, updated_at) VALUES (?, ?, ?, ?)
-                ON CONFLICT(scope, key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-                """, arguments: [Self.scopeString(scope), key.name, json, nowMillis()])
+            try Self.upsertSetting(scope: scope, key: key.name, json: json, in: db)
             if key.name == SettingKey<[String]>.alsoShowSplitInInbox.name || key.name == SettingKey<Int?>.eventsRescanAt.name,
                case let .account(id) = scope {
                 try ThreadAggregator.reevaluateSplits(account: id.rawValue, in: db)
@@ -46,6 +43,13 @@ extension MailStore: SettingsStoring {
             // `settings` is WITHOUT ROWID so SQLite's update hook never fires for it; bumping the pulse row wakes observers
             try db.execute(sql: "UPDATE observation_pulse SET seq = seq + 1 WHERE id = 1")
         }
+    }
+
+    static func upsertSetting(scope: SettingScope, key: String, json: String, in db: Database) throws {
+        try db.execute(sql: """
+            INSERT INTO settings (scope, key, value_json, updated_at) VALUES (?, ?, ?, ?)
+            ON CONFLICT(scope, key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
+            """, arguments: [scopeString(scope), key, json, nowMillis()])
     }
 
     static func scopeString(_ scope: SettingScope) -> String {

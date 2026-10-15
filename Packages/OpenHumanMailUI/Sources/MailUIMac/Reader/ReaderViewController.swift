@@ -720,28 +720,41 @@ public final class ReaderViewController: NSViewController {
         let line = NSMutableAttributedString(string: text, attributes: [
             .font: theme.typeMeta.font, .foregroundColor: theme.textSecondary.nsColor,
         ])
-        if let list = router?.active?.list, let row = list.row(for: model.thread) {
-            for chip in list.chips(for: row) where chip.kind != .overflow {
-                let dotColor: NSColor = switch chip.kind {
-                case .important, .vip: theme.textWarning.nsColor
-                case .label: chip.color.flatMap { ThemeColor(hex: $0)?.nsColor } ?? theme.textTertiary.nsColor
-                default: theme.textTertiary.nsColor
-                }
-                let dotFont = NSFont.systemFont(ofSize: max(6, theme.typeMeta.size * 0.6))
-                line.append(NSAttributedString(string: "  ●", attributes: [
-                    .font: dotFont, .foregroundColor: dotColor,
-                    .baselineOffset: (theme.typeMeta.font.xHeight - dotFont.xHeight) / 2,
-                ]))
-                line.append(NSAttributedString(string: " " + chip.title, attributes: [
-                    .font: theme.typeMeta.font,
-                    .foregroundColor: (chip.isFallback ? theme.textTertiary : theme.textSecondary).nsColor,
-                ]))
-            }
-        }
+        var listChips: [ThreadRowChip]?
+        if let list = router?.active?.list, let row = list.row(for: model.thread) { listChips = list.chips(for: row) }
+        Self.appendMetaChips(Self.metaChips(listChips: listChips, returnedByReminder: model.returnedByReminder),
+                             to: line, theme: theme)
         if metaLabel.attributedStringValue != line { metaLabel.attributedStringValue = line }
         metaLabel.menu = autoLabelChipMenu()
         metaLabel.isHidden = line.length == 0
-        metaLabel.setAccessibilityLabel(line.string.replacingOccurrences(of: "●", with: ""))
+        metaLabel.setAccessibilityLabel(Self.metaAccessibilityLabel(line))
+    }
+
+    static func metaChips(listChips: [ThreadRowChip]?, returnedByReminder: Bool) -> [ThreadRowChip] {
+        listChips ?? (returnedByReminder ? [.reminderReturned] : [])
+    }
+
+    static func appendMetaChips(_ chips: [ThreadRowChip], to line: NSMutableAttributedString, theme: ThemeTokens) {
+        for chip in chips where chip.kind != .overflow {
+            let dotColor: NSColor = switch chip.kind {
+            case .important, .vip, .returned: theme.textWarning.nsColor
+            case .label: chip.color.flatMap { ThemeColor(hex: $0)?.nsColor } ?? theme.textTertiary.nsColor
+            default: theme.textTertiary.nsColor
+            }
+            let dotFont = NSFont.systemFont(ofSize: max(6, theme.typeMeta.size * 0.6))
+            line.append(NSAttributedString(string: "  ●", attributes: [
+                .font: dotFont, .foregroundColor: dotColor,
+                .baselineOffset: (theme.typeMeta.font.xHeight - dotFont.xHeight) / 2,
+            ]))
+            line.append(NSAttributedString(string: " " + chip.title, attributes: [
+                .font: theme.typeMeta.font,
+                .foregroundColor: (chip.isFallback ? theme.textTertiary : theme.textSecondary).nsColor,
+            ]))
+        }
+    }
+
+    static func metaAccessibilityLabel(_ line: NSAttributedString) -> String {
+        line.string.replacingOccurrences(of: "●", with: "")
     }
 
     func autoLabelChipMenu() -> NSMenu? {

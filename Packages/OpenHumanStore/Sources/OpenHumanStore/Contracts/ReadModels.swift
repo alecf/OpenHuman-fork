@@ -43,6 +43,7 @@ public struct ThreadListItem: Identifiable, Hashable, Sendable {
     public var hasPendingChanges: Bool
     public var importance: ThreadImportance = .normal
     public var splitChipIDs: [LabelRowID] = []
+    public var returnedByReminder: Bool = false
 
     // generated-init: Tools/ci/gen-public-inits.py
     public init(
@@ -68,7 +69,8 @@ public struct ThreadListItem: Identifiable, Hashable, Sendable {
         scheduledSendAt: Date? = nil,
         hasPendingChanges: Bool,
         importance: ThreadImportance = .normal,
-        splitChipIDs: [LabelRowID] = []
+        splitChipIDs: [LabelRowID] = [],
+        returnedByReminder: Bool = false
     ) {
         self.id = id
         self.ref = ref
@@ -93,6 +95,7 @@ public struct ThreadListItem: Identifiable, Hashable, Sendable {
         self.hasPendingChanges = hasPendingChanges
         self.importance = importance
         self.splitChipIDs = splitChipIDs
+        self.returnedByReminder = returnedByReminder
     }
     // end generated-init
 }

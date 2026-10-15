@@ -356,7 +356,8 @@ public final class MailStoreAdapter: MailDataSource, Sendable {
             isImportant: item.isImportant, userLabelIDs: item.userLabelIDs.map(\.rawValue),
             lastMessageAt: item.lastMessageAt, sortAt: item.sortAt, snoozedUntil: item.snoozedUntil,
             reminderAt: item.reminderAt, scheduledSendAt: item.scheduledSendAt, hasPendingChanges: item.hasPendingChanges,
-            categoryLabelIDs: item.categoryLabelIDs.filter { $0 != hiddenCategory }.map(\.rawValue))
+            categoryLabelIDs: item.categoryLabelIDs.filter { $0 != hiddenCategory }.map(\.rawValue),
+            returnedByReminder: item.returnedByReminder)
     }
 
     static func pageCursor(_ cursor: ThreadCursor) -> PageCursor {
@@ -403,7 +404,7 @@ public final class MailStoreAdapter: MailDataSource, Sendable {
         }
         return ConversationDetail(id: threadKey, subject: detail.thread.subject, messages: messages,
                                   userLabelIDs: detail.thread.userLabelIDs.map(\.rawValue),
-                                  isStarred: detail.thread.isStarred)
+                                  isStarred: detail.thread.isStarred, returnedByReminder: detail.thread.returnedByReminder)
     }
 
     static func threadKey(_ ref: ThreadRef) -> ThreadKey {

@@ -21,11 +21,13 @@ public final class ThreadRowView: NSTableCellView {
         var dateWidth: CGFloat
         var indicators: [NSImage]
         var showsUnreadDot: Bool
+        var fitted: (width: CGFloat, line: NSAttributedString)?
     }
 
     var style: ThreadRowStyle {
         didSet {
             guard style !== oldValue else { return }
+            content?.fitted = nil
             restylePlate()
             needsDisplay = true
             needsLayout = true
@@ -211,13 +213,22 @@ public final class ThreadRowView: NSTableCellView {
         }
         if let sender = frames.sender { content.sender.draw(with: sender, options: options, context: nil) }
         if let line = frames.line {
-            (onCursor ? style.onCursor(content.line) : content.line).draw(with: line, options: options, context: nil)
+            let text = fittedLine(width: c.subject.upperBound - c.subject.lowerBound)
+            (onCursor ? style.onCursor(text) : text).draw(with: line, options: options, context: nil)
         }
         NSGraphicsContext.restoreGraphicsState()
         if let date = frames.date {
             (onCursor ? style.onCursor(content.date) : content.date).draw(with: date, options: options, context: nil)
         }
         for (image, frame) in zip(content.indicators, frames.indicators) { image.draw(in: frame) }
+    }
+
+    func fittedLine(width: CGFloat) -> NSAttributedString {
+        guard let content else { return NSAttributedString() }
+        if let fitted = content.fitted, fitted.width == width { return fitted.line }
+        let line = style.fitted(content.line, width: width)
+        self.content?.fitted = (width, line)
+        return line
     }
 
     struct DrawnFrames: Equatable {

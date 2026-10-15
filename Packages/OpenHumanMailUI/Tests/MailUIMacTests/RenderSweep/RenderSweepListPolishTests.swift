@@ -69,6 +69,81 @@ extension RenderSweepTests {
         table.scrollRowToVisible(table.numberOfRows - 1)
         try await sweepShoot(w.window, screen: "list-tail-end", theme: theme)
     }
+
+    @Test(arguments: SweepTheme.builtInsAndIncreaseContrast)
+    func listReminderReturned(_ theme: SweepTheme) async throws {
+        let clients = ThreadRowChip(kind: .label, title: "Clients", color: "#fb4c2f")
+        let rows = [
+            ListPolishRow(subject: "Budget follow-up", unread: false, chips: [.reminderReturned]),
+            ListPolishRow(subject: "Contract renewal terms", unread: true,
+                          chips: [.reminderReturned, clients, ThreadRowChip(kind: .category, title: "Updates")]),
+            ListPolishRow(subject: "Launch checklist", unread: false,
+                          chips: [.reminderReturned, ThreadRowChip(kind: .vip, title: "VIP"),
+                                  ThreadRowChip(kind: .important, title: "Important")]),
+            ListPolishRow(subject: "Returned under the cursor", unread: false, chips: [.reminderReturned, clients],
+                          state: .cursor),
+            ListPolishRow(subject: "Returned and checked", unread: false, chips: [.reminderReturned], state: .checked),
+            ListPolishRow(subject: "Returned and hovered", unread: false, chips: [.reminderReturned], state: .hover),
+            ListPolishRow(subject: "Not returned", unread: false, chips: [clients]),
+        ]
+        for (screen, width) in [("list-reminder-returned", 1000), ("list-reminder-returned-medium", 620),
+                                ("list-reminder-returned-narrow", 420)] as [(String, CGFloat)] {
+            let window = ListPolishWindow(rows: rows, theme: theme, width: width)
+            defer { window.close() }
+            try await sweepShoot(window.window, screen: screen, theme: theme)
+        }
+    }
+
+    @Test(arguments: SweepTheme.lightAndDark)
+    func readerReminderReturned(_ theme: SweepTheme) async throws {
+        let (environment, thread) = try await ReturnedReminderSweep.environment()
+        let w = try await SweepWindow.make(environment, theme: theme)
+        defer { w.close() }
+        _ = try await w.open(thread.id)
+        try await sweepShoot(w.window, screen: "reader-reminder-returned", theme: theme)
+    }
+
+    @Test(arguments: SweepTheme.lightAndDark)
+    func searchReminderReturned(_ theme: SweepTheme) async throws {
+        let (environment, thread) = try await ReturnedReminderSweep.environment()
+        let words: [Substring] = thread.subject.split(separator: " ")
+        let word: Substring = try #require(words.max { $0.count < $1.count })
+        let query = String(word).lowercased()
+        let w = try await SweepWindow.make(environment, theme: theme)
+        defer { w.close() }
+        #expect(w.router.perform(.search))
+        try await until { OverlayFocusKeeper.control(of: w.window.firstResponder) is NSTextField }
+        let editor = try #require(w.window.firstResponder as? NSTextView)
+        editor.insertText(query, replacementRange: editor.selectedRange())
+        let model = w.environment.overlays.search
+        try await until {
+            model.shownQuery == query && w.router.list?.state == .loaded
+                && w.router.list?.rows.contains { $0.id == thread.id && $0.returnedByReminder } == true
+        }
+        try await sweepShoot(w.window, screen: "search-reminder-returned", theme: theme)
+    }
+}
+
+@MainActor
+enum ReturnedReminderSweep {
+    static func environment() async throws -> (AppEnvironment, ThreadRow) {
+        let environment = SweepWindow.environment()
+        let store = try #require(environment.data as? FakeMailStore)
+        var account: AccountID?
+        for try await accounts in environment.data.accounts() {
+            account = accounts.first?.id
+            break
+        }
+        let rows = try await environment.data.threadPage(.system(.inbox), account: try #require(account), after: nil,
+                                                         limit: 20).rows
+        let target = try #require(rows.dropFirst(2).first)
+        let newest = try #require(rows.map(\.lastMessageAt).max())
+        let firedAt = newest.addingTimeInterval(120)
+        _ = try await store.apply(.setReminder(target.id, dueAt: firedAt.addingTimeInterval(-60), kind: .always))
+        store.runSchedulers(now: firedAt)
+        store.acknowledgeRemote()
+        return (environment, target)
+    }
 }
 
 extension SweepTheme {
