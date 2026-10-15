@@ -24,6 +24,17 @@ extension ThemeTokens {
         return listCursorFillReads(band) ? band : bgRowSelected.composited(over: bgWindow)
     }
 
+    public func listCheckedFillReads(_ fill: ThemeColor) -> Bool {
+        let plate = fill.composited(over: bgWindow)
+        return listCursorFillReads(plate) && Self.standApart(listCursorFill, plate, luminance: 1.06)
+    }
+
+    public var listCheckedFill: ThemeColor {
+        let own = component.row.bgChecked.composited(over: bgWindow)
+        let plates = [own, accentFill.withAlpha(0.16), bgRowSelected].map { $0.composited(over: bgWindow) }
+        return plates.first { listCheckedFillReads($0) } ?? own
+    }
+
     private var listActionPlates: [ThemeColor] { [listCursorFill, component.row.bgHover.composited(over: bgWindow)] }
 
     public var listActionTint: ThemeColor {

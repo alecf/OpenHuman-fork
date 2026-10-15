@@ -77,9 +77,9 @@ struct RecentOpensPanel: View {
                 Text("Conversations you open show up here.")
                     .themeFont(theme.typeMeta).foregroundStyle(theme.textTertiary.color)
             } else {
-                TimelineView(.everyMinute) { context in
+                TimelineView(.everyMinute) { _ in
                     VStack(alignment: .leading, spacing: theme.space5) {
-                        ForEach(RecentOpenGroup.groups(entries, now: context.date)) { group in
+                        ForEach(RecentOpenGroup.groups(entries, now: router.recentOpens.now())) { group in
                             section(group)
                         }
                     }

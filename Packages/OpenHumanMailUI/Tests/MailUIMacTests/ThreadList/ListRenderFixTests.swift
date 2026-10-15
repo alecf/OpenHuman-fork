@@ -50,11 +50,12 @@ struct ListRenderFixTests {
             header.configure(title: "Last 7 days")
             #expect(header.needsLayout, "a new title asks for layout")
             header.layoutSubtreeIfNeeded()
-            let padding = CGFloat(style.row.paddingX)
-            #expect(header.labelFrame.width == 900 - 2 * padding + 2 * ThreadGroupHeaderView.textInset)
+            let leading = style.metrics.leading, trailing = style.metrics.trailing
+            #expect(leading == style.columns(width: 900).sender.lowerBound, "the header lines up with the sender column")
+            #expect(header.labelFrame.width == 900 - leading - trailing + 2 * ThreadGroupHeaderView.textInset)
             #expect(header.labelFrame.width >= short)
             #expect(header.title == "Last 7 days")
-            #expect(header.labelFrame.minX == padding - ThreadGroupHeaderView.textInset)
+            #expect(header.labelFrame.minX == leading - ThreadGroupHeaderView.textInset)
             #expect(header.accessibilityLabel() == "Last 7 days")
         }
     }

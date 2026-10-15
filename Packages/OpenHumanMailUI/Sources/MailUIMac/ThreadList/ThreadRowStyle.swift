@@ -2,6 +2,7 @@ import AppKit
 import MailFeatures
 import MailModel
 import MailTheme
+import MailUI
 
 @MainActor
 final class ThreadRowStyle {
@@ -104,7 +105,7 @@ final class ThreadRowStyle {
         accentOnFill = theme.accentOnFill.nsColor
         hover = theme.component.row.bgHover.nsColor
         cursor = Self.cursorFill(theme).nsColor
-        checked = theme.component.row.bgChecked.nsColor
+        checked = theme.listCheckedFill.nsColor
         cursorBar = theme.component.row.cursorBar.nsColor
         plateEdge = theme.borderControl.nsColor
         drawsPlateEdge = theme.increaseContrast
@@ -447,13 +448,18 @@ final class ThreadRowStyle {
         return tokens
     }
 
+    static let checkboxClearance: CGFloat = 6
+    static let senderClearance: CGFloat = 10
+
     static func metrics(_ theme: ThemeTokens) -> Metrics {
         let row = theme.component.row
         let open = openness(theme)
         let type = typeScale(theme)
-        let padding = CGFloat(row.paddingX), gutter = CGFloat(row.dotGutter), gap = CGFloat(row.columnGap)
-        let leading = padding * (1 + open)
-        return Metrics(leading: leading, trailing: padding * (1 + open / 2), dotCenterX: leading - gutter / 2 * (1 + open),
+        let padding = CGFloat(row.paddingX), gap = CGFloat(row.columnGap)
+        let box = SelectCheckbox.side
+        let dot = CGFloat(theme.listPlateInsetX + row.cursorBarWidth) + checkboxClearance + box / 2
+        let leading = max(padding * (1 + open), ((dot + box / 2 + senderClearance) / 4).rounded(.up) * 4)
+        return Metrics(leading: leading, trailing: padding * (1 + open / 2), dotCenterX: dot,
                        senderGap: gap * (1 + open), columnGap: gap,
                        senderMin: (CGFloat(row.senderMin) * type).rounded(), senderMax: CGFloat(row.senderMax),
                        senderPct: CGFloat(row.senderPct),

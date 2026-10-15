@@ -7,26 +7,31 @@ struct SelectAllCheckbox: View {
     let list: ThreadListModel
     let descriptors: [ActionDescriptor]
     @Environment(\.theme) private var theme
+    @Environment(\.selectAllTipPinned) private var tipPinned
     @State private var hovering = false
     @State private var showsTip = false
 
     var body: some View {
         let check = list.headerCheck
-        if check != .hidden {
+        if check == .hidden {
+            Color.clear
+                .frame(width: ShellMetrics.toolbarControlHeight, height: ShellMetrics.toolbarControlHeight)
+                .padding(.trailing, theme.space3)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        } else {
             let rows = SelectAllShortcuts.tipRows(descriptors)
-            let tip = showsTip && !rows.isEmpty
+            let tip = (showsTip || tipPinned) && !rows.isEmpty
             Button {
                 hovering = false
                 showsTip = false
                 list.headerCheckClicked()
             } label: {
-                Image(systemName: check == .all ? "checkmark.square" : "square")
-                    .font(.system(size: theme.component.toolbar.iconSize, weight: .light))
+                SelectCheckboxGlyph(checked: check == .all)
                     .frame(width: ShellMetrics.toolbarControlHeight, height: ShellMetrics.toolbarControlHeight)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .foregroundStyle(theme.textSecondary.color)
             .onHover { hovering = $0 }
             .onDisappear {
                 hovering = false
@@ -54,6 +59,10 @@ struct SelectAllCheckbox: View {
     static func spokenHint(_ rows: [SelectAllShortcuts.TipRow]) -> String {
         rows.map { "\($0.title): \(SelectAllShortcuts.spoken($0.keycaps))" }.joined(separator: ". ")
     }
+}
+
+extension EnvironmentValues {
+    @Entry public var selectAllTipPinned = false
 }
 
 struct SelectAllTipRequest {

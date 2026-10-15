@@ -312,7 +312,7 @@ struct RowActionsOverlapTests {
         let normal = ThreadRowStyle(theme: Self.tokens(light, density: .default))
         let comfortable = ThreadRowStyle(theme: Self.tokens(light, density: .comfortable))
         #expect(compact.rowHeight == 32 && normal.rowHeight == 36 && comfortable.rowHeight == 44)
-        let designTen = ThreadRowStyle.Metrics(leading: 24, trailing: 24, dotCenterX: 16, senderGap: 16, columnGap: 16,
+        let designTen = ThreadRowStyle.Metrics(leading: 40, trailing: 24, dotCenterX: 22, senderGap: 16, columnGap: 16,
                                                senderMin: 160, senderMax: 240, senderPct: 0.22, indicatorWidth: 40,
                                                indicatorSize: 12, dateWidth: 72, buttonGap: 4, buttonGlyph: 14)
         for style in [compact, normal] {
@@ -320,19 +320,44 @@ struct RowActionsOverlapTests {
             #expect(style.bodyFont.pointSize == 13 && style.lineHeight == 18 && style.plateRadius == 6)
         }
         #expect(comfortable.metrics == ThreadRowStyle.Metrics(
-            leading: 48, trailing: 36, dotCenterX: 32, senderGap: 32, columnGap: 16, senderMin: 185, senderMax: 240,
+            leading: 48, trailing: 36, dotCenterX: 24, senderGap: 32, columnGap: 16, senderMin: 185, senderMax: 240,
             senderPct: 0.22, indicatorWidth: 46, indicatorSize: 14, dateWidth: 83, buttonGap: 12, buttonGlyph: 16))
         #expect(comfortable.bodyFont.pointSize == 15 && comfortable.strongFont.pointSize == 15 && comfortable.lineHeight == 20)
         #expect(comfortable.metaFont.pointSize == 14)
         #expect(comfortable.plateRadius == 10 && comfortable.plateInsetX == 8 && comfortable.hoverTarget == 28)
-        #expect(ThreadRowView.columns(width: 1000).sender == 24...244)
+        #expect(ThreadRowView.columns(width: 1000).sender == 40...260)
         let zoomed = ThreadRowStyle(theme: Self.tokens(light, density: .comfortable, zoom: 1.5))
-        #expect(zoomed.bodyFont.pointSize == 22.5 && zoomed.metrics == comfortable.metrics)
+        var columnsOnly = zoomed.metrics
+        columnsOnly.dotCenterX = comfortable.metrics.dotCenterX
+        #expect(zoomed.bodyFont.pointSize == 22.5 && columnsOnly == comfortable.metrics)
+        #expect(zoomed.metrics.dotCenterX - zoomed.plateInsetX == comfortable.metrics.dotCenterX - comfortable.plateInsetX,
+                "the box follows the zoomed plate's bar")
         let header = ThreadGroupHeaderView(style: comfortable)
         header.frame = NSRect(x: 0, y: 0, width: 900, height: comfortable.rowHeight)
         header.configure(title: "Yesterday")
         header.layoutSubtreeIfNeeded()
         #expect(header.labelFrame.minX == 48 - ThreadGroupHeaderView.textInset)
+    }
+
+    @Test func theCheckboxGutterClearsTheBarAndTheSenderEverywhere() {
+        for themeID in Self.themeIDs {
+            for density in ThemeDensity.allCases {
+                for zoom in [1.0, 1.5] {
+                    let style = ThreadRowStyle(theme: Self.tokens(themeID, density: density, zoom: zoom))
+                    let label = "\(themeID) \(density) zoom \(zoom)"
+                    let side = ThreadRowView.checkboxSize
+                    let box = (style.metrics.dotCenterX - side / 2)...(style.metrics.dotCenterX + side / 2)
+                    #expect(side >= 14 && side <= 16, "\(label)")
+                    #expect(box.lowerBound - (style.plateInsetX + style.cursorBarWidth) >= 6, "after the bar: \(label)")
+                    #expect(style.metrics.leading - box.upperBound >= 10, "before the sender: \(label)")
+                    for width in [CGFloat(500), 1000, 2000] {
+                        let c = style.columns(width: width)
+                        #expect(c.dotCenterX == style.metrics.dotCenterX && c.sender.lowerBound == style.metrics.leading,
+                                "every row keeps the gutter: \(label) \(width)")
+                    }
+                }
+            }
+        }
     }
 
     @Test func chipsSitOnTheBaselineAndTakeTheirHuesTokens() throws {

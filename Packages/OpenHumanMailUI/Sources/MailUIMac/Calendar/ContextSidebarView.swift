@@ -151,14 +151,18 @@ struct RightPaneTabs: View {
             tab(contactTitle, .contact, contact)
             if calendar != nil || selected == .calendar { tab("Calendar", .calendar, calendar) }
             Spacer(minLength: 0)
-            Button(action: close) { Image(systemName: "xmark") }
-                .buttonStyle(.borderless)
-                .help(hide)
-                .accessibilityLabel(hide)
+            Button(action: close) {
+                Image(systemName: "xmark").foregroundStyle(Self.closeTint(theme.tokens).color).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(hide)
+            .accessibilityLabel(hide)
         }
         .padding(.horizontal, theme.space5)
         .padding(.vertical, theme.space4)
     }
+
+    static func closeTint(_ theme: ThemeTokens) -> ThemeColor { theme.textSecondary }
 
     @ViewBuilder
     private func tab(_ title: String, _ tab: Tab, _ action: (() -> Void)?) -> some View {

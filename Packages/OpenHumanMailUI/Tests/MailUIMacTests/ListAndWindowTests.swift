@@ -16,14 +16,14 @@ private let now = Date(timeIntervalSince1970: 1_791_000_000)
 struct ListAndWindowTests {
     @Test func rowColumnsFollowTheDesignGeometry() {
         let c = ThreadRowView.columns(width: 1000)
-        #expect(c.dotCenterX == 16)
-        #expect(c.sender == 24...244)
-        #expect(c.subject.lowerBound == 260)
+        #expect(c.dotCenterX == 22)
+        #expect(c.sender == 40...260)
+        #expect(c.subject.lowerBound == 276)
         #expect(c.date == 904...976)
         #expect(c.indicators == 864...904)
         #expect(c.subject.upperBound == 848)
-        #expect(ThreadRowView.columns(width: 500).sender == 24...184)
-        #expect(ThreadRowView.columns(width: 2000).sender == 24...264)
+        #expect(ThreadRowView.columns(width: 500).sender == 40...200)
+        #expect(ThreadRowView.columns(width: 2000).sender == 40...280)
     }
 
     @Test func listShowsTheWindowAndMirrorsTheCursor() async throws {
