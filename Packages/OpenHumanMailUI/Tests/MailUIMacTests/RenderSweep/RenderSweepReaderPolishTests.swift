@@ -51,4 +51,17 @@ extension RenderSweepTests {
         reader.hideTooltip()
         card.mouseExited(with: exit)
     }
+
+    @Test(arguments: SweepTheme.lightAndDark)
+    func readerBodyPastFooter(_ theme: SweepTheme) async throws {
+        let corpus = FakeCorpus.small
+        let thread = try #require(corpus.threads.first { candidate in
+            candidate.detail.messages.last.map { candidate.bodyKinds[$0.id] == .cidImage } == true
+        })
+        let environment = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate), featureFlags: FeatureFlags())
+        let w = try await SweepWindow.make(environment, theme: theme, size: NSSize(width: 1360, height: 620))
+        defer { w.close() }
+        _ = try await w.open(thread.row.id)
+        try await sweepShoot(w.window, screen: "reader-body-past-footer", theme: theme)
+    }
 }

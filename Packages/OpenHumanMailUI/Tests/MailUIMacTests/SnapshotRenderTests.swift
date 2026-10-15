@@ -52,21 +52,12 @@ struct SnapshotRenderTests {
     func snapshot(_ window: NSWindow, name: String) throws {
         let root = window.contentView!
         root.layoutSubtreeIfNeeded()
-        root.displayIfNeeded()
-        let rep = try #require(root.bitmapImageRepForCachingDisplay(in: root.bounds))
-        root.cacheDisplay(in: root.bounds, to: rep)
-        let image = NSImage(size: root.bounds.size)
-        image.addRepresentation(rep)
-        let composed = NSImage(size: root.bounds.size)
-        composed.lockFocus()
-        image.draw(in: root.bounds)
         let group = DispatchGroup()
-        var shots: [(NSRect, NSImage)] = []
+        var shots: [(NSView, NSImage)] = []
         for web in Self.webViews(in: root) where !web.isHiddenOrHasHiddenAncestor && web.alphaValue > 0 {
-            let frame = web.convert(web.bounds, to: root)
             group.enter()
             web.takeSnapshot(with: nil) { image, _ in
-                if let image { shots.append((frame, image)) }
+                if let image { shots.append((web, image)) }
                 group.leave()
             }
         }
@@ -74,15 +65,52 @@ struct SnapshotRenderTests {
         while group.wait(timeout: .now()) == .timedOut, Date() < deadline {
             RunLoop.main.run(until: Date().addingTimeInterval(0.02))
         }
-        for (frame, shot) in shots {
-            let flipped = root.isFlipped ? NSRect(x: frame.minX, y: root.bounds.height - frame.maxY, width: frame.width,
-                                                  height: frame.height) : frame
-            shot.draw(in: flipped)
-        }
+        let rep = try Self.cacheDisplay(root, shots: shots)
+        let image = NSImage(size: root.bounds.size)
+        image.addRepresentation(rep)
+        let composed = NSImage(size: root.bounds.size)
+        composed.lockFocus()
+        image.draw(in: root.bounds)
         composed.unlockFocus()
         let tiff = try #require(composed.tiffRepresentation)
         let png = try #require(NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]))
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try png.write(to: directory.appendingPathComponent("\(name).png"))
+    }
+
+    // cacheDisplay leaves out-of-process web content blank; drawing each snapshot just above its web view lets the
+    // scroll view clip it and later siblings cover it, as on screen
+    static func cacheDisplay(_ root: NSView, shots: [(NSView, NSImage)]) throws -> NSBitmapImageRep {
+        root.layoutSubtreeIfNeeded()
+        let standIns = shots.compactMap { view, image -> NSView? in
+            guard let superview = view.superview else { return nil }
+            let standIn = SnapshotStandIn(image: image, frame: view.frame)
+            superview.addSubview(standIn, positioned: .above, relativeTo: view)
+            return standIn
+        }
+        defer { for standIn in standIns { standIn.removeFromSuperview() } }
+        root.displayIfNeeded()
+        let rep = try #require(root.bitmapImageRepForCachingDisplay(in: root.bounds))
+        root.cacheDisplay(in: root.bounds, to: rep)
+        return rep
+    }
+}
+
+private final class SnapshotStandIn: NSView {
+    let image: NSImage
+
+    init(image: NSImage, frame: NSRect) {
+        self.image = image
+        super.init(frame: frame)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var isFlipped: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        image.draw(in: NSRect(origin: .zero, size: image.size), from: .zero, operation: .sourceOver, fraction: 1,
+                   respectFlipped: true, hints: nil)
     }
 }
