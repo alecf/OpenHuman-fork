@@ -26,6 +26,7 @@ actor ThreadListPipeline {
     private var liveLimit = 0
     private var pendingWindow: ThreadListWindow?
     private var pendingSettled: [Int] = []
+    private var settledIDs = Set<Int>()
     private var pendingFailure: String?
     private var searchStatus: SearchWindowStatus?
     private var needsBuild = false
@@ -103,7 +104,9 @@ actor ThreadListPipeline {
             for page in assembler.pages {
                 for row in page.rows where touched.contains(row.id) && present[row.id] == nil { present[row.id] = row }
             }
-            pendingSettled += assembler.overlay.confirm { present[$0] }
+            let settled = assembler.overlay.confirm { present[$0] }
+            settledIDs.formUnion(settled)
+            pendingSettled += settled
         }
         pendingWindow = window
         scheduleBuild()
@@ -122,6 +125,7 @@ actor ThreadListPipeline {
     func setOverlay(_ overlay: ThreadListOverlay, displayed: ThreadListSnapshot?, token displayedToken: Int?,
                     changedKeys: Set<ThreadKey>) {
         assembler.overlay = overlay
+        if !settledIDs.isEmpty { assembler.overlay.drop(settled: Array(settledIDs)) }
         if let displayed, let displayedToken {
             assembler.previous = displayed
             basedOn = displayedToken
@@ -241,6 +245,7 @@ actor ThreadListPipeline {
                 }
             }
             let (snapshot, change, settled) = assembler.assemble()
+            settledIDs.formUnion(settled)
             token += 1
             let build = ThreadListBuild(token: token, basedOn: basedOn, snapshot: snapshot, change: change,
                                         overlayVersion: assembler.overlay.version, settled: pendingSettled + settled,

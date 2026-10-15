@@ -439,10 +439,11 @@ public final class AccountState: Identifiable {
         let model = ReaderModel(thread: key, data: environment.data, renderQueue: environment.renderQueue,
                                 myAddresses: account.myAddresses)
         if let through = localReads[key] { model.markReadLocally(through: through) }
-        if marksRead, let actions = environment.actions.threadActions {
-            model.onFirstShown = { [weak self, weak actions] shown in
+        if let actions = environment.actions.threadActions {
+            model.reportsOnlyArrivals = !marksRead
+            model.onShown = { [weak self, weak actions] shown in
                 guard let self, let actions else { return }
-                self.readMark = actions.markReadWhenShown(key, shown: shown, in: self)
+                if let mark = actions.markReadWhenShown(key, shown: shown, in: self) { self.readMark = mark }
             }
         }
         reader = model
@@ -459,7 +460,7 @@ public final class AccountState: Identifiable {
 
     func pendingReadMark(for keys: [ThreadKey]) -> Task<Void, Never>? {
         guard let thread = reader?.thread, keys.contains(thread) else { return nil }
-        reader?.onFirstShown = nil
+        reader?.onShown = nil
         return readMark
     }
 

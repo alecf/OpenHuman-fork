@@ -53,7 +53,9 @@ public final class ReaderModel {
     @ObservationIgnored public private(set) var hasInteracted = false
     public let myAddresses: Set<String>
     public private(set) var localReadThrough: Date?
-    @ObservationIgnored var onFirstShown: (@MainActor ([MessageSummary]) -> Void)?
+    @ObservationIgnored var onShown: (@MainActor ([MessageSummary]) -> Void)?
+    @ObservationIgnored var reportsOnlyArrivals = false
+    @ObservationIgnored private var reportedShown: Set<MessageKey>?
 
     @ObservationIgnored private let data: any MailDataSource
     @ObservationIgnored private let renderQueue: RenderQueue
@@ -111,7 +113,7 @@ public final class ReaderModel {
     }
 
     public func stop() {
-        onFirstShown = nil
+        onShown = nil
         cancelAll()
     }
 
@@ -293,6 +295,7 @@ public final class ReaderModel {
         focusChosen = true
         focusScrollRequest += 1
         revision += 1
+        reportShown()
     }
 
     private func isMine(_ summary: MessageSummary) -> Bool {
@@ -523,10 +526,22 @@ public final class ReaderModel {
         pendingMessages = detail.messages.map(\.id).filter(held.contains)
         latest = locallyRead(detail.messages)
         show(latest)
-        if let shown = onFirstShown {
-            onFirstShown = nil
-            shown(messages.map(\.summary))
+        reportShown()
+    }
+
+    private func reportShown() {
+        guard let onShown else { return }
+        let shown = messages.map(\.summary)
+        guard let reported = reportedShown else {
+            reportedShown = Set(shown.map(\.id))
+            if !reportsOnlyArrivals { onShown(shown) }
+            return
         }
+        let fresh = shown.filter { !reported.contains($0.id) }
+        guard !fresh.isEmpty else { return }
+        reportedShown = reported.union(fresh.map(\.id))
+        guard pendingMessages.isEmpty, fresh.contains(where: { $0.isUnread && !isMine($0) }) else { return }
+        onShown(shown)
     }
 
     public func markReadLocally(through date: Date) {

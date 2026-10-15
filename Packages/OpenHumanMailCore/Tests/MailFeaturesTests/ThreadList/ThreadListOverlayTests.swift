@@ -106,6 +106,61 @@ private func row(_ n: Int64, unread: Bool = false, starred: Bool = false, labels
         #expect(shown.isUnread)
         #expect(shown.userLabelIDs.isEmpty)
     }
+
+    @Test func openingAfterMarkUnreadStaysReadOnceTheStoreAgrees() {
+        var overlay = ThreadListOverlay()
+        overlay.add(.of(.markUnread([key(1)]), in: .system(.inbox)), at: start)
+        overlay.add(.of(.markRead([key(1)]), in: .system(.inbox)), at: start)
+        let read = [key(1): row(1, unread: false)]
+        let settled = overlay.confirm { read[$0] }
+        #expect(!settled.isEmpty)
+        #expect(overlay.apply(to: [row(1, unread: false)]).rows[0].isUnread == false,
+                "the earlier mark unread does not return once the read is confirmed")
+        #expect(overlay.isEmpty)
+    }
+
+    @Test func aNewerChangeLeavesOtherFieldsAndThreadsAlone() {
+        var overlay = ThreadListOverlay()
+        overlay.add(OptimisticEffect(patches: [key(1): RowPatch(isUnread: true, isStarred: true),
+                                               key(2): RowPatch(isUnread: true)]), at: start)
+        overlay.add(.of(.markRead([key(1)]), in: .system(.inbox)), at: start)
+        #expect(overlay.patch(for: key(1)) == RowPatch(isUnread: false, isStarred: true))
+        #expect(overlay.patch(for: key(2)) == RowPatch(isUnread: true))
+    }
+}
+
+@MainActor
+@Suite struct ThreadListPipelineOverlayTests {
+    @Test func aConfirmedChangeIsNotRevivedByAnOverlayThatStillHoldsIt() async throws {
+        let (builds, sink) = AsyncStream.makeStream(of: ThreadListBuild.self)
+        let pipeline = ThreadListPipeline(data: ReaderTestSource(details: [], bodies: [:]), location: .system(.inbox),
+                                          account: AccountID(1), now: { fixedNow }, deliver: { sink.yield($0) })
+        var next = builds.makeAsyncIterator()
+        await pipeline.receive(ThreadListWindow(rows: [row(1, unread: true), row(2)], hasMore: false, totalCount: 2))
+        _ = await next.next()
+
+        var overlay = ThreadListOverlay()
+        let ticket = overlay.add(.of(.markRead([key(1)]), in: .system(.inbox)), at: fixedNow)
+        let read = try #require(ticket)
+        await pipeline.setOverlay(overlay, displayed: nil, token: nil, changedKeys: [key(1)])
+        let optimistic = try #require(await next.next())
+        #expect(optimistic.snapshot.rows.first { $0.id == key(1) }?.isUnread == false)
+        #expect(optimistic.settled.isEmpty)
+
+        await pipeline.receive(ThreadListWindow(rows: [row(1, unread: false), row(2)], hasMore: false, totalCount: 2))
+        let confirmed = try #require(await next.next())
+        #expect(confirmed.settled == [read.id])
+
+        await pipeline.receive(ThreadListWindow(rows: [row(1, unread: true), row(2)], hasMore: false, totalCount: 2))
+        let newMail = try #require(await next.next())
+        #expect(newMail.snapshot.rows.first { $0.id == key(1) }?.isUnread == true)
+
+        overlay.add(.of(.star([key(2)]), in: .system(.inbox)), at: fixedNow)
+        await pipeline.setOverlay(overlay, displayed: nil, token: nil, changedKeys: [key(2)])
+        let build = try #require(await next.next())
+        #expect(build.snapshot.rows.first { $0.id == key(1) }?.isUnread == true, "the confirmed read stays settled")
+        #expect(build.snapshot.rows.first { $0.id == key(2) }?.isStarred == true)
+    }
 }
 
 @Suite struct ThreadListEditTests {

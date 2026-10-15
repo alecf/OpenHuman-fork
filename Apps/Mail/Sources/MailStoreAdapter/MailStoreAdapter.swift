@@ -385,7 +385,9 @@ public final class MailStoreAdapter: MailDataSource, Sendable {
     static func conversation(_ detail: ThreadDetail) -> ConversationDetail {
         let ref = detail.thread.ref
         let threadKey = ThreadKey(account: ref.accountID, rowID: detail.thread.id.rawValue, gmailThreadID: ref.gmailThreadID)
-        let visible = detail.messages.filter { !$0.isDraft && !$0.inTrash && !$0.inSpam }
+        let nonDraft = detail.messages.filter { !$0.isDraft }
+        let unbinned = nonDraft.filter { !$0.inTrash && !$0.inSpam }
+        let visible = unbinned.isEmpty ? nonDraft : unbinned
         let hidden = Set(detail.hiddenMessageIDs)
         let withoutHidden = hidden.isEmpty ? visible : visible.filter { !hidden.contains($0.id) }
         let messages = (withoutHidden.isEmpty ? visible : withoutHidden).map { item in

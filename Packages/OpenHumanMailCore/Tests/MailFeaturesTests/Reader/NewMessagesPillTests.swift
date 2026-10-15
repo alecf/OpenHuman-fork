@@ -125,10 +125,7 @@ import Testing
         let registry = f.env.actions
         #expect(registry.descriptor(.showNewMessages)?.shortcutHint == "⇧N")
         #expect(registry.availability(.showNewMessages, host: f.router) == .disabled(.other("No new messages")))
-        if f.router.actionContext().targets.anyUnread {
-            #expect(await f.run(.toggleRead))
-            await soon { reader.messages.allSatisfy { !$0.summary.isUnread } }
-        }
+        await untilObserved { reader.messages.allSatisfy { !$0.summary.isUnread } }
         reader.noteInteraction()
         let dana = EmailAddress(name: "Dana Ruiz", email: "dana@example.com")
         let first = f.store.deliverMessage(account: ComposeFixture.work, to: thread, from: dana, at: fixedNow + 60)
@@ -143,7 +140,11 @@ import Testing
         #expect(await f.run(.showNewMessages))
         #expect(reader.pendingMessages.isEmpty && reader.focusedMessage == first && reader.messages.last?.id == first)
         #expect(reader.focusScrollRequest == 1)
+        await untilObserved { reader.message(first)?.summary.isUnread == false }
+        try #require(try await isUnread(first, in: thread, f) == false, "shown from the pill, so read")
 
+        #expect(await f.run(.toggleRead))
+        await untilObserved { f.router.actionContext().targets.anyUnread }
         let second = f.store.deliverMessage(account: ComposeFixture.work, to: thread, from: dana, at: fixedNow + 120)
         await soon { reader.pendingMessages == [second] }
         #expect(f.router.actionContext().targets.anyUnread)
