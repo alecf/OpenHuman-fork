@@ -47,10 +47,10 @@ import Testing
                                      "offers@notacme.example"])
         let news = try #require(keys["news@acme.example"])
         #expect(await f.run(.blockDomain, context: context(f, thread: news, sender: "news@acme.example")))
-        await eventually { f.env.notices.toasts.contains { $0.message.hasPrefix("Blocked acme.example. Clean up") } }
+        #expect(!inInbox(f, news), "the blocked conversation leaves at once")
         #expect(await rules(f).map(\.id) == ["domain:acme.example"])
         let offer = try #require(f.env.notices.toasts.first { $0.message.hasPrefix("Blocked acme.example. Clean up") })
-        #expect(offer.message == "Blocked acme.example. Clean up 2 conversations from them?")
+        #expect(offer.message == "Blocked acme.example. Clean up 1 conversation from them?")
         #expect(offer.actionTitle == "Archive all" && offer.secondaryActionTitle == "Move to Trash", "the default leads")
 
         await f.env.notices.activate(offer.id)
@@ -96,7 +96,7 @@ import Testing
         let keys = await deliver(f, ["news@acme.example"])
         let news = try #require(keys["news@acme.example"])
         #expect(await f.run(.blockSender, context: context(f, thread: news, sender: "news@acme.example")))
-        await eventually { f.env.notices.toasts.contains { $0.message.hasPrefix("Blocked news@acme.example. Clean up") } }
+        #expect(f.env.undo?.stack.map { String(localized: $0.title) } == ["Blocked news@acme.example"])
         #expect(await f.run(.blockSender, context: context(f, thread: news, sender: "News+Promo@Acme.Example")))
         await f.toast("Already blocked: news@acme.example")
         #expect(await rules(f).count == 1)

@@ -48,13 +48,14 @@ final class BlockActionHandler: ActionHandler {
         }
         guard let rule else { return .notHandled }
         let id = request.id
+        let place = BlockedPlace(router: request.router, advances: request.source != .intent)
         return .started(Task { [weak self] in
-            await self?.begin(rule, account: account, thread: thread, id: id)
+            await self?.begin(rule, account: account, thread: thread, id: id, place: place)
         })
     }
 
 
-    func begin(_ rule: BlockRule, account: AccountID, thread: ThreadKey?, id: ActionID) async {
+    func begin(_ rule: BlockRule, account: AccountID, thread: ThreadKey, id: ActionID, place: BlockedPlace) async {
         guard let environment, let center else { return }
         guard environment.status.safeMode.allowsMailChanges else {
             feedback.refuse(id, .safeMode)
@@ -68,55 +69,65 @@ final class BlockActionHandler: ActionHandler {
             environment.notices.postChoice(
                 "You've written to \(rule.value). Block it anyway?",
                 NoticeCenter.Choice("Block anyway") { [weak self] in
-                    await self?.commit(rule, account: account, thread: thread)
+                    await self?.commit(rule, account: account, thread: thread, id: id, place: place)
                 },
                 NoticeCenter.Choice("Cancel") {},
                 duration: nil)
             return
         }
-        await commit(rule, account: account, thread: thread)
+        await commit(rule, account: account, thread: thread, id: id, place: place)
     }
 
-    func commit(_ rule: BlockRule, account: AccountID, thread: ThreadKey?) async {
-        guard let environment, let center, let undoer, let undo = environment.undo else { return }
-        let token: UndoToken
+    func commit(_ rule: BlockRule, account: AccountID, thread: ThreadKey, id: ActionID, place: BlockedPlace) async {
+        guard let environment, let center, let undoer, let undo = environment.undo,
+              let commands = environment.commands else { return }
+        let fallback = await center.defaultDisposition()
+        let move: MailCommand = (rule.disposition ?? fallback) == .trash ? .trash([thread]) : .markDone([thread])
+        let hidden = place.hide(thread, move)
+        if let reopens = hidden.reopens { environment.actions.threadActions?.keepDraft(of: reopens.thread) }
+        let entry: UndoCoordinator.Entry
         do {
-            let ruleToken = try await center.add(rule, account: account)
-            token = undoer.begin(rule: ruleToken)
+            entry = try await undo.perform("Blocked \(rule.value)", threads: [thread], via: undoer,
+                                           reopens: hidden.reopens) {
+                let ruleToken = try await center.add(rule, account: account)
+                do {
+                    let moved = try await commands.apply(move)
+                    return undoer.begin(rule: ruleToken, moved: moved)
+                } catch {
+                    if !ruleToken.changesNothing { _ = try? await center.ruleUndoer.undo(ruleToken) }
+                    throw error
+                }
+            }
+        } catch MailPortError.blockedBySafeMode {
+            hidden.restore()
+            feedback.refuse(id, .safeMode)
+            return
         } catch {
+            hidden.restore()
             feedback.failed("Couldn't block \(rule.value)")
             return
         }
-        undo.push(UndoCoordinator.Entry(title: "Blocked \(rule.value)", token: token, threads: thread.map { [$0] } ?? [],
-                                        undoer: undoer))
-        await offerCleanup(rule, account: account, thread: thread, token: token)
+        await offerCleanup(rule, account: account, thread: thread, token: entry.token)
     }
 
 
     static let cleanupLimit = ThreadActionHandler.sweepLimit
 
-    func cleanupTargets(_ rule: BlockRule, account: AccountID, thread: ThreadKey?) async -> [ThreadKey] {
-        guard let environment else { return [] }
-        var targets: [ThreadKey] = []
-        if let query = BlockMatcher.cleanupQuery(kind: rule.kind, value: rule.value) {
-            do {
-                for try await page in environment.data.search(query, accounts: [account], limit: Self.cleanupLimit) {
-                    targets = page.hits.map(\.row).filter { row in
-                        BlockMatcher.coversAny(rule, senders: row.participants.filter { !$0.isMe }.map(\.email))
-                    }.map(\.id)
-                    break
-                }
-            } catch {
-                targets = []
+    func cleanupTargets(_ rule: BlockRule, account: AccountID, excluding thread: ThreadKey) async -> [ThreadKey] {
+        guard let environment, let query = BlockMatcher.cleanupQuery(kind: rule.kind, value: rule.value) else { return [] }
+        do {
+            for try await page in environment.data.search(query, accounts: [account], limit: Self.cleanupLimit) {
+                return page.hits.map(\.row).filter { row in
+                    row.id != thread && BlockMatcher.coversAny(rule, senders: row.participants.filter { !$0.isMe }.map(\.email))
+                }.map(\.id)
             }
-        }
-        if let thread, !targets.contains(thread) { targets.append(thread) }
-        return targets
+        } catch {}
+        return []
     }
 
-    private func offerCleanup(_ rule: BlockRule, account: AccountID, thread: ThreadKey?, token: UndoToken) async {
+    private func offerCleanup(_ rule: BlockRule, account: AccountID, thread: ThreadKey, token: UndoToken) async {
         guard let environment, let center else { return }
-        let targets = await cleanupTargets(rule, account: account, thread: thread)
+        let targets = await cleanupTargets(rule, account: account, excluding: thread)
         guard !targets.isEmpty else { return }
         let archive = NoticeCenter.Choice("Archive all") { [weak self] in
             await self?.cleanUp(.markDone(targets), token: token, who: rule.value)
@@ -154,6 +165,37 @@ final class BlockActionHandler: ActionHandler {
         if case .trash = command { verb = "Moved \(what) to Trash" }
         environment.notices.post("\(verb). ⌘Z takes this back along with the block.", style: .info,
                                  duration: NoticeCenter.infoDuration)
+    }
+}
+
+@MainActor
+struct BlockedPlace {
+    weak var router: AppRouter?
+    let advances: Bool
+
+    func hide(_ thread: ThreadKey, _ command: MailCommand) -> HiddenThread {
+        let state = router?.accounts.first { $0.id == thread.account } ?? router?.active
+        var reopens: UndoCoordinator.Entry.Reopen?
+        if advances, let router, let state { reopens = ThreadActionHandler.advance(past: [thread], in: state, router: router) }
+        let list = state?.list
+        return HiddenThread(reopens: reopens, ticket: list?.applyOptimistic(command), list: list, state: state,
+                            router: router)
+    }
+}
+
+@MainActor
+struct HiddenThread {
+    let reopens: UndoCoordinator.Entry.Reopen?
+    let ticket: OptimisticTicket?
+    weak var list: ThreadListModel?
+    weak var state: AccountState?
+    weak var router: AppRouter?
+
+    func restore() {
+        if let ticket { list?.revertOptimistic(ticket) }
+        guard let reopens, let state, state.reader?.thread == reopens.shown else { return }
+        state.reopenAfterUndo(reopens.thread)
+        router?.setNeedsPersist()
     }
 }
 

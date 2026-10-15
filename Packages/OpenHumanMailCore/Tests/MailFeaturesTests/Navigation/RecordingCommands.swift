@@ -7,11 +7,14 @@ import Synchronization
 final class RecordingCommands: MailCommanding {
     let store: FakeMailStore
     private let log = Mutex<[String]>([])
+    private let scheduleHold = Mutex<Checkpoint?>(nil)
 
     init(_ store: FakeMailStore) { self.store = store }
 
     var calls: [String] { log.withLock { $0 } }
     private func record(_ name: String) { log.withLock { $0.append(name) } }
+
+    func holdSchedules(at checkpoint: Checkpoint) { scheduleHold.withLock { $0 = checkpoint } }
 
     func apply(_ command: MailCommand) async throws -> UndoToken { record("apply"); return try await store.apply(command) }
     func undo(_ token: UndoToken) async throws -> UndoToken? { record("undo"); return try await store.undo(token) }
@@ -34,7 +37,11 @@ final class RecordingCommands: MailCommanding {
     }
     func cancelSend(_ token: SendToken) async throws -> Bool { record("cancelSend"); return try await store.cancelSend(token) }
     func sendNow(_ token: SendToken) async throws -> Bool { record("sendNow"); return try await store.sendNow(token) }
-    func scheduleSend(_ key: DraftKey, at: Date) async throws { record("scheduleSend"); try await store.scheduleSend(key, at: at) }
+    func scheduleSend(_ key: DraftKey, at: Date) async throws {
+        record("scheduleSend")
+        if let hold = scheduleHold.withLock({ $0 }) { await hold.pass() }
+        try await store.scheduleSend(key, at: at)
+    }
     func scheduleSend(_ key: DraftKey, at: Date, condition: SendLaterCondition) async throws {
         record("scheduleSend:\(condition.rawValue)"); try await store.scheduleSend(key, at: at, condition: condition)
     }
