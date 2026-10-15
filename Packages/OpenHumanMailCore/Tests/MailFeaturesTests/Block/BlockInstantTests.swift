@@ -101,7 +101,8 @@ final class BlockFixture {
         #expect(!f.listed(news), "the row goes at once")
         #expect(state.reader?.thread == next, "the reader moves to the next conversation at once")
         #expect(await f.rules().isEmpty, "the rule is still being written")
-        #expect(f.env.undo?.stack.isEmpty == true)
+        #expect(f.env.undo?.stack.map { String(localized: $0.title) } == ["Blocked news@acme.example"], "the pending Undo entry shows while the rule is saved")
+        #expect(f.env.notices.toasts.contains { $0.message.hasPrefix("Blocked") })
 
         hold.release()
         _ = await blocking.value
@@ -129,6 +130,7 @@ final class BlockFixture {
         #expect(await f.rules().isEmpty)
         #expect(try await f.inStoreInbox(news), "nothing moved")
         #expect(f.env.undo?.stack.isEmpty == true)
+        #expect(!f.env.notices.toasts.contains { $0.message.hasPrefix("Blocked") }, "the Undo toast is gone")
     }
 
     @Test func undoBringsTheThreadBackAndRemovesTheRule() async throws {
