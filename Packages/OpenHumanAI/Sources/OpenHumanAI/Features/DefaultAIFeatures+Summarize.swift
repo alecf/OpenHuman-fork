@@ -32,24 +32,36 @@ extension DefaultAIFeatures {
     {
         let key = threadSummaryKey(thread, engine: engine)
         if let key, let hit = await cache.get(key), case .text(let text) = hit.payload {
-            emit?(.started(hit.provenance))
+            let traceID = await traceCacheHit(nil, engine: engine, task: .summarize, hit: hit, text: text)
+            var provenance = hit.provenance
+            provenance.traceID = traceID
+            provenance.feature = engine.feature
+            emit?(.started(provenance))
             emit?(.textDelta(text))
-            emit?(.completed(AIOutputReport()))
+            emit?(.completed(AIOutputReport(traceID: traceID, model: hit.model)))
             return text
         }
-        emit?(.started(engine.provenance))
+        let firstRoot = makeTraceID()
+        var started = engine.provenance
+        started.traceID = firstRoot
+        started.feature = engine.feature
+        emit?(.started(started))
         let nonce = makeNonce()
         var emittedText = false
+        var attempts = 0
         let (text, report) = try await withOverflowRetry(emitted: { emittedText }) { shrink in
+            let root = attempts == 0 ? firstRoot : makeTraceID()
+            attempts += 1
             var suspicious = false
-            let final: PreparedRequest
+            var final: PreparedRequest
             switch try await planSummary(thread, engine: engine, nonce: nonce, shrink: shrink) {
             case .singlePass(let prepared):
                 final = prepared
             case .mapReduce(let steps):
                 var items: [UntrustedPart] = []
                 for step in steps {
-                    let (summary, flagged) = try await runMapStep(step, engine: engine, nonce: nonce, shrink: shrink)
+                    let (summary, flagged) = try await runMapStep(
+                        step, engine: engine, nonce: nonce, shrink: shrink, parent: root)
                     suspicious = suspicious || flagged
                     let body = step.parts[step.parts.count - 1]
                     items.append(
@@ -58,8 +70,10 @@ extension DefaultAIFeatures {
                             text: summary, date: body.date))
                 }
                 final = try await finalReduce(
-                    items, thread: thread, engine: engine, nonce: nonce, shrink: shrink, suspicious: &suspicious)
+                    items, thread: thread, engine: engine, nonce: nonce, shrink: shrink, suspicious: &suspicious,
+                    parent: root)
             }
+            final.traceID = root
             let used = try await requireFits(final, engine: engine)
             var capper = StreamCapper(maxTokens: final.request.output.maxTokens)
             let outcome = try await run(final, engine: engine, untrustedTokens: used) { delta in
@@ -71,7 +85,8 @@ extension DefaultAIFeatures {
                 return !capper.truncated
             }
             suspicious = suspicious || OutputGuard.isSuspicious(outcome.text, nonce: nonce)
-            return (capper.text, AIOutputReport(suspicious: suspicious, truncated: capper.truncated, usage: outcome.usage))
+            if suspicious { await amendTrace(final, finalText: nil, steps: [AITraceStep(.flaggedSuspicious)]) }
+            return (capper.text, outcome.report(suspicious: suspicious, truncated: capper.truncated))
         }
         if !report.suspicious, let key {
             await cache.put(key, cachedResult(.text(text), engine: engine, model: nil), ttl: engine.ttl(nil))
@@ -134,10 +149,13 @@ extension DefaultAIFeatures {
         return steps
     }
 
-    func runMapStep(_ step: MapStep, engine: Engine, nonce: String, shrink: Double) async throws -> (String, Bool) {
-        let prepared = try await prepare(
+    func runMapStep(_ step: MapStep, engine: Engine, nonce: String, shrink: Double, parent: UUID? = nil)
+        async throws -> (String, Bool)
+    {
+        var prepared = try await prepare(
             .summarizeChunk, engine: engine, nonce: nonce, trusted: step.trusted, untrusted: step.parts,
             output: .text(maxTokens: AIPolicy.reservedChunkSummaryTokens), shrink: shrink)
+        prepared.parentTraceID = parent
         return try await summarizeOnce(prepared, engine: engine)
     }
 
@@ -146,6 +164,7 @@ extension DefaultAIFeatures {
         let key = cacheKey(prepared, engine: engine)
         if let key, let hit = await cache.get(key), case .text(let text) = hit.payload {
             await record(prepared, engine: engine, untrustedTokens: used, usage: nil, outcome: .cached)
+            await traceCacheHit(prepared, engine: engine, task: prepared.request.task, hit: hit, text: text)
             return (text, false)
         }
         var capper = StreamCapper(maxTokens: prepared.request.output.maxTokens)
@@ -185,7 +204,7 @@ extension DefaultAIFeatures {
 
     func finalReduce(
         _ items: [UntrustedPart], thread: AIThreadInput, engine: Engine, nonce: String, shrink: Double,
-        suspicious: inout Bool
+        suspicious: inout Bool, parent: UUID? = nil
     ) async throws -> PreparedRequest {
         let subject = subjectPart(thread)
         let output = OutputSpec.text(maxTokens: AIPolicy.reservedReduceTokens)
@@ -210,9 +229,10 @@ extension DefaultAIFeatures {
                     next.append(group[0])
                     continue
                 }
-                let prepared = try await prepare(
+                var prepared = try await prepare(
                     .summarizeReduce, engine: engine, nonce: nonce, trusted: [], untrusted: [subject] + group,
                     output: output, shrink: shrink)
+                prepared.parentTraceID = parent
                 let (text, flagged) = try await summarizeOnce(prepared, engine: engine)
                 suspicious = suspicious || flagged
                 next.append(UntrustedPart(kind: .summary, id: "r\(round).\(index + 1)", text: text))

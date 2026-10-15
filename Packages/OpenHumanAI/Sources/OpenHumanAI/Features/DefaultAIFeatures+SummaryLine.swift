@@ -4,11 +4,13 @@ public struct ThreadLineSummary: Sendable, Hashable {
     public var text: String
     public var providerID: AIProviderID?
     public var fromCache: Bool
+    public var traceID: UUID?
 
-    public init(text: String, providerID: AIProviderID? = nil, fromCache: Bool = false) {
+    public init(text: String, providerID: AIProviderID? = nil, fromCache: Bool = false, traceID: UUID? = nil) {
         self.text = text
         self.providerID = providerID
         self.fromCache = fromCache
+        self.traceID = traceID
     }
 }
 
@@ -46,14 +48,15 @@ extension DefaultAIFeatures {
         guard engine.capabilities.dataLocation == .onDevice else { throw AIError.unavailable(.onDeviceOnly) }
         let key = threadLineKey(thread, newest: newest, engine: engine)
         if let key, let hit = await cache.get(key), case .text(let text) = hit.payload {
-            return ThreadLineSummary(text: text, providerID: engine.provider.id, fromCache: true)
+            let traceID = await traceCacheHit(nil, engine: engine, task: .summarize, hit: hit, text: text)
+            return ThreadLineSummary(text: text, providerID: engine.provider.id, fromCache: true, traceID: traceID)
         }
         let output = OutputSpec.text(maxTokens: AIPolicy.reservedThreadLineTokens)
         let messages = thread.messages.suffix(AIPolicy.threadLineMessages).flatMap { message in
             [senderPart(message), bodyPart(message, text: Self.followUpCapped(message.bodyText,
                                                                               AIPolicy.threadLineMessageCharacters))]
         }
-        let line: String? = try await withOverflowRetry { shrink in
+        let made: (line: String?, traceID: UUID) = try await withOverflowRetry { shrink in
             let nonce = makeNonce()
             var prepared = try await prepare(.summarizeLine, engine: engine, nonce: nonce, trusted: [],
                                              untrusted: [subjectPart(thread)] + messages, output: output, shrink: shrink)
@@ -68,14 +71,19 @@ extension DefaultAIFeatures {
                 _ = capper.accept(delta)
                 return !capper.truncated
             }
-            guard !OutputGuard.isSuspicious(outcome.text, nonce: nonce) else { return nil }
-            return OutputGuard.threadLine(outcome.text)
+            guard !OutputGuard.isSuspicious(outcome.text, nonce: nonce) else {
+                await amendTrace(prepared, finalText: nil, steps: [AITraceStep(.flaggedSuspicious)])
+                return (nil, prepared.traceID)
+            }
+            let line = OutputGuard.threadLine(outcome.text)
+            await amendTrace(prepared, finalText: line, steps: [])
+            return (line, prepared.traceID)
         }
-        guard let line else { throw AIError.invalidOutput("no line") }
+        guard let line = made.line else { throw AIError.invalidOutput("no line") }
         if let key {
             await cache.put(key, cachedResult(.text(line), engine: engine, model: nil), ttl: engine.ttl(nil))
         }
-        return ThreadLineSummary(text: line, providerID: engine.provider.id)
+        return ThreadLineSummary(text: line, providerID: engine.provider.id, traceID: made.traceID)
     }
 
     func threadLineKey(_ thread: AIThreadInput, newest: AIMessageInput, engine: Engine) -> AICacheKey? {

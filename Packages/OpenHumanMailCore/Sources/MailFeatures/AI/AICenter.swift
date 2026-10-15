@@ -10,6 +10,7 @@ public final class AICenter {
     @ObservationIgnored public let registry: ProviderRegistry?
     public private(set) var settings: AISettings
     @ObservationIgnored public let activity: AIActivityLog
+    @ObservationIgnored public let traces: (any AITraceStore)?
     public private(set) var providers: [AIProviderRow] = []
     @ObservationIgnored public var pasteboard: (any TextPasteboard)?
     @ObservationIgnored public var instantReplyTiming = InstantReplyTiming()
@@ -36,6 +37,7 @@ public final class AICenter {
 
     public init(features: any AIFeatures, registry: ProviderRegistry? = nil, settings: AISettingsBox,
                 cache: (any AIResultCache)? = nil, activity: AIActivityLog = AIActivityLog(),
+                traces: (any AITraceStore)? = nil,
                 makeProvider: @escaping @Sendable (AIProviderID) -> (any AIProvider)? = { _ in nil },
                 bodyTimeout: Duration = .seconds(20)) {
         self.features = features
@@ -44,19 +46,22 @@ public final class AICenter {
         self.settings = settings.current
         self.cache = cache
         self.activity = activity
+        self.traces = traces
         self.makeProvider = makeProvider
         self.bodyTimeout = bodyTimeout
     }
 
     public static func make(registry: ProviderRegistry, settings: AISettingsBox,
                             cache: any AIResultCache = InMemoryAIResultCache(), activity: AIActivityLog = AIActivityLog(),
+                            traces: (any AITraceStore)? = nil,
                             makeProvider: @escaping @Sendable (AIProviderID) -> (any AIProvider)? = { _ in nil })
         -> AICenter
     {
+        let sink = traces.map { store in StoreTraceSink(store: store, settings: { settings.current.traces }) }
         let features = DefaultAIFeatures(registry: registry, settings: { settings.current }, cache: cache,
-                                         activity: activity)
+                                         activity: activity, traces: sink)
         return AICenter(features: features, registry: registry, settings: settings, cache: cache, activity: activity,
-                        makeProvider: makeProvider)
+                        traces: traces, makeProvider: makeProvider)
     }
 
     func attach(_ environment: AppEnvironment) {
@@ -117,9 +122,19 @@ public final class AICenter {
         inlineReplies.reset()
     }
 
-    @ObservationIgnored public private(set) var rewriteFeedback: (up: Int, down: Int) = (0, 0)
+    public func forgetTraces(for account: AccountID) async {
+        guard let traces, let key = policyKey(account) else { return }
+        try? await traces.forget(accountKey: key)
+    }
 
-    func recordRewriteFeedback(up: Bool, undo: Bool) {
+    @ObservationIgnored public private(set) var rewriteFeedback: (up: Int, down: Int) = (0, 0)
+    @ObservationIgnored private(set) var pendingRating: Task<Void, Never>?
+
+    func recordRewriteFeedback(up: Bool, undo: Bool, traceID: UUID? = nil) {
+        if let traces, let traceID {
+            let rating: Int? = undo ? nil : (up ? 1 : -1)
+            pendingRating = Task { try? await traces.setRating(traceID, rating: rating) }
+        }
         let step = undo ? -1 : 1
         if up { rewriteFeedback.up = max(0, rewriteFeedback.up + step) } else {
             rewriteFeedback.down = max(0, rewriteFeedback.down + step)
@@ -226,11 +241,6 @@ public final class AICenter {
         contexts[ReplyKey(thread: thread, message: target)]
     }
 
-    func loadedInput(_ thread: ThreadKey, upTo target: MessageKey?) -> AIThreadInput? {
-        if let exact = contexts[ReplyKey(thread: thread, message: target)] { return exact.input }
-        guard let target, let newest = contexts[ReplyKey(thread: thread, message: nil)] else { return nil }
-        return newest.input.upTo(AIThreadLoader.messageKey(target))
-    }
 
     func exclusion(for thread: ThreadKey, context: AIThreadContext) -> QuickReplyExclusion? {
         QuickReplyExclusion.reason(windowFacts(for: thread, context: context))

@@ -11,7 +11,8 @@ import Testing
         "common.preamble@1": "4d3129f4e9d99c0df5e863bcffb2bdf3a8bdf2544582a4759bcdf0b41904d5e3",
         "common.repair@1": "51c6971fd705409176bfff374c6a1586972d628f5e38eeeb3685f9cbeaa359a5",
         "reply.options@2": "51d718c28414ef02828bec8637b73fc514aa0dc270ace7644cd076550e4b6a5e",
-        "rewrite.instruct@2": "b196d0ec98995574075a3b0f75b9af0e9b75cae254b45ad7ccb9338cd38a4580",
+        "rewrite.instruct@3": "e5fc0c8f20ca03b6d1679b30f17025f8b4303d5b40287f7231160f1964ae442d",
+        "compose.write@1": "4cb3c66840256c2c7fb09145ba36931a9c53a886e556f616f2f44305b75f7bfa",
         "summarize.chunk@2": "6fc007272cce61ca69ffc6c62d86ce2555a7e56820bb3654fbee3b50ae8cdb52",
         "summarize.reduce@2": "0a131f931a830de316d00dab46bf7359beaf27cd30a09d89e9cd42074948766b",
         "summarize.line@3": "611fe764b89f03d822ca95c93073d1ba5db87fd44a1f27ce4f1a5354426a496f",
@@ -58,7 +59,7 @@ import Testing
     @Test func systemPromptsCarryTheInjectionPolicyAndOnlyKnownSlots() throws {
         let library = PromptLibrary.standard
         let nonce = "Zz9Yy8Xx7Ww6"
-        #expect(PromptName.systemPrompts.count == 14)
+        #expect(PromptName.systemPrompts.count == 15)
         for name in PromptName.systemPrompts {
             let template = try library.template(named: name.rawValue)
             #expect(template.placeholders.isEmpty, "\(name.rawValue) has task-level placeholders")

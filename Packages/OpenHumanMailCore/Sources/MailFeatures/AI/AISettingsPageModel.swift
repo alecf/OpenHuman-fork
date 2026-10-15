@@ -115,19 +115,19 @@ public final class AISettingsPageModel {
 
     public var aboutMe: String {
         get { center.settings.aboutMe }
-        set { change { $0.aboutMe = String(newValue.prefix(AISettings.personalTextCap)) } }
+        set { change { $0.aboutMe = newValue } }
     }
 
     public var writingInstructions: String {
         get { center.settings.writingInstructions }
-        set { change { $0.writingInstructions = String(newValue.prefix(AISettings.personalTextCap)) } }
+        set { change { $0.writingInstructions = newValue } }
     }
 
     public static let aboutMeTitle = String(localized: "About me")
     public static let aboutMePrompt = String(localized: "What you do, who you write to")
     public static let writingInstructionsTitle = String(localized: "How I write")
     public static let writingInstructionsPrompt = String(localized: "Tone, length, greetings and sign-offs")
-    public static let personalNote = String(localized: "Used when AI writes for you. Stays on this Mac unless you allowed a provider off it. Up to 1,000 characters each.")
+    public static let personalNote = String(localized: "Used when AI writes for you. Stays on this Mac unless you allowed a provider off it.")
 
     public static let writingToolsNote = String(localized: "Writing Tools is part of macOS and may send the draft off this Mac. It stays off for accounts set to On-device AI only.")
 

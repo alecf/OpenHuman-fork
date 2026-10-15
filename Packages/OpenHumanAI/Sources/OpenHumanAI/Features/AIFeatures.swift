@@ -95,15 +95,24 @@ public struct AIProvenance: Sendable, Hashable {
     public var dataLocation: AIDataLocation
     public var model: String?
     public var fromCache: Bool
+    public var traceID: UUID?
+    public var feature: AIFeature?
+    public var promptID: PromptID?
+    public var promptOverrideRevision: Int?
 
     public init(providerID: AIProviderID, providerName: String, dataLocation: AIDataLocation, model: String? = nil,
-                fromCache: Bool = false)
+                fromCache: Bool = false, traceID: UUID? = nil, feature: AIFeature? = nil, promptID: PromptID? = nil,
+                promptOverrideRevision: Int? = nil)
     {
         self.providerID = providerID
         self.providerName = providerName
         self.dataLocation = dataLocation
         self.model = model
         self.fromCache = fromCache
+        self.traceID = traceID
+        self.feature = feature
+        self.promptID = promptID
+        self.promptOverrideRevision = promptOverrideRevision
     }
 }
 
@@ -111,11 +120,24 @@ public struct AIOutputReport: Sendable, Hashable {
     public var suspicious: Bool
     public var truncated: Bool
     public var usage: AIUsage?
+    public var traceID: UUID?
+    public var model: String?
+    public var latency: Duration?
+    public var firstToken: Duration?
+    public var countedInputTokens: Int?
 
-    public init(suspicious: Bool = false, truncated: Bool = false, usage: AIUsage? = nil) {
+    public init(suspicious: Bool = false, truncated: Bool = false, usage: AIUsage? = nil, traceID: UUID? = nil,
+                model: String? = nil, latency: Duration? = nil, firstToken: Duration? = nil,
+                countedInputTokens: Int? = nil)
+    {
         self.suspicious = suspicious
         self.truncated = truncated
         self.usage = usage
+        self.traceID = traceID
+        self.model = model
+        self.latency = latency
+        self.firstToken = firstToken
+        self.countedInputTokens = countedInputTokens
     }
 }
 

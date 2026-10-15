@@ -29,6 +29,7 @@ public final class AIComposerModel: Identifiable {
         public internal(set) var base: String?
         var modelInstruction = ""
         public internal(set) var rating: Bool?
+        public internal(set) var traceID: UUID?
     }
 
     public struct Preset: Identifiable, Hashable, Sendable {
@@ -142,6 +143,8 @@ public final class AIComposerModel: Identifiable {
     public func isDisabled(_ preset: Preset) -> Bool { preset.id == Self.voicePreset.id && voiceRefusal != nil }
 
     func settleVoice() async { await voiceTask?.value }
+
+    func settle() async { await task?.value }
 
     private func loadVoice() async {
         guard let center, let session else { return }
@@ -276,7 +279,7 @@ public final class AIComposerModel: Identifiable {
         guard let current, versions.indices.contains(current) else { return }
         let previous = versions[current].rating
         versions[current].rating = previous == up ? nil : up
-        center?.recordRewriteFeedback(up: up, undo: previous == up)
+        center?.recordRewriteFeedback(up: up, undo: previous == up, traceID: versions[current].traceID)
     }
 
     public static let examples: [String] = [
@@ -327,20 +330,25 @@ public final class AIComposerModel: Identifiable {
         current = versions.count - 1
         let versionID = version.id
         phase = .working
-        var context = rewriteContext(session: session, center: center)
-        if asked == Self.voicePreset.instruction, voiceRefusal == nil { context.styleExamples = voiceExamples }
-        let events = center.features.rewriteEvents(text, instruction: modelInstruction, context: context)
+        let examples = asked == Self.voicePreset.instruction && voiceRefusal == nil ? voiceExamples : nil
         task = Task { [weak self] in
             do {
+                guard let context = await self?.preparedContext(styleExamples: examples), !Task.isCancelled,
+                      let features = self?.center?.features else { return }
+                let events = features.rewriteEvents(text, instruction: modelInstruction, context: context)
                 for try await event in events {
                     guard !Task.isCancelled, let self else { return }
                     switch event {
                     case .started(let provenance):
-                        self.updateVersion(versionID) { $0.badge = AIProviderBadge(provenance: provenance) }
+                        self.updateVersion(versionID) {
+                            $0.badge = AIProviderBadge(provenance: provenance)
+                            $0.traceID = provenance.traceID
+                        }
                     case .textDelta(let delta):
                         self.updateVersion(versionID) { $0.text += delta }
                     case .completed(let report):
                         self.updateVersion(versionID) {
+                            if let traceID = report.traceID { $0.traceID = traceID }
                             $0.isSuspicious = report.suspicious
                             $0.isTruncated = report.truncated
                             if report.truncated { $0.text = AnswerTrim.toLastCompleteSentence($0.text) }
@@ -401,14 +409,22 @@ public final class AIComposerModel: Identifiable {
         return row.state == .ready
     }
 
-    private func rewriteContext(session: ComposeSession, center: AICenter) -> AIThreadInput {
+    private func preparedContext(styleExamples: [String]?) async -> AIThreadInput? {
+        guard let center, let session else { return nil }
+        var context = await rewriteContext(session: session, center: center)
+        if let styleExamples { context.styleExamples = styleExamples }
+        return context
+    }
+
+    private func rewriteContext(session: ComposeSession, center: AICenter) async -> AIThreadInput {
         let key = center.policyKey(session.account.id)
         if let thread = session.thread {
             let target = Self.draftTarget(session) ?? center.replyTarget(in: thread)
-            if var loaded = center.loadedInput(thread, upTo: target) {
-                loaded.trigger = .user
-                loaded.accountKey = key
-                return loaded
+            if let loaded = await center.context(for: thread, upTo: target, trigger: .user) {
+                var input = loaded.input
+                input.trigger = .user
+                input.accountKey = key
+                return input
             }
             return AIThreadInput(threadKey: AIThreadLoader.threadKey(thread), subject: session.subject, messages: [],
                                  accountKey: key, trigger: .user)
