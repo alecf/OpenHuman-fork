@@ -64,15 +64,11 @@ public final class CleanupRulesModel {
     }
 
     public func set(_ target: String, _ choice: ArchiveSuggestionOverride) async {
-        var next = overrides.value
-        next[target.lowercased()] = choice.rawValue
-        await overrides.set(next)
+        await overrides.update { $0[target.lowercased()] = choice.rawValue }
     }
 
     public func remove(_ target: String) async {
-        var next = overrides.value
-        next.removeValue(forKey: target.lowercased())
-        await overrides.set(next)
+        await overrides.update { $0.removeValue(forKey: target.lowercased()) }
     }
 
     public static let sectionTitle = String(localized: "Always / Never include in cleanup")

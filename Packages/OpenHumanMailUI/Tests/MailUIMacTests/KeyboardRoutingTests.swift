@@ -42,8 +42,8 @@ import WebKit
                          charactersIgnoringModifiers: chars, isARepeat: isARepeat, keyCode: code)!
     }
 
-    func until(_ condition: @MainActor () -> Bool) async {
-        await untilObserved(condition)
+    func until(_ condition: @escaping @MainActor () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async {
+        await awaitObserved("the model state", sourceLocation: sourceLocation, condition)
     }
 
     @Test func eInTheListMarksDone() async {

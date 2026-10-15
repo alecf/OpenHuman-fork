@@ -45,7 +45,7 @@ struct InlineReplyWindow {
                      environment given: AppEnvironment? = nil) async throws -> InlineReplyWindow {
         let environment = given ?? AppEnvironment.fake(corpus: .small, options: .init(remoteAck: .immediate, heldSends: heldSends,
                                                                              safeMode: safeMode),
-                                              featureFlags: featureFlags, ai: ai)
+                                              featureFlags: featureFlags, ai: ai, notices: NoticeCenter(autoExpire: false))
         let themes = ThemeStore(preferencesStore: MemoryThemePreferencesStore(ThemePreferences(mode: mode)),
                                 reduceMotion: reduceMotion)
         var attached: MainContentViewController?

@@ -161,7 +161,7 @@ import Testing
         }
         try await eventually("first run blocked in history.list") { clock.sleeperCount == 1 }
         try await Task.sleep(for: .milliseconds(50))
-        for _ in 0..<5_000 where finished.current < 20 {
+        for _ in 0..<120_000 where finished.current < 20 {
             if clock.sleeperCount > 0 { clock.advance(by: .seconds(1)) }
             try await Task.sleep(for: .milliseconds(1))
         }

@@ -27,7 +27,7 @@ struct AISnapshotRenderTests {
     }
 
     func until(_ condition: @MainActor () -> Bool) async throws {
-        let deadline = ContinuousClock.now + .seconds(60)
+        let deadline = ContinuousClock.now + testBackstop
         while !condition() {
             guard ContinuousClock.now < deadline else { Issue.record("timed out"); return }
             try await Task.sleep(for: .milliseconds(10))

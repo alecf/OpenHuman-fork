@@ -50,7 +50,7 @@ args=(build -project "$ROOT/Apps/Mail/Mail.xcodeproj" -scheme Mail -configuratio
 if [[ ! -f "$ROOT/Apps/Mail/Config/Local.xcconfig" ]]; then
     args+=(CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=)
 fi
-xcodebuild "${args[@]}"
+xcodebuild -skipPackageUpdates "${args[@]}"
 
 APP="$DD/Build/Products/$CONFIG/OpenHumanMail.app"
 [[ -d "$APP" ]] || { echo "build-app: expected $APP after the build" >&2; exit 1; }

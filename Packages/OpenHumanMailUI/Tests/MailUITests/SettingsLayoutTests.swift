@@ -34,7 +34,7 @@ private func environmentWithSystem() async throws -> AppEnvironment {
 
 @MainActor
 private func until(_ what: String, _ condition: () -> Bool) async throws {
-    let deadline = ContinuousClock.now + .seconds(60)
+    let deadline = ContinuousClock.now + testBackstop
     while !condition() {
         guard ContinuousClock.now < deadline else {
             Issue.record("timed out waiting for \(what)")

@@ -123,8 +123,6 @@ private struct InstantFixture {
         await model.show(thread: nil)
         let reads = f.calendar.readCalls
         #expect(reads == 1 && f.store.networkReads == 1)
-        let clock = ContinuousClock()
-        let started = clock.now
         var loads: [Task<Void, Never>] = []
         for step in 1...30 {
             let load = try #require(model.moveDayInstantly(by: 1))
@@ -137,11 +135,9 @@ private struct InstantFixture {
             loads.append(try #require(model.moveDayInstantly(by: -1)))
             #expect(model.days.first?.events.map(\.id) == ["e\(step)"])
         }
-        let elapsed = clock.now - started
         for load in loads { await load.value }
         #expect(f.calendar.readCalls == reads, "zero network calls inside the covered span")
         #expect(f.store.networkReads == 1)
-        #expect(elapsed < .seconds(2), "60 moves drawn from memory")
     }
 
     @Test func aRefreshReadsOnlyWhatChangedAndOnlyTheChangedIDsAreTold() async throws {

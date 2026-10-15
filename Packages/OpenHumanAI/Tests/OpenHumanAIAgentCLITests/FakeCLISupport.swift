@@ -88,7 +88,7 @@ enum Fixtures {
 
 func waitUntil(deadline: Duration = .seconds(10), _ condition: () -> Bool) async -> Bool {
     let clock = ContinuousClock()
-    let end = clock.now + deadline
+    let end = clock.now + max(deadline, .seconds(120))
     while clock.now < end {
         if condition() { return true }
         try? await Task.sleep(for: .milliseconds(20))

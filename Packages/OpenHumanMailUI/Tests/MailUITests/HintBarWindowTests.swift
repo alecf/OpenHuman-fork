@@ -13,7 +13,7 @@ import Testing
     let env = AppEnvironment.fake(corpus: .make(threadCount: 10))
     let router = env.router
     router.start()
-    await untilObserved { router.list?.state == .loaded }
+    await awaitObserved("the list loads") { router.list?.state == .loaded }
 
     let hosting = SizeReportingHostingView(rootView: MailShellView(router: router) { Color.clear.frame(width: 900, height: 400) })
     hosting.frame = NSRect(x: 0, y: 0, width: 900, height: 700)

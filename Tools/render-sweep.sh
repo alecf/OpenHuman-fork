@@ -149,7 +149,7 @@ if [[ -z "$ONLY" || "$ONLY" == package ]]; then
     if [[ -n "$scheme" ]]; then
         run_logged package env TEST_RUNNER_OH_SNAPSHOT_DIR="$OUT" OH_SNAPSHOT_DIR="$OUT" \
             TEST_RUNNER_OH_SWEEP_THEMES="$THEMES" OH_SWEEP_THEMES="$THEMES" \
-            bash -c 'cd "$1" && xcodebuild test -scheme "$2" -destination "platform=macOS,arch=arm64" \
+            bash -c 'cd "$1" && xcodebuild test -skipPackageUpdates -scheme "$2" -destination "platform=macOS,arch=arm64" \
                 -derivedDataPath "$3/dd-package" -only-testing:MailUIMacTests/RenderSweepTests' _ "$PKG" "$scheme" "$WORK"
     else
         scratch="$(spm_scratch)"
@@ -167,7 +167,7 @@ if [[ -z "$ONLY" || "$ONLY" == app ]]; then
     if [[ ! -f "$ROOT/Apps/Mail/Config/Local.xcconfig" ]]; then
         args+=(CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=)
     fi
-    run_logged app env TEST_RUNNER_OH_SNAPSHOT_DIR="$OUT" xcodebuild "${args[@]}"
+    run_logged app env TEST_RUNNER_OH_SNAPSHOT_DIR="$OUT" xcodebuild -skipPackageUpdates "${args[@]}"
 fi
 
 count="$(find "$OUT" -maxdepth 1 -name '*.png' | wc -l | tr -d ' ')"

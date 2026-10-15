@@ -342,12 +342,39 @@ struct ReaderWebKitTests {
         #expect(!zip(menu.items, menu.items.dropFirst()).contains { $0.isSeparatorItem && $1.isSeparatorItem })
     }
 
-    @Test func cidImagesAreServedFromTheMessagesOwnPartsOnly() async throws {
+    final class RecordingSchemeTask: NSObject, WKURLSchemeTask, @unchecked Sendable {
+        let request: URLRequest
+        private let lock = NSLock()
+        private var _mime: String?, _body = Data(), _failure: Error?, _done = false
+        private var waiter: CheckedContinuation<Void, Never>?
+        init(_ url: String) { request = URLRequest(url: URL(string: url)!) }
+        var mime: String? { lock.withLock { _mime } }
+        var body: Data { lock.withLock { _body } }
+        var failure: Error? { lock.withLock { _failure } }
+        func didReceive(_ response: URLResponse) { lock.withLock { _mime = response.mimeType } }
+        func didReceive(_ data: Data) { lock.withLock { _body.append(data) } }
+        func didFinish() { complete() }
+        func didFailWithError(_ error: Error) { lock.withLock { _failure = error }; complete() }
+        func didPerformRedirection(_ response: HTTPURLResponse, newRequest request: URLRequest) {}
+        private func complete() {
+            let w = lock.withLock { () -> CheckedContinuation<Void, Never>? in _done = true; defer { waiter = nil }; return waiter }
+            w?.resume()
+        }
+        func finished() async {
+            await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+                let already = lock.withLock { () -> Bool in if _done { return true }; waiter = c; return false }
+                if already { c.resume() }
+            }
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1))) func cidImagesAreServedFromTheMessagesOwnPartsOnly() async throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("reader-cid-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
         let png = folder.appendingPathComponent("chart.png")
-        try TestImages.png(width: 30, height: 20).write(to: png)
+        let pngData = TestImages.png(width: 30, height: 20)
+        try pngData.write(to: png)
         let fake = folder.appendingPathComponent("fake.png")
         try Data("<svg onload=alert(1)>".utf8).write(to: fake)
         let html = """
@@ -364,14 +391,19 @@ struct ReaderWebKitTests {
         let view = try #require(ReaderWebView.make(for: rendered, width: 600))
         defer { ReaderWebKit.shared.pool.recycle(view) }
         view.inlineParts = InlinePartSource(attachments: parts) { attachment in attachment.id == 1 ? png : fake }
-        await Reports.heights(of: view).wait { view.isShown }
-        func width(_ id: String) async -> Int {
-            (try? await view.evaluateJavaScript("document.getElementById('\(id)').naturalWidth", in: nil,
-                                                contentWorld: .defaultClient) as? Int) ?? -1
+        let handler = CIDSchemeHandler()
+        func ask(_ cid: String) async -> RecordingSchemeTask {
+            let task = RecordingSchemeTask("cid:\(cid)")
+            handler.webView(view, start: task)
+            await task.finished()
+            return task
         }
-        #expect(await width("a") == 30)
-        #expect(await width("b") == 0, "another message's part is not served")
-        #expect(await width("c") == 0, "only real raster images are served")
+        let own = await ask("chart-1@fake.example")
+        #expect(own.failure == nil && own.mime == "image/png" && own.body == pngData, "this message's raster part is served")
+        #expect(await ask("other@fake.example").failure != nil, "another message's part is not served")
+        let svg = await ask("svg@fake.example")
+        #expect(svg.failure != nil && svg.body.isEmpty, "only real raster images are served")
+        #expect(handler.served == 1)
         #expect(CIDSchemeHandler.imageType(of: Data("GIF89a....".utf8)) == "image/gif")
         #expect(CIDSchemeHandler.imageType(of: Data("<svg".utf8)) == nil)
     }
@@ -497,7 +529,7 @@ func stableSelectionRect(_ view: ReaderWebView, timeout: Duration = .seconds(60)
 }
 
 @MainActor
-func until(timeout: Duration = .seconds(60), _ condition: @MainActor () async -> Bool) async throws {
+func until(timeout: Duration = testBackstop, _ condition: @MainActor () async -> Bool) async throws {
     let clock = ContinuousClock()
     let deadline = clock.now + timeout
     while !(await condition()) {

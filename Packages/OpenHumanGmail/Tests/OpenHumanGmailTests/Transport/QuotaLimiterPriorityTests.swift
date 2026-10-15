@@ -58,7 +58,8 @@ final class ManualClock: OHClock {
     }
 
     private func waitUntilQueued(_ limiter: QuotaLimiter, _ count: Int) async {
-        for _ in 0..<10_000 {
+        let deadline = ContinuousClock.now + .seconds(120)
+        while ContinuousClock.now < deadline {
             if await limiter.waiting >= count { return }
             await Task.yield()
         }

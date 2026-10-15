@@ -11,11 +11,12 @@ extension AppEnvironment {
                             keymapStore: (any KeymapStoring)? = nil,
                             calendarConnections: (any CalendarConnectionsProviding)? = nil,
                             calendarCache: (any CalendarCachePersisting)? = nil,
-                            waiting: (any WaitingPort)? = nil) -> AppEnvironment {
+                            waiting: (any WaitingPort)? = nil,
+                            notices: NoticeCenter? = nil) -> AppEnvironment {
         let store = FakeMailStore(corpus: corpus, options: options)
         let rules = FakeImportanceRules(corpus: corpus, safeMode: options.safeMode, now: options.now)
         let environment = AppEnvironment(data: store, commands: store, accounts: store, settings: store, isFake: true,
-                                         navigationStore: navigationStore,
+                                         navigationStore: navigationStore, notices: notices,
                                          importance: rules,
                                          featureFlags: featureFlags, aiOnboarding: FakeAIOnboarding(),
                                          aiConnections: FakeAIConnections(), secrets: InMemorySecretStore(), ai: ai,
