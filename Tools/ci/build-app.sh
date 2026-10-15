@@ -46,6 +46,8 @@ done
 args=(build -project "$ROOT/Apps/Mail/Mail.xcodeproj" -scheme Mail -configuration "$CONFIG"
       -destination 'generic/platform=macOS' -derivedDataPath "$DD"
       "OH_GIT_COMMIT=$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)")
+cache_dir="${OH_COMPILATION_CACHE_PATH:-$HOME/Library/Caches/OpenHuman/compilation-cache}"
+args+=(COMPILATION_CACHE_ENABLE_CACHING=YES "COMPILATION_CACHE_CAS_PATH=$cache_dir")
 [[ -z "$BUILD_NUMBER" ]] || args+=("CURRENT_PROJECT_VERSION=$BUILD_NUMBER")
 if [[ ! -f "$ROOT/Apps/Mail/Config/Local.xcconfig" ]]; then
     args+=(CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=)
