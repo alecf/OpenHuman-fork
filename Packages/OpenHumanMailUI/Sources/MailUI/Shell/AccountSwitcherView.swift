@@ -27,7 +27,9 @@ public struct AccountSwitcherView: View {
         let size = ShellMetrics.avatarSize
         let ring = theme.borderWidthFocus
         let offset = theme.borderWidthFocusOffset
-        let badge = shown ? nil : AccountState.switcherBadge(router.allInboxesUnread ?? 0)
+        let mode = router.accountCountMode
+        let count = router.allInboxesUnread
+        let badge = shown ? nil : AccountState.switcherBadge(count ?? 0)
         return Button {
             router.goToAllInboxes()
         } label: {
@@ -56,9 +58,17 @@ public struct AccountSwitcherView: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .help("All Inboxes  ⌃0")
+        .contextMenu {
+            if router.environment.settings != nil {
+                Button(mode == .off ? "Show count" : "Hide count") {
+                    store(AppSettings.accountCounts, mode == .off ? .important : .off)
+                }
+                Button("Hide All Inboxes") { store(AppSettings.allInboxesShown, false) }
+            }
+        }
+        .help(Self.allInboxesTooltip(count, mode))
         .accessibilityLabel("All Inboxes")
-        .accessibilityValue(shown ? "Active" : "")
+        .accessibilityValue(shown ? "Active" : (badge == nil ? "" : Self.unreadValue(count ?? 0, mode)))
         .accessibilityHint("Control-0 shows every account's inbox together")
         .accessibilityAddTraits(shown ? .isSelected : [])
     }
@@ -67,7 +77,9 @@ public struct AccountSwitcherView: View {
         let account = state.account
         let isActive = state.id == router.activeAccountID && router.unifiedInbox == nil
         let needsSignIn = account.health == .needsSignIn
-        let badge = isActive || needsSignIn ? nil : AccountState.switcherBadge(state.switcherCount)
+        let mode = router.accountCountMode
+        let count = state.badgeCount(mode) ?? 0
+        let badge = isActive || needsSignIn ? nil : AccountState.switcherBadge(count)
         let showsUnread = badge != nil
         let size = ShellMetrics.avatarSize
         let ring = theme.borderWidthFocus
@@ -130,7 +142,7 @@ public struct AccountSwitcherView: View {
         .help(Self.tooltip(account, position: position))
         .accessibilityLabel(Self.name(account))
         .accessibilityValue(isActive ? "Active" : (needsSignIn ? "Needs sign-in"
-            : (showsUnread ? Self.unreadValue(state.switcherCount) : "")))
+            : (showsUnread ? Self.unreadValue(count, mode) : "")))
         .accessibilityHint("Control-\(position) switches to this account")
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
@@ -141,8 +153,27 @@ public struct AccountSwitcherView: View {
         return "\(name(account)) · \(account.email)\(shortcut)"
     }
 
-    static func unreadValue(_ count: Int) -> String {
-        "\(count > 99 ? "More than 99" : String(count)) important unread"
+    static func unreadValue(_ count: Int, _ mode: AccountCountMode) -> String {
+        countPhrase(count > 99 ? "More than 99" : String(count), mode)
+    }
+
+    static func countPhrase(_ count: String, _ mode: AccountCountMode) -> String {
+        mode == .inbox ? "\(count) unread in Inbox" : "\(count) important unread"
+    }
+
+    static func allInboxesTooltip(_ count: Int?, _ mode: AccountCountMode) -> String {
+        guard let count, count > 0 else { return "All Inboxes  ⌃0" }
+        return "All Inboxes · \(countPhrase(count.formatted(), mode))  ⌃0"
+    }
+
+    private func store<Value: Codable & Sendable & Equatable>(_ key: AppSettingKey<Value>, _ value: Value) {
+        guard let settings = router.environment.settings else { return }
+        let notices = router.environment.notices
+        Task {
+            do { try await settings.set(key, value) } catch {
+                notices.post("Couldn't change this setting", style: .error, actionTitle: nil)
+            }
+        }
     }
 
     static func name(_ account: Account) -> String {

@@ -95,7 +95,7 @@ private struct TwoAccountStatusSource: MailDataSource {
         await eventually { router.accounts.count == 2 && router.accounts.allSatisfy { $0.counts != nil } }
         for state in router.accounts {
             let counts = try #require(state.counts)
-            #expect(state.switcherCount == (counts.importantUnread ?? state.firstTabUnread),
+            #expect(state.badgeCount(.important) == (counts.importantUnread ?? state.firstTabUnread),
                     "the Dock badge's counter for that account")
         }
     }

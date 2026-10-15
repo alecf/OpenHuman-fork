@@ -278,10 +278,28 @@ public final class AccountState: Identifiable {
 
     public var firstTabUnread: Int { tabs.first?.unread ?? 0 }
 
-    public var switcherCount: Int { counts?.importantUnread ?? firstTabUnread }
+    public func badgeCount(_ mode: AccountCountMode) -> Int? {
+        Self.badgeCount(importantUnread: counts?.importantUnread, inboxUnread: counts?.inboxUnread,
+                        firstTabUnread: firstTabUnread, mode: mode)
+    }
+
+    public nonisolated static func badgeCount(importantUnread: Int?, inboxUnread: Int?, firstTabUnread: Int,
+                                              mode: AccountCountMode) -> Int? {
+        switch mode {
+        case .important: importantUnread ?? firstTabUnread
+        case .inbox: inboxUnread ?? firstTabUnread
+        case .off: nil
+        }
+    }
 
     public nonisolated static func switcherBadge(_ count: Int) -> String? {
         count <= 0 ? nil : (count > 99 ? "99+" : String(count))
+    }
+
+    public nonisolated static func titleCount(for location: MailLocation, total: Int?) -> String? {
+        if location == .system(.allMail) || location == .system(.done) { return nil }
+        guard let total, total > 0 else { return nil }
+        return total > 999 ? "999+" : String(total)
     }
 
     public func title(for location: MailLocation) -> String {

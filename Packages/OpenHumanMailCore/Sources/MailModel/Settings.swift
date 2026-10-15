@@ -111,6 +111,21 @@ public enum AppSettings {
     }
 }
 
+public enum AccountCountMode: String, Sendable, Hashable, Codable, CaseIterable {
+    case important
+    case inbox
+    case off
+
+    public init(from decoder: any Decoder) throws {
+        self = Self(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .important
+    }
+}
+
+extension AppSettings {
+    public static let accountCounts = AppSettingKey(name: "ui.account_counts", defaultValue: AccountCountMode.important)
+    public static let allInboxesShown = AppSettingKey(name: "ui.all_inboxes", defaultValue: true)
+}
+
 public struct ShortcutUseCount: Sendable, Hashable, Codable {
     public var keyboard: Int
     public var mouse: Int
