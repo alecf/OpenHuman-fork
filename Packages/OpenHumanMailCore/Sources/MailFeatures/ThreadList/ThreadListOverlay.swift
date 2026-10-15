@@ -44,6 +44,15 @@ public struct RowPatch: Sendable, Hashable {
         return true
     }
 
+    func superseded(by newer: RowPatch) -> RowPatch {
+        let relabeled = newer.addUserLabels.union(newer.removeUserLabels)
+        return RowPatch(isUnread: newer.isUnread == nil ? isUnread : nil,
+                        isStarred: newer.isStarred == nil ? isStarred : nil,
+                        reminderAt: newer.reminderAt == nil ? reminderAt : nil,
+                        addUserLabels: addUserLabels.subtracting(relabeled),
+                        removeUserLabels: removeUserLabels.subtracting(relabeled))
+    }
+
     func merged(with other: RowPatch) -> RowPatch {
         RowPatch(isUnread: other.isUnread ?? isUnread, isStarred: other.isStarred ?? isStarred,
                  reminderAt: other.reminderAt ?? reminderAt,
@@ -186,6 +195,14 @@ public struct ThreadListOverlay: Sendable {
     @discardableResult
     public mutating func add(_ effect: OptimisticEffect, at now: Date) -> OptimisticTicket? {
         guard !effect.isEmpty else { return nil }
+        for (key, patch) in effect.patches {
+            for i in entries.indices {
+                guard let older = entries[i].patches[key] else { continue }
+                let rest = older.superseded(by: patch)
+                entries[i].patches[key] = rest.isEmpty ? nil : rest
+            }
+        }
+        entries.removeAll(where: \.isSettled)
         let id = nextID
         nextID += 1
         entries.append(Entry(id: id, createdAt: now, hidden: effect.hidden, patches: effect.patches))

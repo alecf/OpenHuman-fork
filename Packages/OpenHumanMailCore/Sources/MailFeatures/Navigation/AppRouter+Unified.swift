@@ -22,7 +22,7 @@ extension AppRouter {
             guard let self, self.environment.overlays.canPresent(.labelPicker) else { return false }
             self.environment.overlays.present(.labelPicker(targets: keys, mode: .label))
             return true
-        })
+        }, localReads: accounts.reduce(into: [:]) { $0.merge($1.localReads) { max($0, $1) } })
         unifiedInbox = model
         model.start(data: environment.data)
         return true

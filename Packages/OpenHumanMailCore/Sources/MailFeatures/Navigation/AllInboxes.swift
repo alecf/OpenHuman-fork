@@ -36,11 +36,14 @@ public final class AllInboxesModel {
     @ObservationIgnored private let onOpen: @MainActor (ThreadKey) -> Void
     @ObservationIgnored private let onDone: @MainActor ([ThreadKey]) -> Bool
     @ObservationIgnored private let onLabel: @MainActor ([ThreadKey]) -> Bool
+    @ObservationIgnored private var reads = ThreadListOverlay()
 
     public init(accounts: [Account], open: @escaping @MainActor (ThreadKey) -> Void,
                 done: @escaping @MainActor ([ThreadKey]) -> Bool,
-                label: @escaping @MainActor ([ThreadKey]) -> Bool = { _ in false }) {
+                label: @escaping @MainActor ([ThreadKey]) -> Bool = { _ in false },
+                localReads: [ThreadKey: Date] = [:]) {
         self.accounts = accounts
+        for (key, date) in localReads { reads.markReadLocally(key, through: date) }
         self.onLabel = label
         chipNames = Dictionary(accounts.map { ($0.id, $0.alias ?? $0.email) }, uniquingKeysWith: { first, _ in first })
         self.onOpen = open
@@ -111,7 +114,9 @@ public final class AllInboxesModel {
         let order = accounts.map(\.id)
         let chips = Dictionary(accounts.map { ($0.id, $0.alias ?? $0.email) }, uniquingKeysWith: { first, _ in first })
         chipNames = chips
-        inboxRows = Self.merge(windows, order: order).map { Row(thread: $0, account: chips[$0.id.account] ?? "") }
+        inboxRows = Self.merge(windows, order: order).map {
+            Row(thread: reads.locallyRead($0), account: chips[$0.id.account] ?? "")
+        }
         isLoading = windows.count + failedAccounts.count < accounts.count
         refreshRows()
     }
@@ -194,7 +199,9 @@ public final class AllInboxesModel {
     private func finishSearch(_ found: [AccountID: [ThreadRow]], failed: [AccountID], generation: Int) {
         guard generation == searchGeneration else { return }
         let order = accounts.map(\.id)
-        searchResults = Self.merge(found, order: order).map { Row(thread: $0, account: chipNames[$0.id.account] ?? "") }
+        searchResults = Self.merge(found, order: order).map {
+            Row(thread: reads.locallyRead($0), account: chipNames[$0.id.account] ?? "")
+        }
         searchFailedAccounts = failed
         isSearching = false
         refreshRows()

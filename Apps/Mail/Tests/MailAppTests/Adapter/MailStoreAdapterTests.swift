@@ -64,6 +64,27 @@ private func first<T: Sendable>(_ stream: AsyncThrowingStream<T, Error>, where p
     #expect(body == .available(expected))
 }
 
+@Test(.timeLimit(.minutes(1))) func aConversationOnlyInTrashOrSpamShowsItsMessages() async throws {
+    let (store, account) = try FixtureStoreSeeder.makeStore(corpus: FakeCorpus.make(threadCount: 2, now: now))
+    let adapter = MailStoreAdapter(store: store)
+    let binned = ["TRASH", "SPAM"].map { label in
+        MessageUpsert(
+            gmailMessageID: GmailMessageID("binned-\(label)"), gmailThreadID: GmailThreadID("binned-t-\(label)"),
+            historyID: HistoryID(10_000), internalDate: now.addingTimeInterval(3_600),
+            labelIDs: [GmailLabelID(label), GmailLabelID("UNREAD")], snippet: "Binned", sizeEstimate: 10,
+            headers: MessageHeaderFields(subject: "Binned \(label)", from: EmailAddress(name: "Dana Ruiz", email: "dana@example.com"),
+                                         to: [EmailAddress(email: FakeCorpus.me.email)], cc: [], bcc: [], replyTo: [], references: []))
+    }
+    _ = try store.upsertMessages(binned, account: account, generation: 1)
+    for message in binned {
+        let row = try #require(try await adapter.localThread(account, gmailThreadID: message.gmailThreadID))
+        #expect(row.isUnread)
+        let detail = try #require(try await first(adapter.threadDetail(row.id)))
+        #expect(detail.messages.map(\.id.gmailMessageID) == [message.gmailMessageID], "opening it shows the message")
+        #expect(detail.messages.first?.isUnread == true)
+    }
+}
+
 @Test(.timeLimit(.minutes(1))) func missingBodyIsFetchingAndAsksSyncOnce() async throws {
     let corpus = FakeCorpus.make(threadCount: 3, now: now)
     let (store, account) = try FixtureStoreSeeder.makeStore(corpus: corpus, withBodies: false)
