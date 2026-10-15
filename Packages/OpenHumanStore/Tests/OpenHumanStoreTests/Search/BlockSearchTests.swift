@@ -55,7 +55,7 @@ import Testing
         let found = try threads(BlockMatcher.cleanupQuery(kind: .domain, value: "acme.example"))
         #expect(found.isSuperset(of: ["t-news", "t-sub", "t-plus"]), "the domain and its subdomains")
         #expect(!found.contains("t-filed"), "only the inbox")
-        #expect(found.contains("t-look"))
+        #expect(!found.contains("t-look"), "a lookalike domain is not found")
         #expect(!BlockMatcher.matches(BlockRule(kind: .domain, value: "acme.example", createdAt: Date())!,
                                       address: "promo@acme.example.net"))
     }

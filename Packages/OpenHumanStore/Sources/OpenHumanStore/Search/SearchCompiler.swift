@@ -135,7 +135,7 @@ enum SearchCompiler {
             case let .after(date): add(ms(date)); return "m.internal_date >= ?"
             case let .larger(n): add(Int64(n)); return "m.size_estimate > ?"
             case let .smaller(n): add(Int64(n)); return "m.size_estimate < ?"
-            case let .listID(id): add(like(id)); return "m.list_id LIKE ? ESCAPE '\\'"
+            case let .listID(id): return list(id)
             case let .rfc822msgid(id): add(id); return "m.rfc822_message_id = ? COLLATE NOCASE"
             case .anywhere: return "1"
             case .not, .or, .and: return sql(term)
@@ -167,14 +167,11 @@ enum SearchCompiler {
 
         mutating func address(_ field: AddressField, _ value: String) -> String {
             let isMe = value.lowercased() == "me"
+            let pattern = AddressPattern(value, foldingCase: false)
             switch field {
             case .from:
                 if isMe { return "m.is_from_me = 1" }
-                if value.contains("@"), !value.hasPrefix("@") {
-                    add(value); return "m.from_email = ?"
-                }
-                add(like(value)); add(like(value))
-                return "(m.from_email LIKE ? ESCAPE '\\' OR m.from_name LIKE ? ESCAPE '\\')"
+                return addressMatch(pattern, email: "m.from_email", name: "m.from_name")
             case .to, .cc, .bcc:
                 let column = "m.\(field.rawValue)_json"
                 if isMe {
@@ -183,11 +180,39 @@ enum SearchCompiler {
                         AND json_extract(j.value, '$.e') = a.email COLLATE NOCASE)
                         """
                 }
-                add(like(value)); add(like(value))
-                return """
-                    EXISTS (SELECT 1 FROM json_each(\(column)) j WHERE json_extract(j.value, '$.e') LIKE ? ESCAPE '\\' \
-                    OR json_extract(j.value, '$.n') LIKE ? ESCAPE '\\')
-                    """
+                let match = addressMatch(pattern, email: "json_extract(j.value, '$.e')", name: "json_extract(j.value, '$.n')")
+                return "EXISTS (SELECT 1 FROM json_each(\(column)) j WHERE \(match))"
+            }
+        }
+
+        mutating func addressMatch(_ pattern: AddressPattern, email: String, name: String) -> String {
+            switch pattern.kind {
+            case .nothing: return "0"
+            case let .address(address): add(address); return "\(email) = ? COLLATE NOCASE"
+            case let .domain(domain):
+                let escaped = like(domain, contains: false)
+                add("%@" + escaped); add("%@%." + escaped)
+                return "(\(email) LIKE ? ESCAPE '\\' OR \(email) LIKE ? ESCAPE '\\')"
+            case let .text(text):
+                add(like(text)); add(like(text))
+                return "(\(email) LIKE ? ESCAPE '\\' OR \(name) LIKE ? ESCAPE '\\')"
+            }
+        }
+
+        mutating func list(_ value: String) -> String {
+            let id = "trim(substr(m.list_id, instr(m.list_id, '<') + 1), '<> ')"
+            switch AddressPattern(value, foldingCase: false).kind {
+            case .nothing: return "0"
+            case let .address(address):
+                add(like(address.replacingOccurrences(of: "@", with: "."), contains: false))
+                return "\(id) LIKE ? ESCAPE '\\'"
+            case let .domain(domain):
+                let escaped = like(domain, contains: false)
+                add(escaped); add("%." + escaped)
+                return "(\(id) LIKE ? ESCAPE '\\' OR \(id) LIKE ? ESCAPE '\\')"
+            case let .text(text):
+                add(like(text))
+                return "m.list_id LIKE ? ESCAPE '\\'"
             }
         }
 

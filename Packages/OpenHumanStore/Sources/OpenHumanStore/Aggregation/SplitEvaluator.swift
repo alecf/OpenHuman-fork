@@ -120,15 +120,20 @@ struct LabelMatcher {
 }
 
 struct AddressPattern {
-    private enum Kind { case address(String), domain(String), text(String), nothing }
-    private let kind: Kind
+    enum Kind { case address(String), domain(String), text(String), nothing }
+    let kind: Kind
 
-    init(_ raw: String) {
-        let p = raw.trimmingCharacters(in: .whitespaces).lowercased()
+    init(_ raw: String, foldingCase: Bool = true) {
+        var p = raw.trimmingCharacters(in: .whitespaces)
+        if foldingCase { p = p.lowercased() }
+        if let open = p.lastIndex(of: "<"), let close = p[open...].firstIndex(of: ">") {
+            p = p[p.index(after: open)..<close].trimmingCharacters(in: .whitespaces)
+        }
+        if p.hasPrefix("*@") { p.removeFirst() }
         if p.isEmpty || p == "@" { kind = .nothing }
         else if p.hasPrefix("@") { kind = .domain(String(p.dropFirst())) }
         else if p.contains("@") { kind = .address(p) }
-        else if p.contains(".") { kind = .domain(p) }
+        else if p.contains("."), !p.contains(where: \.isWhitespace) { kind = .domain(p) }
         else { kind = .text(p) }
     }
 
