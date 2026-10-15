@@ -333,7 +333,8 @@ public final class ReviewQueueModel {
     public func discard() -> Task<Void, Never>? {
         guard let row = current, row.isActionable, let draft = row.draft, let commands else { return nil }
         let key = draft.id
-        pendingDiscards[row.id] = PendingReviewDiscard(draft: key, row: row)
+        let pending = PendingReviewDiscard(draft: key, row: row, source: source)
+        pendingDiscards[row.id] = pending
         advance(after: row.id, .discarded)
         let id = row.id
         let window = timing.discardWindow
@@ -341,6 +342,7 @@ public final class ReviewQueueModel {
         return track(Task {
             do { try await commands.setReviewState(key, .rejected) } catch {
                 self.pendingDiscards[id] = nil
+                self.restore(pending)
                 self.failed(error)
                 return
             }
@@ -362,12 +364,27 @@ public final class ReviewQueueModel {
 
     func finishDiscard(_ id: String) async {
         guard let pending = pendingDiscards.removeValue(forKey: id), let commands else { return }
-        try? await commands.discardDraft(pending.draft)
+        do {
+            try await commands.discardDraft(pending.draft)
+        } catch MailPortError.notFound(_) {
+            // Deleted elsewhere already: nothing to bring back
+        } catch {
+            try? await commands.setReviewState(pending.draft, .pending)
+            restore(pending)
+            let detail = (error as? MailPortError)?.description ?? String(localized: "Try again.")
+            environment.notices.post(String(localized: "Couldn't discard the draft. \(detail)"), style: .error)
+        }
     }
 
     func undoDiscard(row id: String) async throws {
         guard let pending = pendingDiscards.removeValue(forKey: id), let commands = environment.commands else { return }
         try await commands.setReviewState(pending.draft, .pending)
+        restore(pending)
+    }
+
+    private func restore(_ pending: PendingReviewDiscard) {
+        guard pending.source == source else { return }
+        let id = pending.row.id
         counts.discarded = max(0, counts.discarded - 1)
         isFinished = false
         switch source {
@@ -376,6 +393,7 @@ public final class ReviewQueueModel {
             var restored = pending.row
             restored.outcome = nil
             if !rows.contains(where: { $0.id == id }) { rows.append(restored) }
+            refreshCursor()
         case .link:
             update(id) { $0.outcome = nil }
         case .closed:
@@ -441,6 +459,7 @@ public final class ReviewQueueModel {
 struct PendingReviewDiscard {
     let draft: DraftKey
     let row: ReviewQueueModel.Row
+    let source: ReviewQueueModel.Source
 }
 
 struct ReviewUndoAction: Codable, Sendable {

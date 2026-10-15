@@ -188,6 +188,9 @@ public final class ThreadActionHandler: ActionHandler {
         guard allowsChanges(.createLabel), let commands = environment?.commands, let undo = environment?.undo else {
             return nil
         }
+        let list = (host as? AppRouter)?.accounts.first { $0.id == account }?.list
+        let ticket = list?.applyOptimisticLabel(named: name, to: targets)
+        let restore: @MainActor () -> Void = { [weak list] in if let ticket { list?.revertOptimistic(ticket) } }
         let feedback = self.feedback
         return Task {
             do {
@@ -195,8 +198,10 @@ public final class ThreadActionHandler: ActionHandler {
                     try await commands.createLabel(account, name: name, applyTo: targets)
                 }
             } catch MailPortError.blockedBySafeMode {
+                restore()
                 feedback.refuse(.createLabel, .safeMode)
             } catch {
+                restore()
                 feedback.failed("Couldn't create label \(name)")
             }
         }

@@ -6,20 +6,23 @@ public struct RowPatch: Sendable, Hashable {
     public var isUnread: Bool?
     public var isStarred: Bool?
     public var reminderAt: Date??
+    public var snoozedUntil: Date??
     public var addUserLabels: Set<Int64>
     public var removeUserLabels: Set<Int64>
 
-    public init(isUnread: Bool? = nil, isStarred: Bool? = nil, reminderAt: Date?? = nil,
+    public init(isUnread: Bool? = nil, isStarred: Bool? = nil, reminderAt: Date?? = nil, snoozedUntil: Date?? = nil,
                 addUserLabels: Set<Int64> = [], removeUserLabels: Set<Int64> = []) {
         self.isUnread = isUnread
         self.isStarred = isStarred
         self.reminderAt = reminderAt
+        self.snoozedUntil = snoozedUntil
         self.addUserLabels = addUserLabels
         self.removeUserLabels = removeUserLabels
     }
 
     public var isEmpty: Bool {
-        isUnread == nil && isStarred == nil && reminderAt == nil && addUserLabels.isEmpty && removeUserLabels.isEmpty
+        isUnread == nil && isStarred == nil && reminderAt == nil && snoozedUntil == nil && addUserLabels.isEmpty
+            && removeUserLabels.isEmpty
     }
 
     public func applied(to row: ThreadRow) -> ThreadRow {
@@ -32,13 +35,14 @@ public struct RowPatch: Sendable, Hashable {
         return row.replacing(
             unreadCount: unread == row.isUnread ? row.unreadCount : (unread ? max(1, row.unreadCount) : 0),
             isUnread: unread, isStarred: isStarred ?? row.isStarred, userLabelIDs: labels,
-            reminderAt: reminderAt ?? row.reminderAt)
+            reminderAt: reminderAt ?? row.reminderAt, snoozedUntil: snoozedUntil ?? row.snoozedUntil)
     }
 
     public func isReflected(in row: ThreadRow) -> Bool {
         if let isUnread, row.isUnread != isUnread { return false }
         if let isStarred, row.isStarred != isStarred { return false }
         if let reminderAt, row.reminderAt != reminderAt { return false }
+        if let snoozedUntil, row.snoozedUntil != snoozedUntil { return false }
         if !addUserLabels.isSubset(of: row.userLabelIDs) { return false }
         if row.userLabelIDs.contains(where: removeUserLabels.contains) { return false }
         return true
@@ -49,13 +53,14 @@ public struct RowPatch: Sendable, Hashable {
         return RowPatch(isUnread: newer.isUnread == nil ? isUnread : nil,
                         isStarred: newer.isStarred == nil ? isStarred : nil,
                         reminderAt: newer.reminderAt == nil ? reminderAt : nil,
+                        snoozedUntil: newer.snoozedUntil == nil ? snoozedUntil : nil,
                         addUserLabels: addUserLabels.subtracting(relabeled),
                         removeUserLabels: removeUserLabels.subtracting(relabeled))
     }
 
     func merged(with other: RowPatch) -> RowPatch {
         RowPatch(isUnread: other.isUnread ?? isUnread, isStarred: other.isStarred ?? isStarred,
-                 reminderAt: other.reminderAt ?? reminderAt,
+                 reminderAt: other.reminderAt ?? reminderAt, snoozedUntil: other.snoozedUntil ?? snoozedUntil,
                  addUserLabels: addUserLabels.subtracting(other.removeUserLabels).union(other.addUserLabels),
                  removeUserLabels: removeUserLabels.subtracting(other.addUserLabels).union(other.removeUserLabels))
     }
@@ -86,8 +91,11 @@ public struct OptimisticEffect: Sendable, Equatable {
         }
         let inboxLike = location.isInboxLike
         switch command {
-        case .markDone, .snooze:
+        case .markDone:
             return hide(inboxLike)
+        case .snooze(_, let until):
+            // The store keeps wake times to the minute; matching it lets the patch settle
+            return inboxLike ? hide(true) : patch(RowPatch(snoozedUntil: .some(ScheduleStamp.floorToMinute(until))))
         case .trash:
             return hide(location != .system(.trash))
         case .untrash:
@@ -96,8 +104,11 @@ public struct OptimisticEffect: Sendable, Equatable {
             return hide(location != .system(.spam))
         case .markNotSpam:
             return hide(location == .system(.spam))
-        case .unsnooze, .clearSnooze:
-            return hide(location == .system(.snoozed) || location == .system(.done))
+        case .unsnooze:
+            let leaves = location == .system(.snoozed) || location == .system(.done)
+            return leaves ? hide(true) : patch(RowPatch(snoozedUntil: .some(nil)))
+        case .clearSnooze:
+            return location == .system(.snoozed) ? hide(true) : patch(RowPatch(snoozedUntil: .some(nil)))
         case .moveToInbox:
             return hide(location == .system(.trash) || location == .system(.spam) || location == .system(.done))
         case .markRead:
@@ -233,6 +244,24 @@ public struct ThreadListOverlay: Sendable {
     }
 
     @discardableResult
+    mutating func relabel(_ swaps: [Int64: Int64]) -> Set<ThreadKey> {
+        guard !swaps.isEmpty else { return [] }
+        var touched = Set<ThreadKey>()
+        for i in entries.indices {
+            for (key, patch) in entries[i].patches {
+                var next = patch
+                next.addUserLabels = Set(patch.addUserLabels.map { swaps[$0] ?? $0 })
+                next.removeUserLabels = Set(patch.removeUserLabels.map { swaps[$0] ?? $0 })
+                guard next != patch else { continue }
+                entries[i].patches[key] = next
+                touched.insert(key)
+            }
+        }
+        if !touched.isEmpty { version += 1 }
+        return touched
+    }
+
+    @discardableResult
     public mutating func expire(now: Date) -> Bool {
         let before = entries.count
         entries.removeAll { now.timeIntervalSince($0.createdAt) >= Self.lifetime }
@@ -286,13 +315,14 @@ public struct ThreadListOverlay: Sendable {
 
 extension ThreadRow {
     public func replacing(unreadCount: Int? = nil, isUnread: Bool? = nil, isStarred: Bool? = nil,
-                          userLabelIDs: [Int64]? = nil, reminderAt: Date?? = nil) -> ThreadRow {
+                          userLabelIDs: [Int64]? = nil, reminderAt: Date?? = nil,
+                          snoozedUntil: Date?? = nil) -> ThreadRow {
         ThreadRow(id: id, subject: subject, snippet: snippet, participantsDisplay: participantsDisplay,
                   participants: participants, messageCount: messageCount, unreadCount: unreadCount ?? self.unreadCount,
                   draftCount: draftCount, attachmentCount: attachmentCount, isUnread: isUnread ?? self.isUnread,
                   isStarred: isStarred ?? self.isStarred, isImportant: isImportant,
                   userLabelIDs: userLabelIDs ?? self.userLabelIDs, lastMessageAt: lastMessageAt, sortAt: sortAt,
-                  snoozedUntil: snoozedUntil, reminderAt: reminderAt ?? self.reminderAt,
+                  snoozedUntil: snoozedUntil ?? self.snoozedUntil, reminderAt: reminderAt ?? self.reminderAt,
                   scheduledSendAt: scheduledSendAt, hasPendingChanges: hasPendingChanges,
                   categoryLabelIDs: categoryLabelIDs)
     }
