@@ -16,13 +16,13 @@ private let key = ThreadKey(account: AccountID(1), rowID: 1, gmailThreadID: Gmai
 
 private func row(important: Bool = false, categories: [Int64] = [], labels: [Int64] = [], starred: Bool = false,
                  attachments: Int = 0, drafts: Int = 0, reminderAt: Date? = nil, snoozedUntil: Date? = nil,
-                 pending: Bool = false) -> ThreadRow {
+                 pending: Bool = false, returned: Bool = false) -> ThreadRow {
     ThreadRow(id: key, subject: "Q4 budget", snippet: "Updated numbers\nattached", participantsDisplay: "Dana Ruiz",
               participants: [], messageCount: 1, unreadCount: 1, draftCount: drafts, attachmentCount: attachments,
               isUnread: true, isStarred: starred, isImportant: important, userLabelIDs: labels,
               lastMessageAt: now.addingTimeInterval(-3_600), sortAt: now.addingTimeInterval(-3_600),
               snoozedUntil: snoozedUntil, reminderAt: reminderAt, hasPendingChanges: pending,
-              categoryLabelIDs: categories)
+              categoryLabelIDs: categories, returnedByReminder: returned)
 }
 
 private let labels: [Int64: LabelInfo] = [
@@ -88,6 +88,34 @@ private let labels: [Int64: LabelInfo] = [
                                           location: .system(.inbox), now: now)
     #expect(label == "Unread, Dana Ruiz, Q4 budget, 1:00\u{202F}PM, has attachment, starred, important, "
             + "category Promotions, label Finance, Updated numbers attached")
+}
+
+@Test func aReturnedReminderLeadsTheChipsWithItsExactWording() {
+    let context = ThreadRowChipContext(location: .system(.inbox), labels: labels)
+    let chips = ThreadRowFormatting.chips(for: row(important: true, categories: [10], labels: [20, 21, 22], returned: true),
+                                          context: context)
+    #expect(chips.map(\.kind) == [.returned, .important, .category, .label, .label, .overflow])
+    #expect(chips.first?.title == "Reminder returned")
+    #expect(ThreadRowChip.reminderReturned == ThreadRowChip(kind: .returned, title: "Reminder returned"))
+    #expect(!ThreadRowFormatting.chips(for: row(important: true), context: context).contains { $0.kind == .returned })
+    let starred = ThreadRowChipContext(location: .system(.starred), labels: labels)
+    #expect(ThreadRowFormatting.chips(for: row(returned: true), context: starred).map(\.kind) == [.returned])
+}
+
+@Test func theVIPChipFollowsAReturnedReminder() {
+    let important = ThreadRowChip(kind: .important, title: "Important")
+    #expect(ThreadRowFormatting.withVIPChip([.reminderReturned, important], title: "VIP").map(\.kind)
+        == [.returned, .vip, .important])
+    #expect(ThreadRowFormatting.withVIPChip([important], title: "VIP").map(\.kind) == [.vip, .important])
+    #expect(ThreadRowFormatting.withVIPChip([], title: "VIP") == [ThreadRowChip(kind: .vip, title: "VIP")])
+}
+
+@Test func voiceOverReadsTheReturnedReminderWordForWord() {
+    let context = ThreadRowChipContext(location: .system(.inbox), labels: labels)
+    let r = row(labels: [20], returned: true)
+    let label = format.accessibilityLabel(r, chips: ThreadRowFormatting.chips(for: r, context: context),
+                                          location: .system(.inbox), now: now)
+    #expect(label == "Unread, Dana Ruiz, Q4 budget, 1:00\u{202F}PM, Reminder returned, label Finance, Updated numbers attached")
 }
 
 @Test func emptyStates() {

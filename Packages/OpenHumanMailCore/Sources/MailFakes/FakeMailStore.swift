@@ -149,6 +149,7 @@ struct FakeThread: Sendable {
     var subject: String
     var messages: [FakeMessage]
     var boostAt: Date?
+    var reminderReturnAt: Date?
 }
 
 struct FakeDraft: Sendable {

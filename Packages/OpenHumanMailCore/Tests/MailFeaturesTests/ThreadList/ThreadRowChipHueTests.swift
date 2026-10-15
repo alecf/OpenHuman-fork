@@ -11,6 +11,10 @@ import Testing
                 "a Superhuman category not imported yet stays muted grey")
     }
 
+    @Test func aReturnedReminderIsNeutralLikeOtherSystemChips() {
+        #expect(ThreadRowChip.reminderReturned.hue == .neutral)
+    }
+
     @Test func categoriesGoByTheirTitle() {
         #expect(ThreadRowChip(kind: .category, title: "Marketing").hue == .coral)
         #expect(ThreadRowChip(kind: .category, title: "PROMOTIONS").hue == .coral)

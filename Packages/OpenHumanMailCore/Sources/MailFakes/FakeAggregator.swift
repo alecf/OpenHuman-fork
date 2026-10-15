@@ -117,7 +117,7 @@ enum FakeAggregator {
                     userLabelRows: [GmailLabelID: Int64], categoryLabelRows: [GmailLabelID: Int64] = [:],
                     draftCount: Int = 0, sortAt: Date? = nil,
                     snoozedUntil: Date? = nil, reminderAt: Date? = nil, scheduledSendAt: Date? = nil,
-                    hasPendingChanges: Bool = false) -> ThreadRow {
+                    hasPendingChanges: Bool = false, returnedByReminder: Bool = false) -> ThreadRow {
         let scope = scope(messages)
         let (display, participants) = Self.participants(scope: scope, me: me)
         var unread = 0, attachments = 0
@@ -141,7 +141,8 @@ enum FakeAggregator {
             attachmentCount: attachments, isUnread: unread > 0, isStarred: starred, isImportant: important,
             userLabelIDs: labelRows.sorted(), lastMessageAt: lastAt, sortAt: sortAt ?? lastAt,
             snoozedUntil: snoozedUntil, reminderAt: reminderAt, scheduledSendAt: scheduledSendAt,
-            hasPendingChanges: hasPendingChanges, categoryLabelIDs: categoryRows.sorted())
+            hasPendingChanges: hasPendingChanges, categoryLabelIDs: categoryRows.sorted(),
+            returnedByReminder: returnedByReminder)
     }
 
     static func participants(scope: [MessageView], me: Set<String>) -> (String, [Participant]) {

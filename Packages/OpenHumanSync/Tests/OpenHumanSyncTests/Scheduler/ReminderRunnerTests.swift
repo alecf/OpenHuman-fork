@@ -172,6 +172,26 @@ import Testing
         await engine.stop()
     }
 
+    @Test func aReminderFiredLateTagsTheThreadAsReturned() async throws {
+        let h = try await EngineHarness()
+        let thread = h.threads[1]
+        try await syncOnce(h)
+        await h.gmail.simulateWebArchive(threadID: thread)
+        try await syncOnce(h)
+        let due = h.clock.now.addingTimeInterval(600)
+        _ = try h.store.apply(.setReminder(try h.ref(thread), dueAt: due, condition: .always), origin: .app)
+        #expect(try h.store.thread(try h.ref(thread))?.returnedByReminder == false)
+        let syncer = AccountSyncer(account: h.account, store: h.store, api: h.gmail, clock: h.clock)
+        let context = RunnerContext(account: h.account, store: h.store, syncer: syncer, api: h.gmail, clock: h.clock,
+                                    jitter: .zero, emit: { _ in }, pokeDrainer: {}, isReachable: { true },
+                                    labelsFreshness: LabelsFreshness())
+        try await ReminderRunner(context).reconcile(account: h.account, now: due.addingTimeInterval(3 * 86_400))
+        #expect(try activeReminders(h).isEmpty)
+        #expect(try h.inbox().first == thread)
+        #expect(try h.store.thread(try h.ref(thread))?.returnedByReminder == true)
+        #expect(try h.store.thread(try h.ref(h.threads[0]))?.returnedByReminder == false)
+    }
+
     @Test func readOnlyRunsNoReminderScheduler() async throws {
         let h = try await EngineHarness(safeMode: .readOnly, scopes: [GmailScope.readonly])
         try await syncOnce(h)

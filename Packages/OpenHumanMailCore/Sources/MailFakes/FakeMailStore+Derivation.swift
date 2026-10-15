@@ -36,7 +36,7 @@ extension ThreadRow {
             attachmentCount: attachmentCount, isUnread: isUnread, isStarred: isStarred, isImportant: isImportant,
             userLabelIDs: userLabelIDs, lastMessageAt: lastMessageAt, sortAt: sortAt, snoozedUntil: snoozedUntil,
             reminderAt: reminderAt, scheduledSendAt: scheduledSendAt, hasPendingChanges: hasPendingChanges,
-            categoryLabelIDs: categoryLabelIDs, searchMatch: searchMatch)
+            categoryLabelIDs: categoryLabelIDs, searchMatch: searchMatch, returnedByReminder: returnedByReminder)
     }
 }
 
@@ -112,10 +112,12 @@ extension State {
             if summary.status == .scheduled, let at = summary.sendAt { scheduledAt = min(scheduledAt ?? at, at) }
         }
         let reminder = reminders[key]
+        let returned = boost != nil && reminder == nil && thread.reminderReturnAt == thread.boostAt
         let row = FakeAggregator.row(
             key: key, subject: thread.subject, messages: views, me: account.me, userLabelRows: account.userLabelRows,
             categoryLabelRows: account.categoryLabelRows, draftCount: listed.count, sortAt: lastAt, snoozedUntil: snooze?.wakeAt, reminderAt: reminder?.dueAt,
-            scheduledSendAt: scheduledAt, hasPendingChanges: !(pendingByThread[key]?.isEmpty ?? true))
+            scheduledSendAt: scheduledAt, hasPendingChanges: !(pendingByThread[key]?.isEmpty ?? true),
+            returnedByReminder: returned)
 
         var result = DerivedThread(
             row: row, lastAt: lastAt, hasVisible: !visible.isEmpty, inInbox: inInbox, inboxSortAt: inboxSortAt,
@@ -294,7 +296,7 @@ extension State {
         }
         return ConversationDetail(id: key, subject: thread.subject, messages: shown.map(\.summary), drafts: threadDrafts,
                                   userLabelIDs: d.row.userLabelIDs, snooze: d.snooze, reminder: reminder,
-                                  isStarred: d.row.isStarred)
+                                  isStarred: d.row.isStarred, returnedByReminder: d.row.returnedByReminder)
     }
 
     mutating func tally(_ accountID: AccountID) -> (labels: [LabelInfo], counts: MailboxCountsInfo, splitTotals: [SplitKey: Int])? {

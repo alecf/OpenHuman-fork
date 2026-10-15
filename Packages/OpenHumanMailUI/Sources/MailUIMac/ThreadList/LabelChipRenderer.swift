@@ -49,7 +49,9 @@ final class LabelChipRenderer {
         let overflow = chips.first { $0.kind == .overflow }.flatMap { Int($0.title.dropFirst()) } ?? 0
         let visible = named.prefix(max(0, maximum))
         let hidden = named.count - visible.count + overflow
-        var result = visible.map { (title: $0.title.localizedLowercase, hue: $0.hue, muted: $0.isFallback) }
+        var result = visible.map {
+            (title: $0.kind == .returned ? $0.title : $0.title.localizedLowercase, hue: $0.hue, muted: $0.isFallback)
+        }
         if hidden > 0 { result.append((title: "+\(hidden)", hue: .neutral, muted: false)) }
         return result
     }

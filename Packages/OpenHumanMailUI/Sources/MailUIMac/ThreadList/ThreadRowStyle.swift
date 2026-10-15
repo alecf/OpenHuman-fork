@@ -229,7 +229,7 @@ final class ThreadRowStyle {
             case .overflow:
                 line.append(NSAttributedString(string: chip.title, attributes: attributes(metaFont, tertiary)))
                 continue
-            case .important:
+            case .important, .returned:
                 dot("●", warning, into: line)
             case .vip:
                 dot("★", warning, into: line)
@@ -278,15 +278,60 @@ final class ThreadRowStyle {
     private func appendFilledChips(_ chips: [ThreadRowChip], to line: NSMutableAttributedString) {
         let shown = LabelChipRenderer.shown(chips, maximum: Self.maximumFilledChips)
         guard !shown.isEmpty else { return }
+        var end: CGFloat = 0
         for (index, chip) in shown.enumerated() {
-            if index > 0 { gap(line, CGFloat(theme.space2)) }
-            line.append(chipAttachment(chip.title, hue: chip.hue, muted: chip.muted))
+            let start = line.length
+            if index > 0 {
+                gap(line, CGFloat(theme.space2))
+                end += CGFloat(theme.space2)
+            }
+            let image = self.chips.image(chip.title, hue: chip.hue, muted: chip.muted)
+            line.append(chipAttachment(image))
+            end += image.image.size.width
+            line.addAttribute(Self.chipEnd, value: end, range: NSRange(location: start, length: line.length - start))
         }
+        let start = line.length
         gap(line, CGFloat(theme.space3))
+        line.addAttribute(Self.chipsEnd, value: end + CGFloat(theme.space3),
+                          range: NSRange(location: start, length: line.length - start))
     }
 
-    private func chipAttachment(_ title: String, hue: LabelChipHue, muted: Bool = false) -> NSAttributedString {
-        let chip = chips.image(title, hue: hue, muted: muted)
+    static let chipEnd = NSAttributedString.Key("oh.row.chipEnd")
+    static let chipsEnd = NSAttributedString.Key("oh.row.chipsEnd")
+    static let minimumSubjectEms: CGFloat = 8
+    var minimumSubjectWidth: CGFloat { (bodyFont.pointSize * Self.minimumSubjectEms).rounded() }
+
+    func fitted(_ line: NSAttributedString, width: CGFloat) -> NSAttributedString {
+        Self.fitted(line, width: width, minimumSubject: minimumSubjectWidth)
+    }
+
+    // Chips are images and cannot truncate, so ones that would starve the subject are dropped from the end.
+    static func fitted(_ line: NSAttributedString, width: CGFloat, minimumSubject: CGFloat) -> NSAttributedString {
+        let all = NSRange(location: 0, length: line.length)
+        var chipRuns: [(end: Int, x: CGFloat)] = []
+        var location = 0
+        var range = NSRange()
+        while location < line.length,
+              let x = line.attribute(chipEnd, at: location, longestEffectiveRange: &range, in: all) as? CGFloat {
+            chipRuns.append((NSMaxRange(range), x))
+            location = NSMaxRange(range)
+        }
+        guard location < line.length,
+              let total = line.attribute(chipsEnd, at: location, longestEffectiveRange: &range, in: all) as? CGFloat
+        else { return line }
+        let budget = width - minimumSubject
+        guard total > budget else { return line }
+        let trailingGap = total - (chipRuns.last?.x ?? 0)
+        let result = NSMutableAttributedString(attributedString: line)
+        if let keep = chipRuns.last(where: { $0.x + trailingGap <= budget }) {
+            result.deleteCharacters(in: NSRange(location: keep.end, length: location - keep.end))
+        } else {
+            result.deleteCharacters(in: NSRange(location: 0, length: NSMaxRange(range)))
+        }
+        return result
+    }
+
+    private func chipAttachment(_ chip: (image: NSImage, baseline: CGFloat)) -> NSAttributedString {
         let attachment = NSTextAttachment()
         attachment.image = chip.image
         attachment.bounds = NSRect(x: 0, y: -chip.baseline, width: chip.image.size.width, height: chip.image.size.height)

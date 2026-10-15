@@ -34,6 +34,7 @@ public final class ReaderModel {
     public let thread: ThreadKey
     public private(set) var subject = ""
     public private(set) var isStarred = false
+    public private(set) var returnedByReminder = false
     public private(set) var userLabelIDs: [Int64] = []
     public private(set) var messages: [Message] = []
     public private(set) var state: LoadState = .loading
@@ -509,6 +510,7 @@ public final class ReaderModel {
     func apply(_ detail: ConversationDetail?) {
         guard let detail else {
             state = .missing
+            returnedByReminder = false
             messages = []
             pendingMessages = []
             latest = []
@@ -517,6 +519,7 @@ public final class ReaderModel {
         }
         subject = detail.subject
         isStarred = detail.isStarred
+        returnedByReminder = detail.returnedByReminder
         userLabelIDs = detail.userLabelIDs
         var held = Set(pendingMessages)
         if state == .loaded, hasInteracted {

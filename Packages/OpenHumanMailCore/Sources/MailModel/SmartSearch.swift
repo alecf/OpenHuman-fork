@@ -39,6 +39,6 @@ extension ThreadRow {
             attachmentCount: attachmentCount, isUnread: isUnread, isStarred: isStarred, isImportant: isImportant,
             userLabelIDs: userLabelIDs, lastMessageAt: lastMessageAt, sortAt: sortAt, snoozedUntil: snoozedUntil,
             reminderAt: reminderAt, scheduledSendAt: scheduledSendAt, hasPendingChanges: hasPendingChanges,
-            categoryLabelIDs: categoryLabelIDs, searchMatch: searchMatch)
+            categoryLabelIDs: categoryLabelIDs, searchMatch: searchMatch, returnedByReminder: returnedByReminder)
     }
 }

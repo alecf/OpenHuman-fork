@@ -170,6 +170,22 @@ private func row(_ n: Int64, unread: Bool = false, starred: Bool = false, labels
         #expect(overlay.patch(for: key(1)) == RowPatch(isUnread: false, isStarred: true))
         #expect(overlay.patch(for: key(2)) == RowPatch(isUnread: true))
     }
+
+    @Test func patchedAndSearchCopiesKeepTheReturnedReminderFlag() {
+        let at = Date(timeIntervalSince1970: 1_791_000_000)
+        let returned = ThreadRow(id: key(1), subject: "Subject 1", snippet: "s", participantsDisplay: "P1", participants: [],
+                                 messageCount: 1, unreadCount: 0, draftCount: 0, attachmentCount: 0, isUnread: false,
+                                 isStarred: false, isImportant: false, userLabelIDs: [], lastMessageAt: at, sortAt: at,
+                                 returnedByReminder: true)
+        #expect(returned.replacing(isUnread: true).returnedByReminder)
+        #expect(returned.replacing(isStarred: true, userLabelIDs: [5]).returnedByReminder)
+        #expect(returned.with(searchMatch: .related).returnedByReminder)
+        #expect(!row(1).replacing(isUnread: true).returnedByReminder)
+        var overlay = ThreadListOverlay()
+        overlay.add(.of(.markUnread([key(1)]), in: .system(.inbox)), at: start)
+        let patched = overlay.patch(for: key(1)).map { $0.applied(to: returned) }
+        #expect(patched?.isUnread == true && patched?.returnedByReminder == true)
+    }
 }
 
 @MainActor

@@ -147,6 +147,7 @@ extension FakeMailStore {
             if let marker = s.accounts[key.account]?.label(named: OHGmailLabels.snoozed)?.labelID { remove.insert(marker) }
             s.editServerLabels(key, add: [FakeLabels.inbox], remove: remove)
             s.threads[key]?.boostAt = now
+            s.threads[key]?.reminderReturnAt = nil
         }
     }
 
@@ -295,6 +296,7 @@ extension FakeMailStore {
                         if d.snooze == nil {
                             operations += s.labelEdit("fireReminder", [key], .visible, add: [FakeLabels.inbox], remove: [])
                             s.threads[key]?.boostAt = now
+                            s.threads[key]?.reminderReturnAt = now
                         }
                     }
                 }

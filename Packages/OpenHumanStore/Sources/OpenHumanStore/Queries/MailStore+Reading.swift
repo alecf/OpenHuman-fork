@@ -34,7 +34,10 @@ extension MailStore: MailReading {
     }
 
     public func threadPage(view: MailboxView, after: ThreadCursor?, limit: Int) throws -> ThreadPage {
-        try read { db in try Self.withCategories(Self.page(view: view, after: after, limit: limit, in: db), in: db) }
+        try read { db in
+            try ReminderReturns.decorate(Self.withCategories(Self.page(view: view, after: after, limit: limit, in: db), in: db),
+                                         in: db)
+        }
     }
 
     public func thread(_ ref: ThreadRef) throws -> ThreadListItem? {
@@ -323,7 +326,8 @@ extension MailStore {
     }
 
     static func window(view: MailboxView, limit: Int, in db: Database) throws -> ThreadWindow {
-        let p = try withCategories(page(view: view, after: nil, limit: limit, maxLimit: maxWindowLimit, in: db), in: db)
+        let p = try ReminderReturns.decorate(
+            withCategories(page(view: view, after: nil, limit: limit, maxLimit: maxWindowLimit, in: db), in: db), in: db)
         var total = 0
         if let v = try resolve(view, in: db) {
             let extra = viewFilter(view)
@@ -342,7 +346,8 @@ extension MailStore {
     static func threadItem(tid: Int64, in db: Database) throws -> ThreadListItem? {
         guard let r = try Row.fetchOne(db, sql: "SELECT \(listColumns) FROM threads t WHERE t.tid = ?", arguments: [tid])
         else { return nil }
-        return try withCategories(listItem(r, sortAt: r[14], unread: (r[8] as Int) > 0, decoder: JSONDecoder()), in: db)
+        let item = try withCategories(listItem(r, sortAt: r[14], unread: (r[8] as Int) > 0, decoder: JSONDecoder()), in: db)
+        return try ReminderReturns.decorate(item, in: db)
     }
 
     static func attachmentItems(mids: [Int64], directory: URL, in db: Database) throws -> [Int64: [AttachmentItem]] {

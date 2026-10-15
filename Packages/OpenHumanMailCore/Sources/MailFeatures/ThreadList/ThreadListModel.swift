@@ -508,7 +508,7 @@ public final class ThreadListModel {
             location: location, labels: labels, impliesImportance: impliesImportance,
             superhuman: superhumanLabels?.rules ?? SuperhumanLabelRules()),
                                               autoLabel: autoLabels?.title(for: row, labels: labels))
-        if let vips, vips.hasVIPSender(row) { chips.insert(ThreadRowChip(kind: .vip, title: VIPCenter.chipTitle), at: 0) }
+        if let vips, vips.hasVIPSender(row) { chips = ThreadRowFormatting.withVIPChip(chips, title: VIPCenter.chipTitle) }
         return chips
     }
 
