@@ -231,6 +231,22 @@ struct ThreadListViewTests {
         #expect(ListAndWindowTests.containsHostingView(view) == false, "no NSHostingView inside cells")
     }
 
+    @Test func voiceOverCanCheckARowWithoutMovingTheCursor() async throws {
+        let host = StubListHost(enabled: [.markDone, .trash, .toggleCheck])
+        let (controller, model, _, window) = try await Self.list(threads: 10, host: host)
+        defer { window.close() }
+        let cursor = model.cursor
+        let key = model.rows[2].id
+        let view = try #require(cell(controller, 2))
+        let actions = try #require(view.accessibilityCustomActions())
+        #expect(actions.map(\.name) == ["Mark done", "Trash", "Check"])
+        #expect(actions[2].handler?() == true)
+        #expect(model.selection.checked == [key] && model.cursor == cursor)
+        #expect(try #require(view.accessibilityLabel()).hasPrefix("Checked"))
+        #expect(try #require(view.accessibilityCustomActions()).last?.name == "Uncheck")
+        #expect(host.performed.isEmpty)
+    }
+
     @Test func swipeActionsComeFromTheCatalogAndFollowAvailability() async throws {
         let host = StubListHost(enabled: [.markDone, .trash])
         let (controller, _, _, window) = try await Self.list(threads: 5, host: host)
@@ -301,6 +317,57 @@ struct ThreadListViewTests {
         #expect(model.selection.checked == Set(keys[2...5]))
         #expect(table.selectedRow == 5)
         #expect(!table.allowsMultipleSelection)
+    }
+
+    @Test func commandAChecksFromTheCursorThenEverythingAndCommandShiftAChecksAll() async throws {
+        let (controller, model, _, window) = try await Self.list(threads: 12)
+        defer { window.close() }
+        let table = controller.tableView
+        let keys = model.rows.map(\.id)
+        model.setCursor(keys[3])
+        table.keyDown(with: Self.key("a", 0, .command, window: window))
+        #expect(model.selection.checked == Set(keys[3...]))
+        #expect(model.offersCheckBefore && model.headerCheck == .some)
+        table.keyDown(with: Self.key("a", 0, .command, window: window))
+        #expect(model.checkedCount == 12 && model.headerCheck == .all)
+        table.keyDown(with: Self.key("\u{1B}", 53, window: window))
+        #expect(model.headerCheck == .hidden)
+        table.keyDown(with: Self.key("A", 0, [.command, .shift], window: window))
+        #expect(model.checkedCount == 12)
+    }
+
+    @Test func theGutterBoxShowsOnHoverAndAClickOnItTogglesTheRow() async throws {
+        let (controller, model, _, window) = try await Self.list(threads: 12)
+        defer { window.close() }
+        let table = controller.tableView
+        let keys = model.rows.map(\.id)
+        let hovered = try #require(cell(controller, 6))
+        #expect(!hovered.showsEmptyCheckbox)
+        hovered.setHovering(true)
+        #expect(hovered.showsEmptyCheckbox)
+        hovered.setHovering(false)
+        #expect(!hovered.showsEmptyCheckbox)
+
+        let rect = table.frameOfCell(atColumn: 0, row: 6)
+        let columns = controller.style.columns(width: rect.width)
+        let gutter = NSPoint(x: rect.minX + columns.dotCenterX, y: rect.midY)
+        #expect(controller.isCheckboxHit(row: 6, at: gutter))
+        #expect(!controller.isCheckboxHit(row: 6, at: NSPoint(x: rect.midX, y: rect.midY)))
+        #expect(!controller.isCheckboxHit(row: 6, at: NSPoint(x: rect.minX + columns.sender.lowerBound + 1, y: rect.midY)),
+                "the sender name opens the conversation")
+        table.userInterfaceLayoutDirection = .rightToLeft
+        #expect(controller.isCheckboxHit(row: 6, at: NSPoint(x: rect.maxX - columns.dotCenterX, y: rect.midY)))
+        #expect(!controller.isCheckboxHit(row: 6, at: gutter))
+        table.userInterfaceLayoutDirection = .leftToRight
+        func click(_ point: NSPoint) -> NSEvent {
+            NSEvent.mouseEvent(with: .leftMouseDown, location: table.convert(point, to: nil), modifierFlags: [], timestamp: 0,
+                               windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        }
+        table.mouseDown(with: click(gutter))
+        #expect(model.selection.checked == [keys[6]])
+        #expect(model.headerCheck == .some)
+        table.mouseDown(with: click(gutter))
+        #expect(model.checkedCount == 0)
     }
 
     @Test func placeholdersFillWhenTheListScrollsDeep() async throws {

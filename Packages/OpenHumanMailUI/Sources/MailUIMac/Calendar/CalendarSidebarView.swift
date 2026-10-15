@@ -91,10 +91,11 @@ public struct CalendarSidebarView: View {
             HStack(alignment: .firstTextBaseline, spacing: theme.space3) {
                 let contact = router.environment.actions.superhumanCore?.contextSidebar
                 if let contact {
-                    Button("Contact") { contact.setVisible(true) }
+                    let title = router.reader == nil ? ListSidePanelView.panel(for: router).title : "Contact"
+                    Button(title) { contact.setVisible(true) }
                         .buttonStyle(.borderless)
                         .themeFont(theme.typeHeadline).foregroundStyle(theme.textSecondary.color)
-                        .help("Show the contact pane")
+                        .help("Show \(title.lowercased())")
                 }
                 Text("Calendar").themeFont(theme.typeHeadline).foregroundStyle(theme.textPrimary.color)
                     .overlay(alignment: .bottom) {

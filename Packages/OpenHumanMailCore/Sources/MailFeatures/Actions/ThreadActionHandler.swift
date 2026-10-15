@@ -269,7 +269,11 @@ public final class ThreadActionHandler: ActionHandler {
         let router = request.router
         let state = router?.accounts.first { $0.id == request.context.account } ?? router?.active
         let fromIntent = request.source == .intent
-        if consumesChecks, !fromIntent { state?.selection.clearChecked() }
+        var checked: [ThreadKey] = []
+        if consumesChecks, !fromIntent, let state {
+            checked = state.selection.targets(cursor: nil, order: state.list?.rows.map(\.id) ?? [])
+            state.selection.clearChecked()
+        }
         var reopens: UndoCoordinator.Entry.Reopen?
         if advances, !fromIntent, let router, let state {
             reopens = Self.advance(past: command.threads, in: state, router: router)
@@ -279,6 +283,7 @@ public final class ThreadActionHandler: ActionHandler {
         let ticket = list?.applyOptimistic(command)
         return LocalChange(reopens: reopens) { [weak list, weak router, weak state] in
             if let ticket { list?.revertOptimistic(ticket) }
+            if let state, !checked.isEmpty, state.selection.checked.isEmpty { state.selection.restoreChecked(checked) }
             if let reopens, let state { router?.reopen(reopens, in: state) }
         }
     }
@@ -564,13 +569,11 @@ public final class ThreadActionHandler: ActionHandler {
             guard let to = list.cursor else { return .notHandled }
             state.selection.extend(to: to, from: from, in: rows)
         case .checkAll:
-            guard let first = rows.first, let last = rows.last else { return .notHandled }
-            state.selection.clearChecked()
-            state.selection.extend(to: last, from: first, in: rows)
+            guard !rows.isEmpty else { return .notHandled }
+            state.selection.checkAll(in: rows)
         case .checkFromHere:
-            guard let cursor = list.cursor, let last = rows.last else { return .notHandled }
-            state.selection.clearChecked()
-            state.selection.extend(to: last, from: cursor, in: rows)
+            guard !rows.isEmpty else { return .notHandled }
+            state.selection.checkFromHere(cursor: list.cursor, in: rows)
         case .clearChecks:
             if state.selection.checked.isEmpty, case .search? = state.location {
                 environment?.overlays.search.close()

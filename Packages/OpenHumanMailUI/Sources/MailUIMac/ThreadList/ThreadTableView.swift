@@ -26,8 +26,15 @@ public final class ThreadTableView: NSTableView {
     }
 
     public override func mouseDown(with event: NSEvent) {
-        let row = self.row(at: convert(event.locationInWindow, from: nil))
+        let point = convert(event.locationInWindow, from: nil)
+        let row = self.row(at: point)
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if row >= 0, modifiers.isDisjoint(with: [.shift, .command, .control]),
+           listController?.isCheckboxHit(row: row, at: point) == true {
+            listController?.handleClick(row: row, extending: false, toggling: true)
+            window?.makeFirstResponder(self)
+            return
+        }
         if row >= 0, modifiers.contains(.shift) || modifiers.contains(.command) {
             listController?.handleClick(row: row, extending: modifiers.contains(.shift), toggling: modifiers.contains(.command))
             window?.makeFirstResponder(self)

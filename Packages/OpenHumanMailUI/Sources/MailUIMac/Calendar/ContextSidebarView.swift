@@ -16,9 +16,11 @@ public struct ContextSidebarView: View {
     }
 
     public var body: some View {
+        let panel = model.person == nil && model.thread == nil ? ListSidePanelView.panel(for: router) : nil
+        let title = panel?.title ?? "Contact"
         VStack(alignment: .leading, spacing: 0) {
-            RightPaneTabs(selected: .contact, contact: nil, calendar: model.hasCalendar ? { model.showCalendar() } : nil,
-                          close: { model.setVisible(false) })
+            RightPaneTabs(selected: .contact, contactTitle: title, contact: nil,
+                          calendar: model.hasCalendar ? { model.showCalendar() } : nil, close: { model.setVisible(false) })
             Rectangle().fill(theme.borderHairline.color).frame(height: theme.borderWidthHairline)
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: theme.space5) {
@@ -26,9 +28,8 @@ public struct ContextSidebarView: View {
                         card(person)
                         vipInset
                         recent
-                    } else if model.thread == nil {
-                        Text("Open a conversation to see who it's with.")
-                            .themeFont(theme.typeMeta).foregroundStyle(theme.textTertiary.color)
+                    } else if let panel {
+                        ListSidePanelView(router: router, panel: panel)
                     } else if !model.isLoading {
                         Text("Only your own addresses are in this conversation.")
                             .themeFont(theme.typeMeta).foregroundStyle(theme.textTertiary.color)
@@ -46,7 +47,7 @@ public struct ContextSidebarView: View {
         }
         .task(id: router.reader?.thread) { await model.show(thread: router.reader?.thread) }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Contact")
+        .accessibilityLabel(title)
         .accessibilityIdentifier("contact.sidebar")
     }
 
@@ -138,20 +139,22 @@ struct RightPaneTabs: View {
     enum Tab { case contact, calendar }
 
     let selected: Tab
+    var contactTitle = "Contact"
     let contact: (() -> Void)?
     let calendar: (() -> Void)?
     let close: () -> Void
     @Environment(\.theme) private var theme
 
     var body: some View {
+        let hide = selected == .contact ? "Hide \(contactTitle.lowercased())" : "Hide calendar"
         HStack(spacing: theme.space3) {
-            tab("Contact", .contact, contact)
+            tab(contactTitle, .contact, contact)
             if calendar != nil || selected == .calendar { tab("Calendar", .calendar, calendar) }
             Spacer(minLength: 0)
             Button(action: close) { Image(systemName: "xmark") }
                 .buttonStyle(.borderless)
-                .help(selected == .contact ? "Hide contact" : "Hide calendar")
-                .accessibilityLabel(selected == .contact ? "Hide contact" : "Hide calendar")
+                .help(hide)
+                .accessibilityLabel(hide)
         }
         .padding(.horizontal, theme.space5)
         .padding(.vertical, theme.space4)
