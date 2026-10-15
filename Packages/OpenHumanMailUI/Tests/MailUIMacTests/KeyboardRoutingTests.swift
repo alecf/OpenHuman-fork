@@ -8,7 +8,7 @@ import WebKit
 @testable import MailUIMac
 
 @MainActor
-@Suite struct KeyboardRoutingTests {
+@Suite(.timeLimit(.minutes(2))) struct KeyboardRoutingTests {
     let window = NSWindow(contentRect: NSRect(x: -4000, y: -4000, width: 500, height: 400), styleMask: [.titled],
                           backing: .buffered, defer: false)
 
@@ -23,10 +23,10 @@ import WebKit
     func fixture(options: FakeMailStore.Options = .init(remoteAck: .immediate),
                  flags: FeatureFlags = FeatureFlags()) async -> Fixture {
         let env = AppEnvironment.fake(corpus: .make(threadCount: 10, now: Date(timeIntervalSince1970: 1_791_000_000)),
-                                      options: options, featureFlags: flags)
+                                      options: options, featureFlags: flags, notices: NoticeCenter(autoExpire: false))
         let router = AppRouter(environment: env)
         router.start()
-        await until { router.list?.rows.count == 10 }
+        await untilObserved { router.list?.rows.count == 10 }
         let keys = KeyRouter.catalog(env.actions.descriptors)
         let target = window
         keys.isMailWindow = { $0 === target }
@@ -42,19 +42,17 @@ import WebKit
                          charactersIgnoringModifiers: chars, isARepeat: isARepeat, keyCode: code)!
     }
 
-    func until(_ condition: @escaping @MainActor () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async {
-        await awaitObserved("the model state", sourceLocation: sourceLocation, condition)
-    }
-
     @Test func eInTheListMarksDone() async {
         let f = await fixture()
         let first = f.router.list?.cursor
         #expect(f.keys.route(key("e", code: 14)) == nil, "consumed")
-        await until { f.router.list?.rows.count == 9 }
+        await f.env.actions.lastTask?.value
+        #expect(f.env.notices.toasts.contains { $0.message == "Marked done" })
+        await untilObserved { f.router.list?.rows.count == 9 }
         #expect(f.router.list?.row(for: first!) == nil)
-        await until { f.env.notices.toasts.contains { $0.message == "Marked done" } }
         #expect(f.keys.route(key("⌫", code: 51)) == nil, "⌫ trashes")
-        await until { f.router.list?.rows.count == 8 }
+        await f.env.actions.lastTask?.value
+        await untilObserved { f.router.list?.rows.count == 8 }
     }
 
     @Test func eWhileTypingDoesNothing() async {
@@ -150,7 +148,8 @@ import WebKit
         #expect(f.keys.route(key("e", code: 14, repeat: true)) == nil, "the repeat is consumed…")
         #expect(f.keys.route(key("e", code: 14, repeat: true)) == nil)
         #expect(performed == [.nextThread, .nextThread, .markDone], "…and marks nothing else done")
-        await until { f.router.list?.rows.count == 9 }
+        await f.env.actions.lastTask?.value
+        await untilObserved { f.router.list?.rows.count == 9 }
     }
 
     @Test func overlayScopesComeFirst() async {
@@ -199,7 +198,7 @@ import WebKit
         #expect(f.keys.bindings[.reader]?[commandF] == .findInConversation)
         #expect(f.keys.bindings[.global]?[commandF] == nil, "never everywhere: the composer's ⌘F is the text's")
         #expect(f.router.perform(.openThread))
-        await until { f.router.reader?.state == .loaded }
+        await untilObserved { f.router.reader?.state == .loaded }
         let reader = try #require(f.router.reader)
         #expect(f.keys.route(key("f", code: 3, modifiers: .command)) == nil, "consumed: the find bar opens")
         #expect(reader.findRequest == 1)

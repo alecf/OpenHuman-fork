@@ -53,7 +53,9 @@ struct RenderSweepTests {
         let crop = CGRect(x: 0, y: 0, width: 640 * scale, height: (strip + 120) * scale)
         let cropped = try #require(rep.cgImage?.cropping(to: crop))
         let png = try #require(NSBitmapImageRep(cgImage: cropped).representation(using: .png, properties: [:]))
-        try png.write(to: directory.appendingPathComponent("title-bar-strip-crop--\(theme.slug).png"))
+        let name = "title-bar-strip-crop--\(theme.slug).png"
+        try png.write(to: directory.appendingPathComponent(name))
+        try SweepIndex.record(SweepIndexEntry(screen: "title-bar-strip-crop", theme: theme.name, file: name), in: directory)
     }
 
     @Test(arguments: SweepTheme.builtIns)

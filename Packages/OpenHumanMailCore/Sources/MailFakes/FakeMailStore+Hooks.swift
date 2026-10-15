@@ -63,6 +63,13 @@ extension FakeMailStore {
         }
     }
 
+    public func isVisible(_ thread: ThreadKey) -> Bool {
+        state.withLock { s in
+            guard let t = s.threads[thread] else { return false }
+            return s.views(t).contains { FakeAggregator.isVisible($0.labels) }
+        }
+    }
+
     public func setOffline(_ offline: Bool) {
         let now = self.now
         let pending = mutate { s -> [Int64] in

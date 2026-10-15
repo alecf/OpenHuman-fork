@@ -199,7 +199,7 @@ import Testing
         #expect(await model.importLabels())
         let names = f.store.labelNames(of: labelled)
         #expect(names.contains("OpenHuman/Pitch") && !names.contains("OpenHuman/Marketing"), "ours wins")
-        #expect(!f.store.labelNames(of: sorted).contains("OpenHuman/Meeting"))
+        #expect(f.store.isVisible(sorted) && !f.store.labelNames(of: sorted).contains("OpenHuman/Meeting"))
     }
 
     @Test func fakeDataAndReadOnlyRefuseBeforeAnyPortCall() async throws {

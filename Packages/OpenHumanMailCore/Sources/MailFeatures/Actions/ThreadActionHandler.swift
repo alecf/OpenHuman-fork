@@ -22,6 +22,7 @@ public final class ThreadActionHandler: ActionHandler {
     // Why: one-click unsubscribe can't be undone once sent, so it waits out the undo toast; Undo drops it
     public var unsubscribeWindow: Duration = NoticeCenter.toastDuration
     var sleep: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    public private(set) var lastTask: Task<Void, Never>?
     private var heldUnsubscribes: [UUID: Task<Void, Never>] = [:]
     private var canceledUnsubscribes: Set<UUID> = []
 
@@ -179,6 +180,7 @@ public final class ThreadActionHandler: ActionHandler {
         let performed = registry.performCount
         guard registry.perform(place.actionID, source: .palette, host: host, context: context),
               registry.performCount > performed else { return nil }
+        if let task = registry.lastTask { lastTask = task }
         return registry.lastTask
     }
 
@@ -192,7 +194,7 @@ public final class ThreadActionHandler: ActionHandler {
         let ticket = list?.applyOptimisticLabel(named: name, to: targets)
         let restore: @MainActor () -> Void = { [weak list] in if let ticket { list?.revertOptimistic(ticket) } }
         let feedback = self.feedback
-        return Task {
+        let task = Task {
             do {
                 try await undo.perform(Titles.createdLabel(name), threads: targets) {
                     try await commands.createLabel(account, name: name, applyTo: targets)
@@ -205,6 +207,8 @@ public final class ThreadActionHandler: ActionHandler {
                 feedback.failed("Couldn't create label \(name)")
             }
         }
+        lastTask = task
+        return task
     }
 
     @discardableResult
@@ -601,8 +605,9 @@ public final class ThreadActionHandler: ActionHandler {
     }
 
     private func task(_ performance: ActionPerformance) -> Task<Void, Never>? {
-        if case .started(let task) = performance { return task }
-        return nil
+        guard case .started(let task) = performance else { return nil }
+        lastTask = task
+        return task
     }
 
     private func labelName(_ label: GmailLabelID, account: AccountID?, router: AppRouter?) -> String {
