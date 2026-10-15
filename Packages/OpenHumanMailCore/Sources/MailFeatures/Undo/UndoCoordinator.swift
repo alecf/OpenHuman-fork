@@ -49,8 +49,7 @@ public final class UndoCoordinator {
     @ObservationIgnored private let notices: NoticeCenter?
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var toastIDs: [Entry.ID: Toast.ID] = [:]
-    @ObservationIgnored private var performing = 0
-    @ObservationIgnored private var waitingForPerform: [CheckedContinuation<Void, Never>] = []
+    @ObservationIgnored private var unsettled: [Entry.ID: [CheckedContinuation<Void, Never>]] = [:]
 
     public init(commands: any MailUndoing, notices: NoticeCenter?, now: @escaping @Sendable () -> Date = { Date() }) {
         self.commands = commands
@@ -68,38 +67,50 @@ public final class UndoCoordinator {
 
     @discardableResult
     public func perform(_ title: LocalizedStringResource, threads: [ThreadKey] = [], via undoer: (any MailUndoing)? = nil,
-                        reopens: Entry.Reopen? = nil, _ command: () async throws -> UndoToken) async throws -> Entry {
-        performing += 1
-        defer {
-            performing -= 1
-            if performing == 0 {
-                let waiting = waitingForPerform
-                waitingForPerform = []
-                for continuation in waiting { continuation.resume() }
-            }
+                        reopens: Entry.Reopen? = nil, expiresAt: Date? = nil,
+                        _ command: () async throws -> UndoToken) async throws -> Entry {
+        var entry = Entry(title: title, token: UndoToken(payload: Data(), changesNothing: true), expiresAt: expiresAt,
+                          threads: threads, undoer: undoer, reopens: reopens)
+        unsettled[entry.id] = []
+        push(entry)
+        defer { settle(entry.id) }
+        do {
+            entry.token = try await command()
+        } catch {
+            discard(entry.id)
+            throw error
         }
-        let entry = Entry(title: title, token: try await command(), threads: threads, undoer: undoer, reopens: reopens)
-        if !entry.token.changesNothing { push(entry) }
+        if entry.token.changesNothing {
+            discard(entry.id)
+        } else if let index = stack.firstIndex(where: { $0.id == entry.id }) {
+            stack[index].token = entry.token
+        }
         return entry
+    }
+
+    public func discard(_ id: Entry.ID) {
+        stack.removeAll { $0.id == id }
+        if let toast = toastIDs.removeValue(forKey: id) { notices?.dismiss(toast) }
     }
 
     public var nextUndo: Entry? { stack.last { isLive($0) } }
 
     public func undoLast() async {
         guard !isWorking else { return }
-        if performing > 0 {
-            let newest = stack.last?.id
-            await withCheckedContinuation { waitingForPerform.append($0) }
-            guard !isWorking, stack.last?.id != newest else { return }
-        }
         stack.removeAll { !isLive($0) }
         guard let entry = stack.last else { return }
-        await undo(entry)
+        await undo(entryID: entry.id)
     }
 
     public func undo(entryID: Entry.ID) async {
+        guard !isWorking else { return }
+        if unsettled[entryID] != nil { await withCheckedContinuation { unsettled[entryID, default: []].append($0) } }
         guard !isWorking, let entry = stack.first(where: { $0.id == entryID }), isLive(entry) else { return }
         await undo(entry)
+    }
+
+    private func settle(_ id: Entry.ID) {
+        for waiting in unsettled.removeValue(forKey: id) ?? [] { waiting.resume() }
     }
 
     public func redoLast() async {

@@ -22,6 +22,8 @@ struct SenderSweep: Sendable {
         }.map(\.id)
     }
 
+    var others: SenderSweep { SenderSweep(address: address, account: account, thread: nil) }
+
     var query: String? { query(.inbox) }
 
     func query(_ scope: Scope) -> String? {

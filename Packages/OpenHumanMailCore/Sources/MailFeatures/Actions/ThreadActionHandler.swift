@@ -23,7 +23,7 @@ public final class ThreadActionHandler: ActionHandler {
     public var unsubscribeWindow: Duration = NoticeCenter.toastDuration
     var sleep: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     private var heldUnsubscribes: [UUID: Task<Void, Never>] = [:]
-    private lazy var unsubscribeUndoer = UnsubscribeUndoer(handler: self)
+    private var canceledUnsubscribes: Set<UUID> = []
 
     init(environment: AppEnvironment, feedback: ActionFeedback) {
         self.environment = environment
@@ -241,27 +241,41 @@ public final class ThreadActionHandler: ActionHandler {
             feedback.refuse(request.id, .unavailable(ActionCatalog.descriptor(request.id)?.title ?? "This action"))
             return .done
         }
-        let targets = command.threads
-        guard !targets.isEmpty else { return .notHandled }
-        let router = request.router
-        let state = router?.accounts.first { $0.id == request.context.account } ?? router?.active
-        let fromIntent = request.source == .intent
-        let title = fromIntent ? Titles.fromShortcuts(title) : title
-        if consumesChecks, !fromIntent { state?.selection.clearChecked() }
-        var reopens: UndoCoordinator.Entry.Reopen?
-        if advances, !fromIntent, let router, let state { reopens = Self.advance(past: targets, in: state, router: router) }
-        if let reopens { keepDraft(of: reopens.thread) }
-        let list = state?.list
-        let ticket = list?.applyOptimistic(command)
-        let revert: @MainActor () -> Void = { [weak list] in if let ticket { list?.revertOptimistic(ticket) } }
+        guard !command.threads.isEmpty else { return .notHandled }
+        let title = request.source == .intent ? Titles.fromShortcuts(title) : title
+        let local = applyLocally(command, request, advances: advances, consumesChecks: consumesChecks)
         let feedback = self.feedback
         let id = request.id
         let task = Task {
             await after?.value
             await Self.run(command, title: title, id: id, undo: undo, commands: commands, feedback: feedback,
-                           failure: failure, steps: steps, reopens: reopens, onFailure: revert)
+                           failure: failure, steps: steps, reopens: local.reopens, onFailure: local.restore)
         }
         return .started(task)
+    }
+
+    struct LocalChange {
+        let reopens: UndoCoordinator.Entry.Reopen?
+        let restore: @MainActor () -> Void
+    }
+
+    func applyLocally(_ command: MailCommand, _ request: ActionRequest, advances: Bool,
+                      consumesChecks: Bool = true) -> LocalChange {
+        let router = request.router
+        let state = router?.accounts.first { $0.id == request.context.account } ?? router?.active
+        let fromIntent = request.source == .intent
+        if consumesChecks, !fromIntent { state?.selection.clearChecked() }
+        var reopens: UndoCoordinator.Entry.Reopen?
+        if advances, !fromIntent, let router, let state {
+            reopens = Self.advance(past: command.threads, in: state, router: router)
+        }
+        if let reopens { keepDraft(of: reopens.thread) }
+        let list = state?.list
+        let ticket = list?.applyOptimistic(command)
+        return LocalChange(reopens: reopens) { [weak list, weak router, weak state] in
+            if let ticket { list?.revertOptimistic(ticket) }
+            if let reopens, let state { router?.reopen(reopens, in: state) }
+        }
     }
 
     private static func run(_ command: MailCommand, title: LocalizedStringResource, id: ActionID,
@@ -345,9 +359,13 @@ public final class ThreadActionHandler: ActionHandler {
     }
 
     private func startUnsubscribe(_ request: ActionRequest, then followUp: ActionID? = nil) -> ActionPerformance {
-        guard let message = request.context.focusedMessage, let data = environment?.data else { return .notHandled }
+        guard let message = request.context.focusedMessage, let environment else { return .notHandled }
+        guard environment.status.safeMode == .normal else {
+            feedback.refuse(request.id, .safeMode)
+            return .done
+        }
+        let data = environment.data
         let sender = request.context.senderDomain ?? request.context.sender
-        let host = request.host
         let fromKey = request.source == .keyboard
         let thread = request.context.focusedThread
         let sweep = SenderSweep(address: request.context.sender, account: request.context.account ?? thread?.account,
@@ -363,10 +381,10 @@ public final class ThreadActionHandler: ActionHandler {
             }
             switch info {
             case .oneClick(let listHost):
-                self.holdOneClick(message, from: sender ?? listHost, sweep: sweep, then: followUp, host: host)
+                await self.holdOneClick(message, from: sender ?? listHost, sweep: sweep, then: followUp, request: request)
             case .mailto(let address, let subject):
                 _ = self.present(.compose(.mailto(address, subject: subject)))
-                if let followUp { await self.sweepSender(sweep, followUp, host: host) }
+                if let followUp { await self.clearSender(sweep, followUp, request: request) }
             case .link(let url):
                 if fromKey && followUp == nil {
                     self.environment?.notices.postChoice(
@@ -376,64 +394,107 @@ public final class ThreadActionHandler: ActionHandler {
                     return
                 }
                 _ = self.present(.openURL(url))
-                if let followUp { await self.sweepSender(sweep, followUp, host: host) }
+                if let followUp { await self.clearSender(sweep, followUp, request: request) }
             }
         }
         return .started(task)
     }
 
+    private static func localChange(_ followUp: ActionID?, _ thread: ThreadKey) -> MailCommand {
+        followUp == .trash ? .trash([thread]) : .markDone([thread])
+    }
+
+    private func clearSender(_ sweep: SenderSweep, _ followUp: ActionID, request: ActionRequest) async {
+        if let thread = sweep.thread {
+            let title = followUp == .trash ? Titles.trashed(1) : Titles.markDone(1)
+            await task(apply(Self.localChange(followUp, thread), request, title: title, advances: true))?.value
+        }
+        await sweepSender(sweep.others, followUp, host: request.host)
+    }
+
     private func holdOneClick(_ message: MessageKey, from sender: String, sweep: SenderSweep, then followUp: ActionID?,
-                              host: (any ActionHost)?) {
-        let thread = sweep.thread
+                              request: ActionRequest) async {
         guard let environment, let commands = environment.commands, let undo = environment.undo else {
             feedback.refuse(.unsubscribe, .unavailable("Unsubscribe"))
             return
         }
         let id = UUID()
         let window = unsubscribeWindow
+        let change = sweep.thread.map { Self.localChange(followUp, $0) }
+        let local = change.map { applyLocally($0, request, advances: true) }
+        let entry: UndoCoordinator.Entry
+        do {
+            entry = try await undo.perform("Unsubscribing from \(sender)…", threads: change?.threads ?? [],
+                                           via: UnsubscribeUndoer(handler: self, id: id, port: commands),
+                                           reopens: local?.reopens,
+                                           expiresAt: Date().addingTimeInterval(NoticeCenter.seconds(window))) {
+                guard let change else { return UndoToken(payload: Data()) }
+                return try await commands.apply(change)
+            }
+        } catch MailPortError.blockedBySafeMode {
+            local?.restore()
+            feedback.refuse(.unsubscribe, .safeMode)
+            return
+        } catch {
+            local?.restore()
+            feedback.failed("Couldn't unsubscribe from \(sender). Nothing was sent.")
+            return
+        }
         let sleep = self.sleep
+        let host = request.host
         heldUnsubscribes[id] = Task { [weak self, weak host] in
             do { try await sleep(window) } catch { return }
             guard let self, self.heldUnsubscribes.removeValue(forKey: id) != nil else { return }
-            await self.sendUnsubscribe(message, commands: commands, sweep: sweep, then: followUp, host: host)
+            await self.sendUnsubscribe(message, undoing: entry, commands: commands, sweep: sweep, then: followUp,
+                                       host: host)
         }
-        undo.push(UndoCoordinator.Entry(title: "Unsubscribing from \(sender)…",
-                                        token: UndoToken(payload: Data(id.uuidString.utf8)),
-                                        expiresAt: Date().addingTimeInterval(NoticeCenter.seconds(window)),
-                                        threads: thread.map { [$0] } ?? [], undoer: unsubscribeUndoer))
     }
 
     func cancelUnsubscribe(_ id: UUID) {
         guard let held = heldUnsubscribes.removeValue(forKey: id) else {
+            guard !canceledUnsubscribes.contains(id) else { return }
             environment?.notices.post("Too late to undo: the unsubscribe request was already sent.", style: .info,
                                       duration: NoticeCenter.infoDuration)
             return
         }
         held.cancel()
+        canceledUnsubscribes.insert(id)
         environment?.notices.post("Unsubscribe canceled. Nothing was sent.", style: .info,
                                   duration: NoticeCenter.infoDuration)
     }
 
     var heldUnsubscribeCount: Int { heldUnsubscribes.count }
+    var heldUnsubscribeTasks: [Task<Void, Never>] { Array(heldUnsubscribes.values) }
 
-    private func sendUnsubscribe(_ message: MessageKey, commands: any MailCommanding, sweep: SenderSweep,
-                                 then followUp: ActionID?, host: (any ActionHost)?) async {
+    private func sendUnsubscribe(_ message: MessageKey, undoing entry: UndoCoordinator.Entry,
+                                 commands: any MailCommanding, sweep: SenderSweep, then followUp: ActionID?,
+                                 host: (any ActionHost)?) async {
         do {
             try await commands.unsubscribe(message)
         } catch MailPortError.blockedBySafeMode {
+            await putBack(entry, commands: commands)
             feedback.refuse(.unsubscribe, .safeMode)
             return
         } catch {
+            await putBack(entry, commands: commands)
             feedback.failed("Couldn't send the unsubscribe request")
             return
         }
         guard let environment else { return }
         if let followUp {
             environment.notices.post("Unsubscribe request sent", style: .info, duration: NoticeCenter.infoDuration)
-            await sweepSender(sweep, followUp, host: host)
+            await sweepSender(sweep.others, followUp, host: host)
             return
         }
         await offerCleanup(sweep, host: host)
+    }
+
+    private func putBack(_ entry: UndoCoordinator.Entry, commands: any MailCommanding) async {
+        guard let undo = environment?.undo else { return }
+        undo.discard(entry.id)
+        guard !entry.token.payload.isEmpty else { return }
+        do { _ = try await commands.undo(entry.token) } catch { return }
+        undo.onUndone?(entry)
     }
 
     static func cleanupMessage(count: Int, capped: Bool, hasAddress: Bool, leftOut: Int = 0) -> String {
@@ -462,17 +523,24 @@ public final class ThreadActionHandler: ActionHandler {
             environment.notices.post(plain, style: .info, duration: NoticeCenter.infoDuration)
             return
         }
-        let archive = await sweepPlan(sweep, scope: .inbox)
+        let archive = await sweepPlan(sweep.others, scope: .inbox)
         func label(_ plan: SweepPlan) -> String { plan.capped ? "\(plan.targets.count)+" : "\(plan.targets.count)" }
+        let message = Self.cleanupMessage(count: trash.targets.count + trash.leftOut, capped: trash.capped,
+                                          hasAddress: sweep.address != nil, leftOut: trash.leftOut)
+        let moveToTrash = NoticeCenter.Choice("Move \(label(trash)) to Trash") { [weak self, weak host] in
+            await self?.sweepSender(sweep, .trash, scope: .all, host: host)
+        }
+        guard !archive.targets.isEmpty else {
+            environment.notices.post(message, style: .info, actionTitle: moveToTrash.title,
+                                     duration: Self.cleanupOfferDuration, action: moveToTrash.action)
+            return
+        }
         environment.notices.postChoice(
-            Self.cleanupMessage(count: trash.targets.count + trash.leftOut, capped: trash.capped,
-                                hasAddress: sweep.address != nil, leftOut: trash.leftOut),
+            message,
             NoticeCenter.Choice("Archive all \(label(archive))") { [weak self, weak host] in
-                await self?.sweepSender(sweep, .markDone, scope: .inbox, host: host)
+                await self?.sweepSender(sweep.others, .markDone, scope: .inbox, host: host)
             },
-            NoticeCenter.Choice("Move \(label(trash)) to Trash") { [weak self, weak host] in
-                await self?.sweepSender(sweep, .trash, scope: .all, host: host)
-            },
+            moveToTrash,
             duration: Self.cleanupOfferDuration)
     }
 
@@ -544,18 +612,22 @@ public final class ThreadActionHandler: ActionHandler {
 @MainActor
 final class UnsubscribeUndoer: MailUndoing {
     private weak var handler: ThreadActionHandler?
+    private let id: UUID
+    private let port: any MailUndoing
 
-    init(handler: ThreadActionHandler) {
+    init(handler: ThreadActionHandler, id: UUID, port: any MailUndoing) {
         self.handler = handler
+        self.id = id
+        self.port = port
     }
 
     nonisolated func undo(_ token: UndoToken) async throws -> UndoToken? {
-        guard let id = UUID(uuidString: String(decoding: token.payload, as: UTF8.self)) else { return nil }
-        await cancel(id)
+        await cancel()
+        if !token.payload.isEmpty { _ = try await port.undo(token) }
         return nil
     }
 
-    private func cancel(_ id: UUID) { handler?.cancelUnsubscribe(id) }
+    private func cancel() { handler?.cancelUnsubscribe(id) }
 }
 
 enum Titles {

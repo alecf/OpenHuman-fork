@@ -183,6 +183,53 @@ final class FakeUndoPort: MailUndoing {
         #expect(undo.stack.map(\.id) == [first.id])
     }
 
+    @Test func theUndoToastIsUpBeforeTheWriteFinishesAndUndoesItOnceWritten() async throws {
+        let undo = coordinator()
+        let gate = TestGate()
+        let parked = Flag()
+        let action = Task {
+            _ = try await undo.perform("Moved to Trash") {
+                parked.on = true
+                await gate.wait()
+                return port.markDone("t1")
+            }
+        }
+        for _ in 0..<10_000 where !parked.on { await Task.yield() }
+        #expect(parked.on && port.done.isEmpty, "the write is still running")
+        let toast = try #require(notices.toasts.first, "the toast does not wait for the write")
+        let entryID = try #require(undo.stack.last?.id)
+        #expect(toast.message == "Moved to Trash" && toast.actionTitle == "Undo")
+        #expect(undo.canUndo)
+        let undoing = Task { await notices.activate(toast.id) }
+        for _ in 0..<1_000 where port.calls.isEmpty { await Task.yield() }
+        #expect(port.calls.isEmpty, "Undo waits for the write it reverses")
+        gate.release()
+        try await action.value
+        await undoing.value
+        #expect(port.calls == ["done:t1"] && port.done.isEmpty)
+        #expect(!undo.stack.contains { $0.id == entryID } && undo.redoStack.count == 1)
+    }
+
+    @Test func aWriteThatFailsAfterItsToastTakesTheToastAway() async throws {
+        let undo = coordinator()
+        let earlier = try await undo.perform("Marked done") { port.markDone("t0") }
+        let gate = TestGate()
+        let parked = Flag()
+        let action = Task {
+            _ = try await undo.perform("Moved to Trash") {
+                parked.on = true
+                await gate.wait()
+                throw CancellationError()
+            }
+        }
+        for _ in 0..<10_000 where !parked.on { await Task.yield() }
+        #expect(notices.toasts.map(\.message) == ["Marked done", "Moved to Trash"])
+        gate.release()
+        _ = try? await action.value
+        #expect(undo.stack.map(\.id) == [earlier.id])
+        #expect(notices.toasts.map(\.message) == ["Marked done"], "the failure notice replaces it")
+    }
+
     @Test func aFailingCommandPushesNothing() async throws {
         let undo = coordinator()
         var threw = false

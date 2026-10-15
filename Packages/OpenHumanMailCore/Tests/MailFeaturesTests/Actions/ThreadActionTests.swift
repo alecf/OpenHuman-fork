@@ -288,50 +288,147 @@ import Testing
         return key
     }
 
-    @Test func oneClickUnsubscribeWaitsOutItsUndoWindowThenOffersMarkDone() async throws {
-        let f = ActionFixture(corpus: .rich(threadCount: 60, now: fixedNow))
-        await f.loaded()
+    static let lettersSender = "letters@weekly.example"
+
+    func letters(_ f: ActionFixture) async throws -> (thread: ThreadKey, older: ThreadKey, message: MessageKey) {
+        let from = EmailAddress(name: "Weekly Letters", email: Self.lettersSender)
+        f.store.deliverMessage(account: AccountID(1), from: from, subject: "Letters 1", unread: false,
+                               at: fixedNow.addingTimeInterval(60), unsubscribe: .oneClick(host: "weekly.example"))
+        let message = f.store.deliverMessage(account: AccountID(1), from: from, subject: "Letters 2", unread: false,
+                                             at: fixedNow.addingTimeInterval(120),
+                                             unsubscribe: .oneClick(host: "weekly.example"))
+        await untilObserved { f.rows.count == 12 && f.rows.prefix(2).map(\.subject) == ["Letters 2", "Letters 1"] }
+        let thread = f.rows[0].id, older = f.rows[1].id
+        f.router.open(thread)
+        await untilObserved { f.router.reader?.messages.last?.id == message }
+        return (thread, older, message)
+    }
+
+    func heldWindow(_ f: ActionFixture) throws -> (ThreadActionHandler, TestGate) {
         let handler = try #require(f.registry.threadActions)
         let window = TestGate()
+        handler.unsubscribeWindow = .seconds(3_600)
         handler.sleep = { _ in await window.wait() }
-        let key = try await newsletter(f, index: 5)
-        let message = try #require(f.router.reader?.messages.last?.id)
+        return (handler, window)
+    }
+
+    func endWindow(_ handler: ThreadActionHandler, _ window: TestGate) async {
+        let held = handler.heldUnsubscribeTasks
+        window.release()
+        for task in held { await task.value }
+    }
+
+    func inTrash(_ f: ActionFixture, _ key: ThreadKey) -> Bool {
+        f.store.isInTrash(key)
+    }
+
+    func inInbox(_ f: ActionFixture, _ key: ThreadKey) -> Bool {
+        f.store.labelNames(of: key).contains { $0.uppercased() == "INBOX" }
+    }
+
+    @Test func oneClickUnsubscribeMovesOnAtOnceAndSendsOnlyAfterItsUndoWindow() async throws {
+        let f = ActionFixture()
+        let (handler, window) = try heldWindow(f)
+        let (thread, older, message) = try await letters(f)
         let domain = try #require(f.router.actionContext().senderDomain)
         #expect(await f.run(.unsubscribe))
-        await f.toast("Unsubscribing from \(domain)…")
-        let toast = try #require(f.env.notices.toasts.first { $0.message.hasPrefix("Unsubscribing from") })
+        #expect(f.router.list?.row(for: thread) == nil, "hidden before the window ends")
+        #expect(f.router.reader?.thread == older, "the reader moved on")
+        #expect(!inInbox(f, thread) && !inTrash(f, thread), "marked done on this Mac")
+        let toast = try #require(f.env.notices.toasts.first { $0.message == "Unsubscribing from \(domain)…" })
         #expect(toast.style == .undo && toast.actionTitle == "Undo" && toast.shortcut == "⌘Z")
         #expect(!f.presenter.shown.contains { $0.kind == .compose || $0.kind == .openURL }, "nothing else opens")
         #expect(f.store.unsubscribeRequests.isEmpty && handler.heldUnsubscribeCount == 1, "nothing goes out in the window")
-        window.release()
-        await eventually { f.store.unsubscribeRequests == [message] }
-        await eventually { f.env.notices.toasts.contains { $0.message.hasPrefix("Unsubscribe request sent") } }
-        let sent = try #require(f.env.notices.toasts.first { $0.message.hasPrefix("Unsubscribe request sent") })
-        #expect(sent.actionTitle?.hasPrefix("Archive all") == true && sent.secondaryActionTitle?.hasSuffix("to Trash") == true)
-        await f.env.notices.activate(sent.id)
-        await eventually { f.env.notices.toasts.contains { $0.message.hasPrefix("Marked") && $0.message.hasSuffix("done") } }
-        await eventually { f.router.list?.row(for: key) == nil }
+        await endWindow(handler, window)
+        #expect(f.store.unsubscribeRequests == [message])
+        let offer = try #require(f.env.notices.toasts.first { $0.message.hasPrefix("Unsubscribe request sent.") })
+        #expect(offer.message.contains("2 conversations"))
+        #expect(offer.actionTitle == "Archive all 1" && offer.secondaryActionTitle == "Move 2 to Trash")
+        await f.env.notices.activate(offer.id)
+        #expect(f.router.list?.row(for: older) == nil)
+        #expect(!inInbox(f, older))
     }
 
-    @Test func unsubscribeAndTrashAllSweepsTheSendersInboxAsOneUndoableBatch() async throws {
-        let f = ActionFixture(corpus: .rich(threadCount: 60, now: fixedNow))
-        await f.loaded()
-        let handler = try #require(f.registry.threadActions)
-        handler.sleep = { _ in }
-        let key = try await newsletter(f, index: 5)
-        let sender = try #require(f.router.actionContext().sender)
+    @Test func undoInsideTheWindowCancelsTheRequestAndBringsTheConversationBack() async throws {
+        let f = ActionFixture()
+        let (handler, window) = try heldWindow(f)
+        let (thread, older, _) = try await letters(f)
+        #expect(await f.run(.unsubscribeAndTrash))
+        #expect(f.router.list?.row(for: thread) == nil && f.router.reader?.thread == older)
+        #expect(inTrash(f, thread), "trashed at once, not after the request")
+        #expect(!inTrash(f, older), "the rest of the sender's mail waits for the request")
+        let held = handler.heldUnsubscribeTasks
+        #expect(await f.run(.undo))
+        #expect(f.toastMessages.contains("Unsubscribe canceled. Nothing was sent."))
+        #expect(!inTrash(f, thread))
+        #expect(f.router.reader?.thread == thread, "the conversation is open again")
+        window.release()
+        for task in held { await task.value }
+        #expect(f.store.unsubscribeRequests.isEmpty && handler.heldUnsubscribeCount == 0)
+        #expect(inInbox(f, older) && !inTrash(f, older))
+    }
+
+    @Test func unsubscribeAndTrashTrashesThisOneAtOnceAndTheRestAfterTheRequest() async throws {
+        let f = ActionFixture()
+        let (handler, window) = try heldWindow(f)
+        let (thread, older, message) = try await letters(f)
         #expect(f.registry.availability(.unsubscribeAndTrash, host: f.router).isEnabled)
         #expect(await f.run(.unsubscribeAndTrash))
-        await eventually { f.store.unsubscribeRequests.count == 1 }
-        await eventually { f.env.notices.toasts.contains { $0.message.hasPrefix("Moved") && $0.message.hasSuffix("to Trash") } }
-        await eventually { f.router.list?.row(for: key) == nil }
-        #expect(f.router.list?.rows.contains { row in row.participants.contains { $0.email.lowercased() == sender } } != true,
+        #expect(inTrash(f, thread) && !inTrash(f, older))
+        await endWindow(handler, window)
+        #expect(f.store.unsubscribeRequests == [message])
+        #expect(inTrash(f, older))
+        #expect(f.rows.allSatisfy { row in !row.participants.contains { $0.email == Self.lettersSender } },
                 "no inbox row from the sender is left")
         #expect(await f.run(.undo))
-        await eventually { !f.store.labelNames(of: key).contains { $0.uppercased() == "TRASH" } }
+        #expect(!inTrash(f, older), "one undo restores the swept batch")
         withKnownIssue("FakeMailStore.untrash does not add INBOX back (the Store does)") {
-            #expect(f.store.labelNames(of: key).contains { $0.uppercased() == "INBOX" })
+            #expect(inInbox(f, older))
         }
+    }
+
+    @Test func aFailedUnsubscribeRequestPutsTheConversationBack() async throws {
+        let f = ActionFixture()
+        let (handler, window) = try heldWindow(f)
+        let (thread, older, _) = try await letters(f)
+        #expect(await f.run(.unsubscribe))
+        #expect(f.router.reader?.thread == older && !inInbox(f, thread))
+        f.store.failNextCommand()
+        await endWindow(handler, window)
+        #expect(f.store.unsubscribeRequests.isEmpty)
+        #expect(f.toastMessages.contains("Couldn't send the unsubscribe request"))
+        #expect(!f.toastMessages.contains { $0.hasPrefix("Unsubscribing from") })
+        #expect(inInbox(f, thread), "back in the Inbox")
+        #expect(f.router.reader?.thread == thread, "and open again")
+        await untilObserved { f.rows.contains { $0.id == thread } }
+    }
+
+    @Test func readOnlyRefusesUnsubscribeAtOnceWithoutAWindow() async throws {
+        let f = ActionFixture(options: .init(safeMode: .readOnly))
+        let (handler, window) = try heldWindow(f)
+        defer { window.release() }
+        _ = try await letters(f)
+        let request = ActionRequest(id: .unsubscribe, context: f.router.actionContext(), source: .keyboard, host: f.router)
+        if case .started(let task) = handler.perform(request) { await task.value }
+        #expect(f.toastMessages == [StatusModel.blockedText])
+        #expect(handler.heldUnsubscribeCount == 0 && f.store.unsubscribeRequests.isEmpty)
+    }
+
+    @Test func aFailedWriteReopensTheConversationTheReaderMovedOffFrom() async throws {
+        let f = ActionFixture()
+        await untilObserved { f.router.list?.state == .loaded && f.rows.count == 10 }
+        let rows = f.rows.map(\.id)
+        _ = try await f.store.apply(.markRead([rows[3], rows[4]]))
+        await untilObserved { f.rows.count == 10 && !f.rows[3].isUnread && !f.rows[4].isUnread }
+        f.router.open(rows[3])
+        f.store.failNextCommand()
+        #expect(f.registry.perform(.trash, source: .keyboard, host: f.router))
+        #expect(f.router.reader?.thread == rows[4], "the reader moved on at once")
+        await f.registry.lastTask?.value
+        #expect(f.toastMessages.contains("Couldn't move 1 conversation to Trash"))
+        #expect(f.router.reader?.thread == rows[3], "the failed write brought the conversation back")
+        #expect(f.router.list?.optimisticKeys.isEmpty == true)
+        await untilObserved { f.rows.contains { $0.id == rows[3] } }
     }
 
     @Test func unsubscribeChoicesAreRefusedInReadOnly() async throws {
@@ -346,51 +443,52 @@ import Testing
     }
 
     @Test func cleanupOfferTrashesEverythingFromTheSenderWithOneUndoEntry() async throws {
-        let f = ActionFixture(corpus: .rich(threadCount: 60, now: fixedNow))
-        await f.loaded()
-        let handler = try #require(f.registry.threadActions)
-        handler.sleep = { _ in }
-        let key = try await newsletter(f, index: 5)
+        let f = ActionFixture()
+        let (handler, window) = try heldWindow(f)
+        let (thread, older, _) = try await letters(f)
         #expect(await f.run(.unsubscribe))
-        await eventually { f.store.unsubscribeRequests.count == 1 }
-        await eventually { f.env.notices.toasts.contains { $0.message.hasPrefix("Unsubscribe request sent.") } }
+        await endWindow(handler, window)
         let offer = try #require(f.env.notices.toasts.first { $0.message.hasPrefix("Unsubscribe request sent.") })
-        let archive = try #require(offer.actionTitle)
-        let archived = try #require(Int(archive.replacingOccurrences(of: "Archive all ", with: "")))
-        let trash = try #require(offer.secondaryActionTitle)
-        let trashed = try #require(Int(trash.replacingOccurrences(of: "Move ", with: "").replacingOccurrences(of: " to Trash", with: "")))
-        let total = try #require(Int(offer.message.dropFirst("Unsubscribe request sent. ".count).prefix { $0.isNumber }))
-        #expect(archived >= 1 && trashed >= 1 && archived <= total && trashed <= total)
-        #expect(offer.message.contains("\(total) conversation"))
+        #expect(offer.message.contains("2 conversations from this sender"))
+        #expect(offer.secondaryActionTitle == "Move 2 to Trash")
         let before = f.env.undo?.stack.count ?? 0
         await f.env.notices.activateSecondary(offer.id)
-        await eventually { f.env.notices.toasts.contains { $0.message.hasPrefix("Moved") && $0.message.hasSuffix("to Trash") } }
         #expect((f.env.undo?.stack.count ?? 0) == before + 1, "one batch, one undo entry")
-        await eventually { f.router.list?.row(for: key) == nil }
+        #expect(inTrash(f, thread) && inTrash(f, older))
         #expect(await f.run(.undo))
-        await eventually { !f.store.labelNames(of: key).contains { $0.uppercased() == "TRASH" } }
+        #expect(!inTrash(f, thread) && !inTrash(f, older))
+    }
+
+    @Test func theCleanupOfferWithNothingLeftInTheInboxOffersOnlyTrash() async throws {
+        let f = ActionFixture()
+        let (handler, window) = try heldWindow(f)
+        let (thread, older, _) = try await letters(f)
+        _ = try await f.store.apply(.markDone([older]))
+        #expect(await f.run(.unsubscribe))
+        await endWindow(handler, window)
+        let offer = try #require(f.env.notices.toasts.first { $0.message.hasPrefix("Unsubscribe request sent.") })
+        #expect(offer.actionTitle == "Move 2 to Trash" && offer.secondaryActionTitle == nil)
+        await f.env.notices.activate(offer.id)
+        #expect(inTrash(f, thread) && inTrash(f, older))
     }
 
     @Test func cleanupOfferKeepAndSwitchOff() async throws {
-        let f = ActionFixture(corpus: .rich(threadCount: 60, now: fixedNow))
-        await f.loaded()
-        let handler = try #require(f.registry.threadActions)
-        handler.sleep = { _ in }
-        let key = try await newsletter(f, index: 5)
+        let f = ActionFixture()
+        let (handler, window) = try heldWindow(f)
+        let (thread, older, _) = try await letters(f)
         #expect(await f.run(.unsubscribe))
-        await eventually { f.env.notices.toasts.contains { $0.message.hasPrefix("Unsubscribe request sent.") } }
+        await endWindow(handler, window)
         let offer = try #require(f.env.notices.toasts.first { $0.message.hasPrefix("Unsubscribe request sent.") })
         f.env.notices.dismiss(offer.id)
-        #expect(f.router.list?.row(for: key) != nil, "Keep leaves the mail alone")
-        #expect(!f.store.labelNames(of: key).contains { $0.uppercased() == "TRASH" })
+        #expect(!inTrash(f, thread) && !inInbox(f, thread), "Keep leaves the unsubscribed conversation done")
+        #expect(inInbox(f, older) && !inTrash(f, older), "Keep leaves the rest of the sender's mail alone")
 
-        let g = ActionFixture(corpus: .rich(threadCount: 60, now: fixedNow))
-        await g.loaded()
-        try #require(g.registry.threadActions).sleep = { _ in }
+        let g = ActionFixture()
+        let (other, gate) = try heldWindow(g)
         g.env.system.preferences.unsubscribeCleanupOffer = false
-        _ = try await newsletter(g, index: 5)
+        _ = try await letters(g)
         #expect(await g.run(.unsubscribe))
-        await g.toast("Unsubscribe request sent")
+        await endWindow(other, gate)
         let plain = try #require(g.env.notices.toasts.first { $0.message == "Unsubscribe request sent" })
         #expect(plain.secondaryActionTitle == nil && plain.actionTitle == nil)
     }

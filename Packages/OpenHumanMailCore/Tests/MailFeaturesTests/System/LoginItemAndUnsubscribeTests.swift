@@ -102,8 +102,8 @@ struct UnsubscribeModelTests {
             await eventually(timeout: .seconds(15)) { f.store.unsubscribeRequests == [message.id] }
             await eventually(timeout: .seconds(15)) {
                 f.env.notices.toasts.contains {
-                    $0.message.hasPrefix("Unsubscribe request sent") && $0.actionTitle?.hasPrefix("Archive all") == true
-                        && $0.secondaryActionTitle?.hasSuffix("to Trash") == true
+                    $0.message.hasPrefix("Unsubscribe request sent")
+                        && ($0.secondaryActionTitle ?? $0.actionTitle)?.hasSuffix("to Trash") == true
                 }
             }
         case .mailto(let address, _):

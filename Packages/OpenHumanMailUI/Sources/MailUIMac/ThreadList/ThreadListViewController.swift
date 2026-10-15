@@ -633,20 +633,11 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
 
     @discardableResult
     func performRowAction(_ action: ActionID, key: ThreadKey) -> Bool {
-        guard let model, let host = resolvedHost, let row = model.row(for: key), host.threadListCanPerform(action) else {
+        guard let model, let host = resolvedHost, model.row(for: key) != nil, host.threadListCanPerform(action) else {
             return false
         }
         if model.isChecked(key) { model.setCursor(key) } else { model.click(key) }
-        let targets = model.actionTargets
-        guard host.threadListPerform(action) else { return false }
-        let command: MailCommand? = switch action {
-        case .markDone: .markDone(targets)
-        case .trash: .trash(targets)
-        case ThreadListActionIDs.toggleRead: row.isUnread ? .markRead(targets) : .markUnread(targets)
-        default: nil
-        }
-        if let command { model.applyOptimistic(command) }
-        return true
+        return host.threadListPerform(action)
     }
 
     @objc private func doubleClicked() {
