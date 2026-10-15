@@ -546,11 +546,20 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
         let ids: [ActionID] = [.markDone, .trash, ThreadListActionIDs.snooze, .remind, ThreadListActionIDs.reply,
                                ThreadListActionIDs.toggleRead]
         let key = row.id
-        return ids.filter(host.threadListCanPerform).map { action in
+        var actions = ids.filter(host.threadListCanPerform).map { action in
             NSAccessibilityCustomAction(name: Self.title(action, row: row)) { [weak self] in
                 self?.performRowAction(action, key: key) ?? false
             }
         }
+        if host.threadListCanPerform(.toggleCheck) {
+            let name = model?.isChecked(key) == true ? String(localized: "Uncheck") : String(localized: "Check")
+            actions.append(NSAccessibilityCustomAction(name: name) { [weak self] in
+                guard let self, self.model?.toggleCheck(key) == true else { return false }
+                self.announceChecks()
+                return true
+            })
+        }
+        return actions
     }
 
     public func tableView(_ tableView: NSTableView, rowActionsForRow row: Int,
@@ -661,7 +670,10 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
             if model.extendCheck(by: -1) { announceChecks() }
             return true
         case (_, "a", .command):
-            checkAll()
+            checkShortcut(SelectAllShortcuts.commandA)
+            return true
+        case (_, "A", [.command, .shift]):
+            checkShortcut(SelectAllShortcuts.commandShiftA)
             return true
         case (53, _, []):
             return clearChecks()
@@ -673,6 +685,24 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
     func checkAll() {
         model?.checkAll()
         announceChecks()
+    }
+
+    func checkFromHere() {
+        model?.checkFromHere()
+        announceChecks()
+    }
+
+    private func checkShortcut(_ action: ActionID) {
+        if action == .checkFromHere { checkFromHere() } else { checkAll() }
+    }
+
+    func isCheckboxHit(row: Int, at point: NSPoint) -> Bool {
+        guard thread(atDisplay: row) != nil else { return false }
+        let cell = tableView.frameOfCell(atColumn: 0, row: row)
+        guard cell.width > 0 else { return false }
+        let local = point.x - cell.minX
+        let x = tableView.userInterfaceLayoutDirection == .rightToLeft ? cell.width - local : local
+        return x >= 0 && x < style.columns(width: cell.width).sender.lowerBound
     }
 
     @discardableResult

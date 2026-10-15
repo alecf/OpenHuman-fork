@@ -28,9 +28,21 @@ extension ThreadListModel {
     }
 
     public func checkAll() {
-        guard let first = rows.first?.id, let last = rows.last?.id else { return }
-        selection.clearChecked()
-        selection.extend(to: last, from: first, in: rows.map(\.id))
+        selection.checkAll(in: rows.map(\.id))
+    }
+
+    public func checkFromHere() {
+        selection.checkFromHere(cursor: cursor, in: rows.map(\.id))
+    }
+
+    public var headerCheck: SelectionHeaderCheck { selection.headerCheck(in: rows.map(\.id)) }
+
+    public var offersCheckBefore: Bool {
+        !selection.checkBeforeHintDismissed && selection.offersCheckBefore(in: rows.map(\.id))
+    }
+
+    public func headerCheckClicked() {
+        if headerCheck == .all { clearChecks() } else { checkAll() }
     }
 
     @discardableResult

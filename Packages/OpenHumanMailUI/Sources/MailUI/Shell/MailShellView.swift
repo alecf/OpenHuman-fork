@@ -61,8 +61,11 @@ public struct MailShellView<Content: View>: View {
                     .transaction { $0.disablesAnimations = true }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(alignment: .bottom) {
-                        ToastHostView(notices: environment.notices)
-                            .padding(.bottom, theme.component.toast.bottom)
+                        VStack(spacing: theme.space3) {
+                            if let hint = CheckBeforeHint.shows(router: router) { hint }
+                            ToastHostView(notices: environment.notices)
+                        }
+                        .padding(.bottom, theme.component.toast.bottom)
                     }
                     .overlay(alignment: .bottomLeading) {
                         if let hint = router.sequenceHint {
@@ -79,6 +82,9 @@ public struct MailShellView<Content: View>: View {
         .background(theme.bgWindow.color)
         .overlayPreferenceValue(SearchDropdownKey.self, alignment: .topLeading) { request in
             if let request { SearchDropdownLayer(request: request) }
+        }
+        .overlayPreferenceValue(SelectAllTipKey.self, alignment: .topLeading) { request in
+            if let request { SelectAllTipLayer(request: request) }
         }
         .task { hints.start() }
         .overlay { OverlayHostView(center: environment.overlays) }

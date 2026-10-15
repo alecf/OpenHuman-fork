@@ -47,6 +47,9 @@ public final class ThreadRowView: NSTableCellView {
     private(set) var isChecked = false
     private(set) var isHovering = false
     private(set) var isCursor = false
+    private(set) var isPointerInside = false
+    static let checkboxSize: CGFloat = 12
+    var showsEmptyCheckbox: Bool { !isChecked && !isPlaceholder && (isPointerInside || isCursor) }
     private(set) var showsActions = false
     static let showsActionsOnCursorRow = true
     var cursorRowShowsActions = true {
@@ -172,19 +175,26 @@ public final class ThreadRowView: NSTableCellView {
         func x(_ start: CGFloat, _ w: CGFloat) -> CGFloat { rtl ? width - start - w : start }
         let frames = drawnFrames()
 
+        let side = Self.checkboxSize
+        let box = NSRect(x: x(c.dotCenterX - side / 2, side), y: ((height - side) / 2).rounded(), width: side, height: side)
+        let radius = min(CGFloat(style.theme.radiusXS), side / 4)
         if isChecked {
-            let box = NSRect(x: x(c.dotCenterX - 7, 14), y: ((height - 14) / 2).rounded(), width: 14, height: 14)
             style.accentFill.setFill()
-            NSBezierPath(roundedRect: box, xRadius: CGFloat(style.theme.radiusXS), yRadius: CGFloat(style.theme.radiusXS)).fill()
+            NSBezierPath(roundedRect: box, xRadius: radius, yRadius: radius).fill()
             let mark = NSBezierPath()
-            mark.move(to: NSPoint(x: box.minX + 3.5, y: box.minY + 7))
-            mark.line(to: NSPoint(x: box.minX + 6, y: box.minY + 4.5))
-            mark.line(to: NSPoint(x: box.minX + 10.5, y: box.minY + 9.5))
+            mark.move(to: NSPoint(x: box.minX + side * 0.26, y: box.minY + side * 0.5))
+            mark.line(to: NSPoint(x: box.minX + side * 0.43, y: box.minY + side * 0.32))
+            mark.line(to: NSPoint(x: box.minX + side * 0.75, y: box.minY + side * 0.68))
             mark.lineWidth = 1.5
             mark.lineCapStyle = .round
             mark.lineJoinStyle = .round
             style.accentOnFill.setStroke()
             mark.stroke()
+        } else if showsEmptyCheckbox {
+            let outline = NSBezierPath(roundedRect: box.insetBy(dx: 0.75, dy: 0.75), xRadius: radius, yRadius: radius)
+            outline.lineWidth = 1.5
+            style.tertiary.setStroke()
+            outline.stroke()
         } else if content.showsUnreadDot {
             let size = CGFloat(style.row.unreadDotSize)
             style.unreadDot.setFill()
@@ -255,6 +265,10 @@ public final class ThreadRowView: NSTableCellView {
     }
 
     func setHovering(_ hovering: Bool) {
+        if hovering != isPointerInside {
+            isPointerInside = hovering
+            needsDisplay = true
+        }
         let wasShowing = showsActions
         updateActions(pointer: hovering)
         isHovering = hovering && showsActions

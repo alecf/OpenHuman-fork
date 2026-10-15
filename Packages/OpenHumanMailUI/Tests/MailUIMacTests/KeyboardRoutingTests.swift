@@ -287,7 +287,8 @@ extension KeyboardRoutingTests {
         #expect(try action(event(4)) == (ActionCatalog.remindOnH ? .remind : .snooze), "h")
         #expect(try action(event(14, .maskShift)) == .moveToInbox, "⇧E")
         #expect(try action(event(38, .maskShift)) == .extendSelectionDown, "⇧J")
-        #expect(try action(event(0, .maskCommand)) == .checkAll, "⌘A")
+        #expect(try action(event(0, .maskCommand)) == SelectAllShortcuts.commandA, "⌘A")
+        #expect(try action(event(0, [.maskCommand, .maskShift])) == SelectAllShortcuts.commandShiftA, "⌘⇧A")
         #expect(try action(event(40, .maskCommand), .global) == .commandPalette, "⌘K")
         #expect(try action(event(36, .maskCommand), .composer) == .send, "⌘↵ (the composer's own handler performs it)")
     }

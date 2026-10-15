@@ -48,8 +48,10 @@ public struct ShellToolbar: View {
                 } else if state.mode == .reader {
                     readerTitle(state)
                 } else if state.isOnTab {
+                    if let list = state.list { SelectAllCheckbox(list: list, descriptors: router.environment.actions.descriptors) }
                     SplitTabBar(router: router, state: state)
                 } else if let location = state.location {
+                    if let list = state.list { SelectAllCheckbox(list: list, descriptors: router.environment.actions.descriptors) }
                     locationTitle(state, location)
                 }
             }

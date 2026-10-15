@@ -15,6 +15,7 @@ public final class AppRouter {
     public private(set) var activeAccountID: AccountID?
     public private(set) var accountsError: String?
     public private(set) var accountsLoaded = false
+    public let recentOpens = RecentOpens()
     public var isLabelSidebarVisible = false {
         didSet { if isLabelSidebarVisible != oldValue { setNeedsPersist() } }
     }
@@ -184,6 +185,9 @@ public final class AppRouter {
     }
 
     public func open(_ key: ThreadKey) {
+        if let row = accounts.first(where: { $0.id == key.account })?.list?.row(for: key) {
+            recentOpens.record(row, at: Date())
+        }
         environment.calendarWindowIfStarted?.stepAside()
         leaveAllInboxes()
         active?.open(key)
