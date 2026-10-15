@@ -16,6 +16,7 @@ final class StubListHost: ThreadListHost {
     var performed: [ActionID] = []
     var selection: SelectionModel?
     var connectivity: ConnectivityState?
+    weak var model: ThreadListModel?
 
     init(enabled: Set<ActionID> = [.markDone, .trash]) {
         self.enabled = enabled
@@ -23,6 +24,13 @@ final class StubListHost: ThreadListHost {
 
     func threadListPerform(_ action: ActionID) -> Bool {
         performed.append(action)
+        guard let model else { return true }
+        let targets = model.actionTargets
+        switch action {
+        case .markDone: model.applyOptimistic(.markDone(targets))
+        case .trash: model.applyOptimistic(.trash(targets))
+        default: break
+        }
         return true
     }
     func threadListCanPerform(_ action: ActionID) -> Bool { enabled.contains(action) }
@@ -56,6 +64,7 @@ struct ThreadListViewTests {
         let model = ThreadListModel(data: store, location: .system(.inbox), account: AccountID(1))
         let controller = ThreadListViewController(theme: .light)
         hosts.append(host)
+        host.model = model
         controller.host = host
         let window = Self.window(controller.view, height: height)
         controller.model = model
@@ -105,6 +114,49 @@ struct ThreadListViewTests {
         #expect(table.numberOfRows == 19)
         #expect(content.router.list?.index(of: target) == nil)
         #expect(table.selectedRow == 1)
+    }
+
+    static func routed(threads: Int) async throws
+        -> (MainContentViewController, ThreadListViewController, ThreadListModel, AppEnvironment, NSWindow) {
+        let environment = AppEnvironment.fake(corpus: .make(threadCount: threads, now: now), options: .init(remoteAck: .immediate))
+        let content = MainContentViewController(router: AppRouter(environment: environment))
+        let window = Self.window(content.view)
+        await untilObserved { content.router.list?.rows.count == threads }
+        let controller = try #require(content.children.lazy.compactMap { $0 as? ThreadListViewController }.first)
+        let list = try #require(content.router.list)
+        return (content, controller, list, environment, window)
+    }
+
+    @Test func aRowButtonChangesTheRowOnceAndAFailedWriteLeavesNothingBehind() async throws {
+        let (content, controller, list, environment, window) = try await Self.routed(threads: 20)
+        defer { withExtendedLifetime(content) { window.close() } }
+        let store = try #require(environment.commands as? FakeMailStore)
+        let unread = try #require(list.rows.first { $0.isUnread }).id
+        store.failNextCommand()
+        #expect(controller.performRowAction(ThreadListActionIDs.toggleRead, key: unread))
+        #expect(list.row(for: unread)?.isUnread == false, "marked read in the same turn")
+        await environment.actions.lastTask?.value
+        #expect(list.optimisticKeys.isEmpty, "no second change outlives the failed write")
+        await untilObserved { list.rows.first { $0.id == unread }?.isUnread == true }
+
+        let done = try #require(list.rows.last).id
+        #expect(controller.performRowAction(.markDone, key: done))
+        #expect(list.index(of: done) == nil, "hidden in the same turn")
+    }
+
+    @Test func aRowToggleOnAMixedSelectionDoesWhatTheActionDoes() async throws {
+        let (content, controller, list, environment, window) = try await Self.routed(threads: 20)
+        defer { withExtendedLifetime(content) { window.close() } }
+        let read = try #require(list.rows.first { !$0.isUnread }).id
+        let unread = try #require(list.rows.first { $0.isUnread }).id
+        let selection = try #require(content.router.active?.selection)
+        selection.toggle(read)
+        selection.toggle(unread)
+        #expect(controller.performRowAction(ThreadListActionIDs.toggleRead, key: read))
+        #expect(list.row(for: unread)?.isUnread == false, "the unread one is marked read")
+        #expect(list.row(for: read)?.isUnread == false, "the read one is not flipped to unread")
+        await environment.actions.lastTask?.value
+        #expect(list.row(for: read)?.isUnread == false && list.row(for: unread)?.isUnread == false)
     }
 
     @Test func newMailAboveDoesNotMoveTheVisibleRows() async throws {

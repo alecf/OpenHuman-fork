@@ -138,10 +138,13 @@ extension AppRouter {
               let state = accounts.first(where: { $0.id == account }), let list = state.list else { return }
         list.clearOptimistic(for: Set(threads))
         state.restoreCursor(first, in: list, updates: 3)
-        if let reopen = entry.reopens, reopen.thread.account == account, state.reader?.thread == reopen.shown {
-            state.reopenAfterUndo(reopen.thread)
-            setNeedsPersist()
-        }
+        if let reopen = entry.reopens { self.reopen(reopen, in: state) }
+    }
+
+    func reopen(_ reopen: UndoCoordinator.Entry.Reopen, in state: AccountState) {
+        guard reopen.thread.account == state.id, state.reader?.thread == reopen.shown else { return }
+        state.reopenAfterUndo(reopen.thread)
+        setNeedsPersist()
     }
 
     func refuseBlockedWrite(_ action: ActionID) {
