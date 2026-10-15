@@ -25,6 +25,7 @@ public final class AppRouter {
     @ObservationIgnored public var composerContext: (@MainActor () -> ActionContext?)?
     @ObservationIgnored public var willPersist: (@MainActor () -> Void)?
     public internal(set) var unifiedInbox: AllInboxesModel?
+    public internal(set) var accountCountMode: AccountCountMode = AppSettings.accountCounts.defaultValue
     public var sequenceHint: String?
 
     @ObservationIgnored public let environment: AppEnvironment
@@ -32,6 +33,7 @@ public final class AppRouter {
     @ObservationIgnored private let restoration: (any NavigationStateStoring)?
     @ObservationIgnored private var snapshot: NavigationSnapshot?
     @ObservationIgnored private var accountsTask: Task<Void, Never>?
+    @ObservationIgnored var accountCountsTask: Task<Void, Never>?
     @ObservationIgnored private var debouncer: PersistDebouncer?
     @ObservationIgnored private var snapshotLoaded = false
     @ObservationIgnored private var frozen = false
@@ -54,6 +56,7 @@ public final class AppRouter {
 
     isolated deinit {
         accountsTask?.cancel()
+        accountCountsTask?.cancel()
         debouncer?.cancel()
     }
 
@@ -96,6 +99,7 @@ public final class AppRouter {
             undo.onUndone = { [weak self] entry in self?.undone(entry) }
         }
         startTrackingIfNeeded()
+        observeAccountCounts()
         let stream = environment.data.accounts()
         accountsTask = Task { [weak self] in
             do {
@@ -115,6 +119,8 @@ public final class AppRouter {
         persist()
         accountsTask?.cancel()
         accountsTask = nil
+        accountCountsTask?.cancel()
+        accountCountsTask = nil
         for state in accounts { state.stop() }
     }
 

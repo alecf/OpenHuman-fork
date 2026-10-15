@@ -35,7 +35,21 @@ extension AppRouter {
     }
 
     public var allInboxesUnread: Int? {
-        let total = accounts.reduce(0) { $0 + ($1.counts?.inboxUnread ?? $1.firstTabUnread) }
-        return total == 0 ? nil : total
+        Self.allInboxesCount(accounts.map { $0.badgeCount(accountCountMode) })
+    }
+
+    public nonisolated static func allInboxesCount(_ badges: [Int?]) -> Int? {
+        let total = badges.reduce(0) { $0 + max(0, $1 ?? 0) }
+        return total > 0 ? total : nil
+    }
+
+    func observeAccountCounts() {
+        guard accountCountsTask == nil, let stream = environment.settings?.observe(AppSettings.accountCounts) else { return }
+        accountCountsTask = Task { [weak self] in
+            for await mode in stream {
+                guard !Task.isCancelled else { return }
+                if self?.accountCountMode != mode { self?.accountCountMode = mode }
+            }
+        }
     }
 }

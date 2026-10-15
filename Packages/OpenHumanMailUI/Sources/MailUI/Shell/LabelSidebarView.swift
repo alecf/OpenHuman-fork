@@ -88,7 +88,9 @@ public struct LabelSidebarView: View {
         .onHover { inside in hover(key, inside) }
         .help("Every account's inbox together  ⌃0  G U")
         .accessibilityLabel("All Inboxes")
-        .accessibilityValue(router.allInboxesUnread.map { "\($0) unread" } ?? "")
+        .accessibilityValue(router.allInboxesUnread.map {
+            AccountSwitcherView.countPhrase(String($0), router.accountCountMode)
+        } ?? "")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 

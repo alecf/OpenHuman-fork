@@ -16,6 +16,7 @@ public final class GeneralSettingsModel {
     public let showPendingSync: StoredSetting<Bool>
     public let moveToSuperset: StoredSetting<Bool>
     public let tabCounts: StoredSetting<TabCountMode>
+    public let accountCounts: StoredSetting<AccountCountMode>
     public let downloadBodies: StoredSetting<Bool>
     public let bodyMax: StoredSetting<Int?>
     public let confirmEverySend: StoredSetting<Bool>
@@ -48,6 +49,7 @@ public final class GeneralSettingsModel {
         showPendingSync = StoredSetting(AppSettings.showPendingSync, port: settings)
         moveToSuperset = StoredSetting(AppSettings.moveToSuperset, port: settings)
         tabCounts = StoredSetting(AppSettings.tabCounts, port: settings)
+        accountCounts = StoredSetting(AppSettings.accountCounts, port: settings)
         downloadBodies = StoredSetting(AppSettings.downloadBodies, port: settings)
         bodyMax = StoredSetting(AppSettings.bodyMaxMessages, port: settings)
     }
@@ -62,7 +64,7 @@ public final class GeneralSettingsModel {
                         downloadBodies.start, bodyMax.start, confirmEverySend.start, sendAndMarkDone.start, showShortcutHints.start,
                         showPendingSync.start,
                         moveToSuperset.start,
-                        tabCounts.start, signatureOnReplies.start, defaultReminderTime.start,
+                        tabCounts.start, accountCounts.start, signatureOnReplies.start, defaultReminderTime.start,
                         reminderWeekdaysOnly.start] { setting() }
         hintOnClick.start()
     }
@@ -126,6 +128,16 @@ public final class GeneralSettingsModel {
         + "Off: V lists labels only."
     public static let tabCountsNote = "The number next to each split tab. Like a task list, it counts every "
         + "conversation still in the tab, read or not."
+
+    public static func accountCountTitle(_ mode: AccountCountMode) -> String {
+        switch mode {
+        case .important: "Important unread"
+        case .inbox: "All unread in Inbox"
+        case .off: "Off"
+        }
+    }
+    public static let accountCountsNote = "The number on each account picture and on All Inboxes. Important unread "
+        + "follows your splits."
     public static let zoomNote = "The size of the conversation list and of conversations on this Mac. In a conversation, "
         + "⌘+ and ⌘- change it too."
 
@@ -141,7 +153,7 @@ public final class GeneralSettingsModel {
          snoozeMarkUnread.errorMessage, downloadBodies.errorMessage, bodyMax.errorMessage,
          confirmEverySend.errorMessage, showShortcutHints.errorMessage, showPendingSync.errorMessage, sendAndMarkDone.errorMessage,
          moveToSuperset.errorMessage,
-         tabCounts.errorMessage, signatureOnReplies.errorMessage, defaultReminderTime.errorMessage,
+         tabCounts.errorMessage, accountCounts.errorMessage, signatureOnReplies.errorMessage, defaultReminderTime.errorMessage,
          reminderWeekdaysOnly.errorMessage].compactMap { $0 }.first
             ?? hintOnClick.errorMessage
     }

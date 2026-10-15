@@ -84,6 +84,13 @@ struct GeneralSettingsPage: View {
                     ForEach(TabCountMode.allCases, id: \.self) { Text(GeneralSettingsModel.tabCountTitle($0)).tag($0) }
                 }
                 .disabled(!model.availability.canEditSettings)
+                SettingsRow("Account counts", detail: GeneralSettingsModel.accountCountsNote,
+                            selection: binding(model.accountCounts)) {
+                    ForEach(AccountCountMode.allCases, id: \.self) {
+                        Text(GeneralSettingsModel.accountCountTitle($0)).tag($0)
+                    }
+                }
+                .disabled(!model.availability.canEditSettings)
                 SettingsRow("Zoom", detail: GeneralSettingsModel.zoomNote,
                             selection: Binding(get: { ReaderPreferences.shared.textZoom },
                                                set: { ReaderPreferences.shared.setZoom($0) })) {

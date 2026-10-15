@@ -105,6 +105,9 @@ public struct ShellToolbar: View {
             }
         }
         .padding(.horizontal, ShellMetrics.tabHitPadding)
+        .help(router.allInboxesUnread.map {
+            AccountSwitcherView.countPhrase($0.formatted(), router.accountCountMode)
+        } ?? "")
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
@@ -115,13 +118,14 @@ public struct ShellToolbar: View {
                 .font(theme.typeTabActive.swiftUIFont)
                 .foregroundStyle(theme.component.tab.textActive.color)
                 .lineLimit(1)
-            if let total = state.list?.totalCount, total > 0 {
-                Text("\(total)")
+            if let text = AccountState.titleCount(for: location, total: state.list?.totalCount) {
+                Text(text)
                     .font(theme.typeTabCount.swiftUIFont)
                     .foregroundStyle(theme.component.tab.count.color)
             }
         }
         .padding(.horizontal, ShellMetrics.tabHitPadding)
+        .help(Self.titleTooltip(state.list?.totalCount))
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
@@ -158,5 +162,10 @@ public struct ShellToolbar: View {
         let count = reader.messages.count == 1 ? "1 message" : "\(reader.messages.count) messages"
         if sender.isEmpty { return reader.messages.count == 1 ? "" : count }
         return "\(sender) · \(count)"
+    }
+
+    static func titleTooltip(_ total: Int?) -> String {
+        guard let total, total > 0 else { return "" }
+        return total == 1 ? "1 conversation" : "\(total.formatted()) conversations"
     }
 }
