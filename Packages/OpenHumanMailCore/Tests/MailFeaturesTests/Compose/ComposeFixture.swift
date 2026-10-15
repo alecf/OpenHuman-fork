@@ -125,3 +125,33 @@ final class TestGate: @unchecked Sendable {
         for c in pending { c.resume() }
     }
 }
+
+final class Checkpoint: @unchecked Sendable {
+    private let lock = NSLock()
+    private var reached = false
+    private var watchers: [CheckedContinuation<Void, Never>] = []
+    private let gate = TestGate()
+
+    func pass() async {
+        let waiting = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            reached = true
+            defer { watchers = [] }
+            return watchers
+        }
+        for c in waiting { c.resume() }
+        await gate.wait()
+    }
+
+    func arrived() async {
+        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+            let now = lock.withLock { () -> Bool in
+                if reached { return true }
+                watchers.append(c)
+                return false
+            }
+            if now { c.resume() }
+        }
+    }
+
+    func release() { gate.release() }
+}
