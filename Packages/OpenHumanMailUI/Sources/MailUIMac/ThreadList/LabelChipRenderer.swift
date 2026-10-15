@@ -17,6 +17,8 @@ final class LabelChipRenderer {
     }
 
     private var images: [Key: (image: NSImage, baseline: CGFloat)] = [:]
+    private var keys: [ObjectIdentifier: Key] = [:]
+    private var checkedLines: [ObjectIdentifier: (source: NSAttributedString, variant: NSAttributedString)] = [:]
 
     init(theme: ThemeTokens) {
         self.theme = theme
@@ -40,6 +42,7 @@ final class LabelChipRenderer {
         if let cached = images[key] { return cached }
         let made = make(title, hue: hue, muted: muted)
         images[key] = made
+        keys[ObjectIdentifier(made.image)] = key
         return made
     }
 
@@ -72,5 +75,25 @@ final class LabelChipRenderer {
             return true
         }
         return (image, (textY - font.descender).rounded())
+    }
+
+    func onChecked(_ line: NSAttributedString) -> NSAttributedString {
+        let id = ObjectIdentifier(line)
+        if let hit = checkedLines[id], hit.source === line { return hit.variant }
+        let variant = NSMutableAttributedString(attributedString: line)
+        var swapped = false
+        line.enumerateAttribute(.attachment, in: NSRange(location: 0, length: line.length)) { value, range, _ in
+            guard let attachment = value as? NSTextAttachment, let shown = attachment.image,
+                  let key = keys[ObjectIdentifier(shown)], key.hue != .neutral else { return }
+            let neutral = NSTextAttachment()
+            neutral.image = image(key.title, hue: .neutral, muted: key.muted).image
+            neutral.bounds = attachment.bounds
+            variant.addAttribute(.attachment, value: neutral, range: range)
+            swapped = true
+        }
+        let result: NSAttributedString = swapped ? variant : line
+        if checkedLines.count >= 512 { checkedLines.removeAll(keepingCapacity: true) }
+        checkedLines[id] = (line, result)
+        return result
     }
 }

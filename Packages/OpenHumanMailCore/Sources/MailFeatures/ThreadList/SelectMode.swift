@@ -88,6 +88,7 @@ public final class RecentOpens {
 
     public static let limit = 50
     public private(set) var entries: [Entry] = []
+    @ObservationIgnored public var now: @MainActor () -> Date = Date.init
 
     public init() {}
 

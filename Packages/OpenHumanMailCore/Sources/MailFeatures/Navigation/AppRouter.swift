@@ -186,7 +186,7 @@ public final class AppRouter {
 
     public func open(_ key: ThreadKey) {
         if let row = accounts.first(where: { $0.id == key.account })?.list?.row(for: key) {
-            recentOpens.record(row, at: Date())
+            recentOpens.record(row, at: recentOpens.now())
         }
         environment.calendarWindowIfStarted?.stepAside()
         leaveAllInboxes()

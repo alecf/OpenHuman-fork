@@ -3,6 +3,7 @@ import MailActions
 import MailFeatures
 import MailModel
 import MailTheme
+import MailUI
 
 @MainActor
 public final class ThreadRowView: NSTableCellView {
@@ -50,7 +51,7 @@ public final class ThreadRowView: NSTableCellView {
     private(set) var isHovering = false
     private(set) var isCursor = false
     private(set) var isPointerInside = false
-    static let checkboxSize: CGFloat = 12
+    static let checkboxSize = SelectCheckbox.side
     var showsEmptyCheckbox: Bool { !isChecked && !isPlaceholder && (isPointerInside || isCursor) }
     private(set) var showsActions = false
     static let showsActionsOnCursorRow = true
@@ -179,22 +180,19 @@ public final class ThreadRowView: NSTableCellView {
 
         let side = Self.checkboxSize
         let box = NSRect(x: x(c.dotCenterX - side / 2, side), y: ((height - side) / 2).rounded(), width: side, height: side)
-        let radius = min(CGFloat(style.theme.radiusXS), side / 4)
+        let radius = SelectCheckbox.cornerRadius(style.theme, side: side)
         if isChecked {
             style.accentFill.setFill()
             NSBezierPath(roundedRect: box, xRadius: radius, yRadius: radius).fill()
-            let mark = NSBezierPath()
-            mark.move(to: NSPoint(x: box.minX + side * 0.26, y: box.minY + side * 0.5))
-            mark.line(to: NSPoint(x: box.minX + side * 0.43, y: box.minY + side * 0.32))
-            mark.line(to: NSPoint(x: box.minX + side * 0.75, y: box.minY + side * 0.68))
-            mark.lineWidth = 1.5
+            let mark = NSBezierPath(cgPath: SelectCheckbox.tick(in: box, yUp: !isFlipped))
+            mark.lineWidth = SelectCheckbox.lineWidth
             mark.lineCapStyle = .round
             mark.lineJoinStyle = .round
             style.accentOnFill.setStroke()
             mark.stroke()
         } else if showsEmptyCheckbox {
-            let outline = NSBezierPath(roundedRect: box.insetBy(dx: 0.75, dy: 0.75), xRadius: radius, yRadius: radius)
-            outline.lineWidth = 1.5
+            let outline = NSBezierPath(roundedRect: SelectCheckbox.outlineRect(box), xRadius: radius, yRadius: radius)
+            outline.lineWidth = SelectCheckbox.lineWidth
             style.tertiary.setStroke()
             outline.stroke()
         } else if content.showsUnreadDot {
@@ -213,7 +211,8 @@ public final class ThreadRowView: NSTableCellView {
         }
         if let sender = frames.sender { content.sender.draw(with: sender, options: options, context: nil) }
         if let line = frames.line {
-            let text = fittedLine(width: c.subject.upperBound - c.subject.lowerBound)
+            let fitted = fittedLine(width: c.subject.upperBound - c.subject.lowerBound)
+            let text = isChecked ? style.chips.onChecked(fitted) : fitted
             (onCursor ? style.onCursor(text) : text).draw(with: line, options: options, context: nil)
         }
         NSGraphicsContext.restoreGraphicsState()

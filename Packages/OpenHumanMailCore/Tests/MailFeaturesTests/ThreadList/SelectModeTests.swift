@@ -224,10 +224,15 @@ import Testing
         let f = ActionFixture()
         await untilObserved { f.router.list?.state == .loaded && f.rows.count == 10 }
         let keys = f.rows.map(\.id)
+        let first = Date(timeIntervalSince1970: 1_790_000_000)
+        f.router.recentOpens.now = { first }
         f.router.open(keys[2])
         f.router.closeReader()
+        f.router.recentOpens.now = { first.addingTimeInterval(90) }
         f.router.open(keys[5])
         #expect(f.router.recentOpens.entries.map(\.id) == [keys[5], keys[2]])
         #expect(f.router.recentOpens.entries.last?.subject == f.rows[2].subject)
+        #expect(f.router.recentOpens.entries.map(\.openedAt) == [first.addingTimeInterval(90), first],
+                "opens are stamped by the recent-opens clock")
     }
 }

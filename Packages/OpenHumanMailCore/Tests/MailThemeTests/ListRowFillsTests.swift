@@ -26,6 +26,35 @@ import Testing
         #expect(same.listCursorFill == same.bgRowSelected.composited(over: same.bgWindow))
     }
 
+    @Test func checkedRowsGetTheThemesOwnTintApartFromTheCursorEverywhere() {
+        for (label, t) in LabelChipContrastTests.everyResolvedTheme() {
+            let fill = t.listCheckedFill
+            #expect(fill == t.component.row.bgChecked.composited(over: t.bgWindow), "the theme's checked tint: \(label)")
+            #expect(fill != t.listCursorFill, "\(label)")
+            #expect(ThemeTokens.standApart(t.listCursorFill, fill, luminance: 1.06), "checked vs cursor: \(label)")
+            #expect(t.listCursorFillReads(fill), "text, bar, hover and chips on the checked plate: \(label)")
+        }
+        for themeID in [BuiltinThemeID.light, BuiltinThemeID.dark] {
+            let t = Self.resolve(themeID, accent: "periwinkle")
+            #expect(t.component.row.bgChecked != t.accentSubtle, "\(themeID)")
+        }
+    }
+
+    @Test func aCheckedTintThatMatchesTheCursorFallsBackToOneThatStandsApart() {
+        for base in [ThemeTokens.light, ThemeTokens.dark] {
+            var t = base
+            t.component.row.bgChecked = t.component.row.bgCursor
+            #expect(!t.listCheckedFillReads(t.component.row.bgChecked))
+            #expect(t.listCheckedFill != t.listCursorFill)
+            #expect(t.listCheckedFillReads(t.listCheckedFill))
+        }
+    }
+
+    @Test func lightHoverIsAVisibleStepOffTheWindow() {
+        let t = Self.resolve(BuiltinThemeID.light, accent: "periwinkle")
+        #expect(t.component.row.bgHover.composited(over: t.bgWindow).contrastRatio(on: t.bgWindow) >= 1.08)
+    }
+
     @Test func theDrawnFillReadsEverywhereAndIsTheBandAlmostEverywhere() {
         let fallsBack: Set<String> = [
             "\(BuiltinThemeID.dark) graphite increaseContrast=false", "\(BuiltinThemeID.dark) graphite increaseContrast=true",
