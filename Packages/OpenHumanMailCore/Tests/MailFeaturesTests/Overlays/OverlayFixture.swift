@@ -15,7 +15,8 @@ struct OverlayFixture {
 
     init(corpus: FakeCorpus = .make(threadCount: 10, now: fixedNow), options: FakeMailStore.Options = .init(remoteAck: .immediate),
          flags: FeatureFlags = FeatureFlags(), now: @escaping @Sendable () -> Date = { fixedNow }) {
-        env = AppEnvironment.fake(corpus: corpus, options: options, featureFlags: flags)
+        env = AppEnvironment.fake(corpus: corpus, options: options, featureFlags: flags,
+                                  notices: NoticeCenter(autoExpire: false))
         store = env.commands as! FakeMailStore
         router = env.router
         center = env.overlays
@@ -31,9 +32,18 @@ struct OverlayFixture {
     var rows: [ThreadRow] { router.list?.rows ?? [] }
 
     func loaded(_ count: Int? = nil) async {
-        await eventually { router.active != nil }
+        await untilObserved { router.active != nil }
         if router.active?.location != .system(.inbox) { router.go(to: .system(.inbox)) }
-        await eventually { router.list?.state == .loaded && (count.map { router.list?.rows.count == $0 } ?? true) }
+        await untilObserved { router.list?.state == .loaded && (count.map { router.list?.rows.count == $0 } ?? true) }
+    }
+
+    func settled() async {
+        await registry.lastTask?.value
+        await registry.threadActions?.lastTask?.value
+    }
+
+    func hasToast(_ prefix: String) -> Bool {
+        env.notices.toasts.contains { $0.message.hasPrefix(prefix) }
     }
 
     @discardableResult

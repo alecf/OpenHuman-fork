@@ -204,6 +204,8 @@ import Testing
         await eventually { state.labels.contains { $0.displayName == "Clients" } }
         let clients = try #require(state.labels.first { $0.displayName == "Clients" })
         let key = try #require(f.router.list?.cursor)
+        let before = f.store.labelNames(of: key)
+        #expect(inInbox(f, key) && !before.contains("Clients"))
 
         #expect(await f.run(.label))
         guard case .labelPicker(let targets, let mode)? = f.presenter.shown.last else {
@@ -213,9 +215,9 @@ import Testing
         #expect(targets == [key] && mode == .label)
         await f.registry.threadActions?.setLabels([key], add: [clients], remove: [], host: f.router)?.value
         await f.toast("Labeled Clients")
-        #expect(f.store.labelNames(of: key).contains("Clients"))
+        #expect(f.store.labelNames(of: key) == before.union(["Clients"]))
         #expect(await f.run(.undo))
-        await eventually { !f.store.labelNames(of: key).contains("Clients") }
+        #expect(f.store.labelNames(of: key) == before)
 
         #expect(await f.run(.move))
         #expect(f.presenter.lastKind == .labelPicker)
@@ -326,6 +328,10 @@ import Testing
         f.store.labelNames(of: key).contains { $0.uppercased() == "INBOX" }
     }
 
+    func archived(_ f: ActionFixture, _ key: ThreadKey) -> Bool {
+        f.store.isVisible(key) && !inInbox(f, key)
+    }
+
     @Test func oneClickUnsubscribeMovesOnAtOnceAndSendsOnlyAfterItsUndoWindow() async throws {
         let f = ActionFixture()
         let (handler, window) = try heldWindow(f)
@@ -334,7 +340,7 @@ import Testing
         #expect(await f.run(.unsubscribe))
         #expect(f.router.list?.row(for: thread) == nil, "hidden before the window ends")
         #expect(f.router.reader?.thread == older, "the reader moved on")
-        #expect(!inInbox(f, thread) && !inTrash(f, thread), "marked done on this Mac")
+        #expect(archived(f, thread) && !inTrash(f, thread), "marked done on this Mac")
         let toast = try #require(f.env.notices.toasts.first { $0.message == "Unsubscribing from \(domain)…" })
         #expect(toast.style == .undo && toast.actionTitle == "Undo" && toast.shortcut == "⌘Z")
         #expect(!f.presenter.shown.contains { $0.kind == .compose || $0.kind == .openURL }, "nothing else opens")
@@ -346,7 +352,7 @@ import Testing
         #expect(offer.actionTitle == "Archive all 1" && offer.secondaryActionTitle == "Move 2 to Trash")
         await f.env.notices.activate(offer.id)
         #expect(f.router.list?.row(for: older) == nil)
-        #expect(!inInbox(f, older))
+        #expect(archived(f, older))
     }
 
     @Test func undoInsideTheWindowCancelsTheRequestAndBringsTheConversationBack() async throws {
@@ -392,7 +398,7 @@ import Testing
         let (handler, window) = try heldWindow(f)
         let (thread, older, _) = try await letters(f)
         #expect(await f.run(.unsubscribe))
-        #expect(f.router.reader?.thread == older && !inInbox(f, thread))
+        #expect(f.router.reader?.thread == older && archived(f, thread))
         f.store.failNextCommand()
         await endWindow(handler, window)
         #expect(f.store.unsubscribeRequests.isEmpty)
@@ -480,7 +486,7 @@ import Testing
         await endWindow(handler, window)
         let offer = try #require(f.env.notices.toasts.first { $0.message.hasPrefix("Unsubscribe request sent.") })
         f.env.notices.dismiss(offer.id)
-        #expect(!inTrash(f, thread) && !inInbox(f, thread), "Keep leaves the unsubscribed conversation done")
+        #expect(!inTrash(f, thread) && archived(f, thread), "Keep leaves the unsubscribed conversation done")
         #expect(inInbox(f, older) && !inTrash(f, older), "Keep leaves the rest of the sender's mail alone")
 
         let g = ActionFixture()

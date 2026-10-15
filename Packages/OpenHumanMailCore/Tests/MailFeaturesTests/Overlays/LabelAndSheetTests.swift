@@ -7,15 +7,19 @@ import Testing
 @testable import MailFeatures
 
 @MainActor
-@Suite struct LabelPickerTests {
+@Suite(.timeLimit(.minutes(2))) struct LabelPickerTests {
     private func fixture() async throws -> (OverlayFixture, ThreadKey, LabelInfo) {
         let f = OverlayFixture(corpus: .rich(threadCount: 60, now: fixedNow))
         await f.loaded()
         let state = try #require(f.router.active)
-        await eventually { state.labels.contains { $0.displayName == "Clients" } }
+        await untilObserved { state.labels.contains { $0.displayName == "Clients" } }
         let key = try #require(f.router.list?.cursor)
         let clients = try #require(state.labels.first { $0.displayName == "Clients" })
         return (f, key, clients)
+    }
+
+    private func isInInbox(_ names: Set<String>) -> Bool {
+        names.contains { $0.uppercased() == "INBOX" }
     }
 
     @Test func lOpensThePickerWithUserLabelsOnly() async throws {
@@ -30,6 +34,8 @@ import Testing
 
     @Test func spaceToggleAndEnterApplyWithUndo() async throws {
         let (f, key, clients) = try await fixture()
+        let before = f.store.labelNames(of: key)
+        #expect(isInInbox(before) && !before.contains("Clients"))
         await f.run(.label)
         let picker = try #require(f.labelPicker)
         picker.query = "clients"
@@ -41,20 +47,24 @@ import Testing
         #expect(picker.changes.add.map(\.id) == [clients.id])
         picker.confirm()
         #expect(f.center.overlay.isNone)
-        await f.toast("Labeled Clients")
-        #expect(f.store.labelNames(of: key).contains("Clients"))
+        await f.settled()
+        #expect(f.hasToast("Labeled Clients"))
+        #expect(f.store.labelNames(of: key) == before.union(["Clients"]))
         #expect(await f.run(.undo))
-        await eventually { !f.store.labelNames(of: key).contains("Clients") }
+        #expect(f.store.labelNames(of: key) == before)
     }
 
     @Test func enterAppliesTheCursorRowWhenNothingWasToggled() async throws {
         let (f, key, _) = try await fixture()
+        let before = f.store.labelNames(of: key)
+        #expect(isInInbox(before) && !before.contains("Clients"))
         await f.run(.label)
         let picker = try #require(f.labelPicker)
         picker.query = "clients"
         picker.confirm()
-        await f.toast("Labeled Clients")
-        #expect(f.store.labelNames(of: key).contains("Clients"))
+        await f.settled()
+        #expect(f.hasToast("Labeled Clients"))
+        #expect(f.store.labelNames(of: key) == before.union(["Clients"]))
     }
 
     @Test func aSetOfThreadsShowsTheMixedState() async throws {
@@ -81,8 +91,11 @@ import Testing
         #expect(picker.mode == .move && picker.title == "Move to…" && picker.rows.allSatisfy { $0.check == nil })
         picker.query = "clients"
         picker.confirm()
-        await f.toast("Moved to Clients")
-        await eventually { f.router.list?.row(for: key) == nil }
+        await f.settled()
+        #expect(f.hasToast("Moved to Clients"))
+        #expect(!f.rows.contains { $0.id == key })
+        let names = f.store.labelNames(of: key)
+        #expect(names.contains("Clients") && !isInInbox(names))
     }
 
     @Test func goToLabelNavigates() async throws {
@@ -98,6 +111,8 @@ import Testing
 
     @Test func createLabelCreatesAndAppliesInOneUndoableStep() async throws {
         let (f, key, _) = try await fixture()
+        let before = f.store.labelNames(of: key)
+        #expect(isInInbox(before))
         await f.run(.label)
         let picker = try #require(f.labelPicker)
         picker.query = "Brand New"
@@ -105,11 +120,12 @@ import Testing
         #expect(create.title == "Create label “Brand New”")
         picker.moveCursor(by: picker.rows.count - 1)
         picker.confirm()
-        await f.toast("Created label Brand New")
-        #expect(f.store.labelNames(of: key).contains("Brand New"))
+        await f.settled()
+        #expect(f.hasToast("Created label Brand New"))
+        #expect(f.store.labelNames(of: key) == before.union(["Brand New"]))
         #expect(f.env.undo?.stack.count == 1, "one entry")
         #expect(await f.run(.undo))
-        await eventually { !f.store.labelNames(of: key).contains("Brand New") }
+        #expect(f.store.labelNames(of: key) == before)
     }
 
     @Test func createLabelWorksOffline() async throws {
@@ -118,15 +134,19 @@ import Testing
         let f = OverlayFixture(corpus: .rich(threadCount: 60, now: fixedNow), options: options)
         await f.loaded()
         let key = try #require(f.router.list?.cursor)
+        let before = f.store.labelNames(of: key)
+        #expect(isInInbox(before))
         f.store.setOffline(true)
+        let pending = f.store.pendingOperationCount
         f.center.present(.labelPicker(targets: [key], mode: .label))
         let picker = try #require(f.labelPicker)
         picker.query = "Offline Label"
         picker.moveCursor(by: picker.rows.count - 1)
         picker.confirm()
-        await f.toast("Created label Offline Label")
-        #expect(f.store.labelNames(of: key).contains("Offline Label"))
-        #expect(f.store.pendingOperationCount > 0, "queued for when the connection returns")
+        await f.settled()
+        #expect(f.hasToast("Created label Offline Label"))
+        #expect(f.store.labelNames(of: key) == before.union(["Offline Label"]))
+        #expect(f.store.pendingOperationCount > pending, "queued for when the connection returns")
     }
 
     @Test func theCreateRowIsHiddenForAnExactNameAndWhenReadOnly() async throws {

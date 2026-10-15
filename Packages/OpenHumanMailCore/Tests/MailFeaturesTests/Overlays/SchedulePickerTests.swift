@@ -7,7 +7,7 @@ import Testing
 @testable import MailFeatures
 
 @MainActor
-@Suite struct SchedulePickerTests {
+@Suite(.timeLimit(.minutes(2))) struct SchedulePickerTests {
     @Test func hOpensTheSnoozePickerOnTheCursorAndAChoiceSnoozesWithUndo() async throws {
         let f = OverlayFixture()
         await f.loaded(10)
@@ -18,11 +18,13 @@ import Testing
         #expect(picker.title == "Snooze until…" && picker.footer == "Comes back to your inbox. Syncs to your other Mac.")
         picker.chooseNumber(2)
         #expect(f.center.overlay.isNone, "a choice closes the card")
-        await f.toast("Snoozed until ")
-        await eventually { f.router.list?.row(for: key) == nil }
+        await f.settled()
+        #expect(f.hasToast("Snoozed until "))
+        #expect(!f.rows.contains { $0.id == key })
         #expect(try await Self.snooze(of: key, f) != nil)
         #expect(await f.run(.undo))
-        await eventually { f.router.list?.row(for: key) != nil }
+        #expect(try await Self.snooze(of: key, f) == nil)
+        await untilObserved { f.rows.contains { $0.id == key } }
     }
 
     @Test func snoozingASnoozedThreadShowsItsCurrentTimeFromTheCacheAndReschedules() async throws {
@@ -33,17 +35,15 @@ import Testing
         f.store.simulateOtherInstallSnooze(key, until: first)
         f.center.present(.snoozePicker(targets: [key]))
         let picker = try #require(f.timePicker)
-        await eventually { picker.currentLine != nil }
+        await untilObserved { picker.currentLine != nil }
         #expect(picker.current == .snoozedUntil(ScheduleStamp.floorToMinute(first)))
         picker.chooseNumber(4)
-        await f.toast("Snoozed until ")
-        await eventuallyAsync {
-            if case .until(let date, _)? = try? await Self.snooze(of: key, f) { date != ScheduleStamp.floorToMinute(first) } else { false }
-        }
+        await f.settled()
+        #expect(f.hasToast("Snoozed until "))
+        let rescheduled = try await Self.snooze(of: key, f)?.wakeAt
+        #expect(rescheduled != nil && rescheduled != ScheduleStamp.floorToMinute(first))
         #expect(await f.run(.undo))
-        await eventuallyAsync {
-            if case .until(let date, _)? = try? await Self.snooze(of: key, f) { date == ScheduleStamp.floorToMinute(first) } else { false }
-        }
+        #expect(try await Self.snooze(of: key, f)?.wakeAt == ScheduleStamp.floorToMinute(first))
     }
 
     @Test func aMalformedSnoozeOffersWakeNowAndSnoozeAgain() async throws {
@@ -53,13 +53,14 @@ import Testing
         await f.loaded()
         f.center.present(.snoozePicker(targets: [unknown]))
         let picker = try #require(f.timePicker)
-        await eventually { picker.isWakeTimeUnknown }
+        await untilObserved { picker.isWakeTimeUnknown }
         #expect(picker.currentLine == "Wake time unknown")
         #expect(picker.rows.map(\.title) == ["Wake now", "Snooze again…"])
         picker.confirm()
         #expect(f.center.overlay.isNone)
-        await f.toast("Moved to Inbox")
-        await eventuallyAsync { (try? await Self.snooze(of: unknown, f)) == .some(nil) }
+        await f.settled()
+        #expect(f.hasToast("Moved to Inbox"))
+        #expect(try await Self.snooze(of: unknown, f) == nil)
         f.center.present(.snoozePicker(targets: [unknown]))
         let again = try #require(f.timePicker)
         again.apply(snooze: .wakeTimeUnknown, reminder: nil)
@@ -75,7 +76,7 @@ import Testing
         await f.loaded()
         f.center.present(.remindPicker(thread: withReminder))
         let picker = try #require(f.timePicker)
-        await eventually { picker.currentLine != nil }
+        await untilObserved { picker.currentLine != nil }
         #expect(picker.currentLine?.hasPrefix("Current: ") == true)
         #expect(picker.rows.last?.title == "Clear reminder")
     }
@@ -90,29 +91,37 @@ import Testing
         #expect(picker.rows.map(\.title) == ["Later today", "Tomorrow morning", "In 2 days", "Next week", "Pick a date…", "Someday"])
         picker.onlyIfNoReply = true
         picker.chooseNumber(2)
-        await f.toast("Reminder set for ")
+        await f.settled()
+        #expect(f.hasToast("Reminder set for "))
         #expect(f.env.notices.toasts.contains { $0.message.hasSuffix("if no reply") })
-        await eventually { f.router.list?.row(for: key)?.reminderAt != nil }
-        let first = try #require(f.router.list?.row(for: key)?.reminderAt)
+        let placed = try await Self.reminders(f)
+        #expect(placed.map(\.thread) == [key] && placed.first?.kind == .ifNoReply)
+        await untilObserved { f.rows.first { $0.id == key }?.reminderAt != nil }
+        let first = try #require(f.rows.first { $0.id == key }?.reminderAt)
 
         #expect(await f.run(.remind))
         picker = try #require(f.timePicker)
-        await eventually { picker.currentLine?.hasPrefix("Current: ") == true }
+        await untilObserved { picker.currentLine?.hasPrefix("Current: ") == true }
         #expect(picker.currentLine?.hasSuffix("(if no reply)") == true)
         #expect(picker.rows.last?.title == "Clear reminder")
         picker.chooseNumber(3)
-        await eventually { f.router.list?.row(for: key)?.reminderAt.map { $0 != first } == true }
+        await f.settled()
         let reminders = try await Self.reminders(f)
         #expect(reminders.count == 1, "replaced, not added")
+        #expect(reminders.first?.dueAt != placed.first?.dueAt)
+        await untilObserved { f.rows.first { $0.id == key }?.reminderAt.map { $0 != first } == true }
 
         #expect(await f.run(.remind))
         picker = try #require(f.timePicker)
-        await eventually { picker.rows.last?.title == "Clear reminder" }
+        await untilObserved { picker.rows.last?.title == "Clear reminder" }
         picker.choose(picker.rows.last!)
-        await f.toast("Reminder cleared")
-        await eventually { f.router.list?.row(for: key)?.reminderAt == nil }
+        await f.settled()
+        #expect(f.hasToast("Reminder cleared"))
+        #expect(try await Self.reminders(f).isEmpty)
+        await untilObserved { f.rows.first { $0.id == key }?.reminderAt == nil }
         #expect(await f.run(.undo))
-        await eventually { f.router.list?.row(for: key)?.reminderAt != nil }
+        #expect(try await Self.reminders(f).map(\.thread) == [key])
+        await untilObserved { f.rows.first { $0.id == key }?.reminderAt != nil }
     }
 
     @Test func theRemindersLocationListsSoonestFirst() async throws {
@@ -126,7 +135,7 @@ import Testing
             await f.registry.threadActions?.remind(key, at: date, kind: .always, host: f.router)?.value
         }
         f.router.go(to: .system(.reminders))
-        await eventually { f.router.list?.rows.count == 3 }
+        await untilObserved { f.router.list?.rows.count == 3 }
         #expect(f.rows.map(\.id) == [keys[1], keys[2], keys[0]])
         #expect(f.rows.compactMap(\.reminderAt) == [sooner, middle, later])
     }

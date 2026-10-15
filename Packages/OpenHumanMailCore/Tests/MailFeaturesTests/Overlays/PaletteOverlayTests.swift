@@ -7,7 +7,7 @@ import Testing
 @testable import MailFeatures
 
 @MainActor
-@Suite struct PaletteOverlayTests {
+@Suite(.timeLimit(.minutes(2))) struct PaletteOverlayTests {
     @Test func commandKOpensTheOverlayAndTogglesIt() async throws {
         let f = OverlayFixture()
         await f.loaded(10)
@@ -62,10 +62,13 @@ import Testing
         palette.query = "snooze until tomorrow morning"
         #expect(palette.performSelected())
         #expect(!f.center.isShowing)
-        await f.toast("Snoozed until ")
-        await eventually { f.router.list?.row(for: target) == nil }
+        await f.settled()
+        #expect(f.hasToast("Snoozed until "))
+        #expect(!f.rows.contains { $0.id == target })
+        #expect(try await SchedulePickerTests.snooze(of: target, f) != nil, "the selection captured at open was snoozed")
         #expect(await f.run(.undo))
-        await eventually { f.router.list?.row(for: target) != nil }
+        #expect(try await SchedulePickerTests.snooze(of: target, f) == nil)
+        await untilObserved { f.rows.contains { $0.id == target } }
     }
 
     @Test func remindPresetSetsAReminderOnTheFocusedThread() async throws {
@@ -77,8 +80,10 @@ import Testing
         palette.query = "remind me tomorrow morning"
         let entry = try #require(palette.entries.first { if case .remind(_, .always) = $0.kind { true } else { false } })
         palette.perform(entry)
-        await f.toast("Reminder set for ")
-        await eventually { f.router.list?.row(for: target)?.reminderAt != nil }
+        await f.settled()
+        #expect(f.hasToast("Reminder set for "))
+        #expect(try await SchedulePickerTests.reminders(f).map(\.thread) == [target])
+        await untilObserved { f.rows.first { $0.id == target }?.reminderAt != nil }
     }
 
     @Test func clearReminderListsOnlyWhenTheThreadHasOne() async throws {
@@ -91,21 +96,25 @@ import Testing
         #expect(!palette.entries.contains { $0.kind == .action(.clearReminder) })
         palette.close()
         await f.registry.threadActions?.remind(target, at: fixedNow.addingTimeInterval(86_400), kind: .always, host: f.router)?.value
-        await eventually { f.router.list?.row(for: target)?.reminderAt != nil }
+        await untilObserved { f.rows.first { $0.id == target }?.reminderAt != nil }
         await f.run(.commandPalette)
         palette = try #require(f.palette)
         palette.query = "clear reminder"
         #expect(palette.entries.first?.kind == .action(.clearReminder))
         #expect(palette.performSelected())
-        await f.toast("Reminder cleared")
+        await f.settled()
+        #expect(f.hasToast("Reminder cleared"))
+        #expect(try await SchedulePickerTests.reminders(f).isEmpty)
     }
 
     @Test func labelsAndNavigationTargets() async throws {
         let f = OverlayFixture(corpus: .rich(threadCount: 60, now: fixedNow))
         await f.loaded()
         let state = try #require(f.router.active)
-        await eventually { state.labels.contains { $0.displayName == "Clients" } }
+        await untilObserved { state.labels.contains { $0.displayName == "Clients" } }
         let target = try #require(f.router.list?.cursor)
+        let before = f.store.labelNames(of: target)
+        #expect(before.contains { $0.uppercased() == "INBOX" } && !before.contains("Clients"))
         await f.run(.commandPalette)
         let palette = try #require(f.palette)
         palette.query = "clients"
@@ -123,14 +132,15 @@ import Testing
         second.query = "label: clients"
         let entry = try #require(second.entries.first { if case .label = $0.kind { true } else { false } })
         second.perform(entry)
-        await f.toast("Labeled Clients")
-        #expect(f.store.labelNames(of: target).contains("Clients"))
+        await f.settled()
+        #expect(f.hasToast("Labeled Clients"))
+        #expect(f.store.labelNames(of: target) == before.union(["Clients"]))
     }
 
     @Test func otherAccountsAreGoToTargets() async throws {
         let f = OverlayFixture(corpus: .rich(threadCount: 60, now: fixedNow))
         await f.loaded()
-        await eventually { f.router.accounts.count == 2 }
+        await untilObserved { f.router.accounts.count == 2 }
         let other = try #require(f.router.accounts.first { $0.id != f.router.activeAccountID })
         await f.run(.commandPalette)
         let palette = try #require(f.palette)
