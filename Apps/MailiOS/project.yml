@@ -1,0 +1,87 @@
+name: MailiOS
+options:
+  bundleIdPrefix: dev.openhuman
+  deploymentTarget: { iOS: "27.0" }
+  createIntermediateGroups: true
+configs:
+  Debug: debug
+  DevTools: release
+  Release: release
+configFiles:
+  Debug: Config/Debug.xcconfig
+  DevTools: Config/DevTools.xcconfig
+  Release: Config/Release.xcconfig
+packages:
+  OpenHumanCore: { path: ../../Packages/OpenHumanCore }
+  OpenHumanMailUI: { path: ../../Packages/OpenHumanMailUI }
+  OpenHumanMailCore: { path: ../../Packages/OpenHumanMailCore }
+  OpenHumanStore: { path: ../../Packages/OpenHumanStore }
+  OpenHumanGmail: { path: ../../Packages/OpenHumanGmail }
+  OpenHumanSync: { path: ../../Packages/OpenHumanSync }
+  OpenHumanMailLive: { path: ../../Packages/OpenHumanMailLive }
+targets:
+  MailiOS:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+      - path: ../Mail/Sources/BuildFlavor.swift
+        group: Shared
+      - path: ../Mail/Sources/MailStoreAdapter/FixtureStoreSeeder.swift
+        group: Shared
+      - path: ../Mail/Sources/Live/FakeGmailLaunch.swift
+        group: Shared
+    info:
+      path: Resources/Info.generated.plist
+      properties:
+        CFBundleDisplayName: "OpenHuman Mail"
+        CFBundleName: "OpenHuman Mail"
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UIApplicationSceneManifest: { UIApplicationSupportsMultipleScenes: false }
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        ITSAppUsesNonExemptEncryption: false
+        OHGitCommit: $(OH_GIT_COMMIT)
+        OHReleaseChannel: $(OH_RELEASE_CHANNEL)
+    dependencies:
+      - { package: OpenHumanCore, product: OpenHumanCore }
+      - { package: OpenHumanMailUI, product: MailUI }
+      - { package: OpenHumanMailCore, product: MailFeatures }
+      - { package: OpenHumanMailCore, product: MailActions }
+      - { package: OpenHumanMailCore, product: MailModel }
+      - { package: OpenHumanMailCore, product: MailRender }
+      - { package: OpenHumanMailCore, product: MailTheme }
+      - { package: OpenHumanMailCore, product: MailFakes }
+      - { package: OpenHumanStore, product: OpenHumanStore }
+      - { package: OpenHumanGmail, product: OpenHumanGmail }
+      # Linked in every flavour; only Debug and DevTools builds compile the -UseFakeGmail entry point that uses it
+      - { package: OpenHumanGmail, product: OpenHumanGmailTesting }
+      - { package: OpenHumanSync, product: OpenHumanSync }
+      - { package: OpenHumanMailLive, product: OpenHumanMailLive }
+      - { package: OpenHumanMailLive, product: MailSystem }
+  MailiOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [Tests/MailiOSTests]
+    dependencies: [{ target: MailiOS }]
+    settings:
+      PRODUCT_NAME: MailiOSTests
+      PRODUCT_BUNDLE_IDENTIFIER: $(OH_BUNDLE_ID_PREFIX).mail.ios.tests
+      TEST_HOST: $(BUILT_PRODUCTS_DIR)/OpenHumanMail.app/OpenHumanMail
+      BUNDLE_LOADER: $(TEST_HOST)
+      GENERATE_INFOPLIST_FILE: YES
+schemes:
+  MailiOS:
+    build: { targets: { MailiOS: all } }
+    run:
+      config: Debug
+      commandLineArguments: { "-UseFakeData": true, "-UseFakeGmail": false }
+    test:
+      config: Debug
+      targets: [MailiOSTests]
+      commandLineArguments: { "-UseFakeData": true }
+    analyze: { config: Debug }
+    profile: { config: Release }
+    archive: { config: Release }

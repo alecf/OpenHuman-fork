@@ -7,12 +7,14 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 SCRIPTS = [
     "Tools/bootstrap.sh",
     "Tools/ci/build-app.sh",
+    "Tools/ci/build-ios-app.sh",
     "Tools/ci/build-packages.sh",
     "Tools/ci/package-app.sh",
     "Tools/release/bump-version.sh",
     "Tools/release/check-release.sh",
     "Tools/release/make-dmg.sh",
     "Tools/release/publish-github.sh",
+    "Tools/render-ios.sh",
     "Tools/render-sweep.sh",
 ]
 NOT_FOR_USERS = re.compile(r"§|\bagents?\b|\bauthor\b", re.IGNORECASE)
