@@ -144,8 +144,7 @@ public final class AIModelChoiceModel {
         do {
             try center.update { settings in
                 if feature == .classify {
-                    settings.featurePins[.classify] = nil
-                    settings.classifier = id.isLocalModel ? .localModel : .appleModel
+                    settings.useClassifier(id)
                 } else {
                     settings.featurePins[feature] = pin
                     if feature == .replyOptions { settings.agentCLIAutoQuickReplies = id.isAgentCLI }

@@ -10,16 +10,33 @@ public enum LocalModelStatus: Sendable, Hashable {
     case failed(String)
 }
 
+public struct LeftoverLocalModel: Sendable, Hashable, Identifiable {
+    public let id: String
+    public let name: String
+    public let bytes: Int64
+
+    public init(id: String, name: String, bytes: Int64) {
+        self.id = id
+        self.name = name
+        self.bytes = bytes
+    }
+}
+
 public protocol LocalClassifierModelPort: AnyObject, Sendable {
     var modelName: String { get }
+    var classifierID: AIProviderID { get }
     var sizeBytes: Int64 { get }
+    var memoryBytes: Int64 { get }
     var licence: String { get }
+    var unsupportedReason: String? { get }
     func directoryPath() async -> String
     func status() async -> LocalModelStatus
     func download(confirmedSizeBytes: Int64) async -> AsyncStream<LocalModelStatus>
     func cancel() async
     func delete() async throws
     func useDirectory(_ path: String?) async throws
+    func leftoverModels() async -> [LeftoverLocalModel]
+    func deleteLeftover(id: String) async throws
 }
 
 @MainActor @Observable
@@ -28,13 +45,15 @@ public final class ClassifierSettingsModel {
     public let port: (any LocalClassifierModelPort)?
     public private(set) var status: LocalModelStatus?
     public private(set) var directory: String?
+    public private(set) var leftovers: [LeftoverLocalModel] = []
     public private(set) var error: String?
     @ObservationIgnored public var onChange: (@MainActor () async -> Void)?
     @ObservationIgnored private var downloadTask: Task<Void, Never>?
 
-    public static let title = "Downloaded model"
-    public static let footnote = "A model you can download for triage and auto labels instead of Apple's. It runs on this Mac; "
-        + "email text never leaves it. Choose it under Model for each feature."
+    public static let title = "High-accuracy model (optional)"
+    public static let footnote = "Triage and auto labels use Apple's on-device model and Mail's rules unless you choose "
+        + "this larger model. It sorts mail more accurately but is slower and needs much more memory. It runs on this "
+        + "Mac; email text never leaves it. Download it here, then choose it under Model for each feature."
     public static let lowPowerTitle = "Also in Low Power Mode"
     public static let lowPowerDetail = "Off: the downloaded model pauses in Low Power Mode and while the Mac is hot."
 
@@ -48,7 +67,9 @@ public final class ClassifierSettingsModel {
     public var preference: ClassifierPreference {
         get { center.settings.classifier }
         set {
-            change { $0.classifier = newValue }
+            guard newValue == .appleModel || port != nil else { return }
+            let id = newValue == .localModel ? port?.classifierID : nil
+            change { $0.useClassifier(id ?? .appleSystemClassifier) }
             Task { await onChange?() }
         }
     }
@@ -63,6 +84,17 @@ public final class ClassifierSettingsModel {
         return "Download classifier model (\(Self.sizeText(port.sizeBytes)))"
     }
 
+    public var requirementsText: String? {
+        guard let port else { return nil }
+        return "Needs \(Self.sizeText(port.sizeBytes)) of disk space and \(Self.memoryText(port.memoryBytes)) of "
+            + "memory while it works, so other apps can slow down. It takes over a minute to load, then a few "
+            + "seconds for each email."
+    }
+
+    public var unsupportedText: String? {
+        port?.unsupportedReason.map { "This Mac can't run it. " + $0 }
+    }
+
     public var isDownloading: Bool {
         switch status {
         case .downloading, .verifying: true
@@ -71,7 +103,7 @@ public final class ClassifierSettingsModel {
     }
 
     public var canDownload: Bool {
-        guard port != nil else { return false }
+        guard let port, port.unsupportedReason == nil else { return false }
         switch status {
         case .notDownloaded, .failed: return true
         default: return false
@@ -86,7 +118,7 @@ public final class ClassifierSettingsModel {
         case nil: return "Checking…"
         case .notDownloaded(let partial) where partial > 0:
             return "Stopped at \(Self.sizeText(partial)) of \(Self.sizeText(port.sizeBytes)). Download again to resume."
-        case .notDownloaded: return "Not downloaded. Nothing is downloaded until you click."
+        case .notDownloaded: return unsupportedText ?? "Not downloaded. Nothing is downloaded until you click."
         case .downloading(let done, let total):
             let percent = total > 0 ? Int((Double(done) / Double(total) * 100).rounded(.down)) : 0
             return "Downloading… \(percent)%"
@@ -106,6 +138,7 @@ public final class ClassifierSettingsModel {
         guard let port else { return }
         status = await port.status()
         directory = await port.directoryPath()
+        leftovers = await port.leftoverModels()
     }
 
     public func download() {
@@ -143,6 +176,17 @@ public final class ClassifierSettingsModel {
         await onChange?()
     }
 
+    public func deleteLeftover(_ id: String) async {
+        guard let port, leftovers.contains(where: { $0.id == id }) else { return }
+        do {
+            try await port.deleteLeftover(id: id)
+            error = nil
+        } catch {
+            self.error = "The old model couldn't be deleted."
+        }
+        await refresh()
+    }
+
     public func useDirectory(_ path: String?) async {
         guard let port, !isDownloading else { return }
         do {
@@ -155,11 +199,20 @@ public final class ClassifierSettingsModel {
         await onChange?()
     }
 
+    public static func leftoverText(_ leftover: LeftoverLocalModel) -> String {
+        "Mail no longer uses this model. Its files still take \(sizeText(leftover.bytes)) on this Mac until you "
+            + "delete them."
+    }
+
     public static func sizeText(_ bytes: Int64) -> String {
         let gigabytes = Double(bytes) / 1_000_000_000
         if gigabytes >= 0.95 && gigabytes < 1.05 { return "about 1 GB" }
         if gigabytes >= 1 { return String(format: "about %.1f GB", gigabytes) }
         return String(format: "about %.0f MB", Double(bytes) / 1_000_000)
+    }
+
+    public static func memoryText(_ bytes: Int64) -> String {
+        String(format: "about %.0f GB", max(1, (Double(bytes) / 1_000_000_000).rounded()))
     }
 
     private func change(_ mutate: (inout AISettings) -> Void) {

@@ -23,5 +23,12 @@ public struct AIProviderID: RawRepresentable, Hashable, Sendable, Codable, Codin
     public var isLocalModel: Bool { rawValue.hasPrefix("local.") }
     public var isAgentCLI: Bool { rawValue.hasPrefix("agent.") }
 
+    public var localModelID: String? {
+        guard isLocalModel else { return nil }
+        var model = rawValue.dropFirst("local.".count)
+        if model.hasSuffix(".classifier") { model = model.dropLast(".classifier".count) }
+        return model.isEmpty ? nil : String(model)
+    }
+
     public var isExperimental: Bool { self == .agentCodex }
 }

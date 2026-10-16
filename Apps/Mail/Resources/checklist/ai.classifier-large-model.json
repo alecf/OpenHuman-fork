@@ -1,0 +1,14 @@
+{
+  "id": "ai.classifier-large-model",
+  "area": "AI",
+  "title": "Optional large model for triage and auto labels",
+  "steps": [
+    "On a Mac that once downloaded Qwen3 1.7B in Mail, open Settings › AI",
+    "Look at Model for each feature › Triage and auto labels",
+    "Scroll to High-accuracy model (optional)"
+  ],
+  "deepLink": null,
+  "expected": "Triage and auto labels uses Apple on-device model (default); Qwen3.5 9B OptiQ (4-bit) is listed and greyed out as not downloaded. The section warns about 7.1 GB of disk and 8 GB of memory before the download button, and lists Qwen3 1.7B with its size and a Delete button; its files stay until you click Delete.",
+  "requires": "real",
+  "addedIn": "2026-10-16"
+}

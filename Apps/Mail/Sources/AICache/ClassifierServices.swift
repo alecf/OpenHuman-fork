@@ -13,6 +13,8 @@ final class ClassifierServices: LocalClassifierModelPort, Sendable {
     private let settings: AISettingsBox
     private let service: Mutex<LocalClassifierService>
 
+    static let manifest = LocalClassifierModels.offered
+
     @MainActor @discardableResult
     static func install(registry: ProviderRegistry, settings: AISettingsBox) -> ClassifierServices {
         let services = ClassifierServices(registry: registry, settings: settings)
@@ -20,7 +22,7 @@ final class ClassifierServices: LocalClassifierModelPort, Sendable {
         return services
     }
 
-    private init(registry: ProviderRegistry, settings: AISettingsBox) {
+    init(registry: ProviderRegistry, settings: AISettingsBox) {
         self.registry = registry
         self.settings = settings
         let made = Self.makeService(settings: settings)
@@ -33,16 +35,21 @@ final class ClassifierServices: LocalClassifierModelPort, Sendable {
         let root = settings.current.modelsDirectory.map { URL(fileURLWithPath: $0, isDirectory: true) }
             ?? ModelStore.defaultRoot
         return LocalClassifierService(
-            manifest: LocalClassifierModels.defaultModel, rootDirectory: root, runtime: MLXLocalModelRuntime(),
+            manifest: manifest, rootDirectory: root, runtime: MLXLocalModelRuntime(),
             allowsLoading: { settings.current.enabled && settings.current.classifier != .appleModel },
-            gate: LocalClassifierGate(allowsLowPowerMode: { settings.current.localClassifierInLowPowerMode }))
+            gate: LocalClassifierGate(
+                requiredMemoryBytes: LocalClassifierModels.requirements(for: manifest).machineMemoryBytes,
+                allowsLowPowerMode: { settings.current.localClassifierInLowPowerMode }))
     }
 
     private var currentService: LocalClassifierService { service.withLock { $0 } }
 
-    var modelName: String { LocalClassifierModels.defaultModel.displayName }
-    var sizeBytes: Int64 { LocalClassifierModels.defaultModel.totalBytes }
-    var licence: String { LocalClassifierModels.defaultModel.license }
+    var modelName: String { Self.manifest.displayName }
+    var classifierID: AIProviderID { currentService.classifier.id }
+    var sizeBytes: Int64 { Self.manifest.totalBytes }
+    var memoryBytes: Int64 { LocalClassifierModels.requirements(for: Self.manifest).memoryBytes }
+    var licence: String { Self.manifest.license }
+    var unsupportedReason: String? { currentService.gate.memoryShortfall }
 
     func directoryPath() async -> String { currentService.rootDirectory.path }
 
@@ -66,6 +73,17 @@ final class ClassifierServices: LocalClassifierModelPort, Sendable {
     func cancel() async { await currentService.cancel() }
 
     func delete() async throws { try await currentService.delete() }
+
+    func leftoverModels() async -> [LeftoverLocalModel] {
+        await currentService.leftovers().map {
+            LeftoverLocalModel(id: $0.manifest.id, name: $0.manifest.displayName, bytes: $0.bytesOnDisk)
+        }
+    }
+
+    func deleteLeftover(id: String) async throws {
+        guard let old = LocalClassifierModels.retired.first(where: { $0.id == id }) else { return }
+        try await currentService.deleteLeftover(old)
+    }
 
     func useDirectory(_ path: String?) async throws {
         if let path {

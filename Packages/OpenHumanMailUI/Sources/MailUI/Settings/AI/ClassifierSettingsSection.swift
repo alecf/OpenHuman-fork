@@ -16,7 +16,8 @@ public struct ClassifierSettingsSection: View {
     public var body: some View {
         SettingsSection(ClassifierSettingsModel.title, footnote: ClassifierSettingsModel.footnote) {
             if let port = model.port {
-                SettingsRow(port.modelName, detail: model.statusText) {
+                SettingsRow(port.modelName, detail: model.statusText, status: model.requirementsText,
+                            statusTone: .warning) {
                     HStack(spacing: theme.space3) {
                         if let progress = model.progress {
                             ProgressView(value: progress).frame(width: 120)
@@ -43,6 +44,12 @@ public struct ClassifierSettingsSection: View {
                             isOn: $model.allowLowPower)
                 SettingsFootnote("Licence: \(port.licence). Downloaded only when you click, from a fixed version, and "
                                  + "checked before use.")
+                ForEach(model.leftovers) { leftover in
+                    SettingsRow(leftover.name, detail: ClassifierSettingsModel.leftoverText(leftover)) {
+                        Button("Delete", role: .destructive) { Task { await model.deleteLeftover(leftover.id) } }
+                            .accessibilityIdentifier("settings.ai.deleteLeftover.\(leftover.id)")
+                    }
+                }
             }
             if let error = model.error { SettingsFootnote(error, tone: .warning) }
         }

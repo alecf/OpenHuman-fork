@@ -26,7 +26,10 @@ public final class AISettingsBox: Sendable {
 
     public init(store: any AISettingsStoring) {
         self.store = store
-        value = Mutex(store.load())
+        let loaded = store.load()
+        let current = loaded.retiringLocalModels()
+        if current != loaded { try? store.save(current) }
+        value = Mutex(current)
     }
 
     public var current: AISettings { value.withLock { $0 } }
