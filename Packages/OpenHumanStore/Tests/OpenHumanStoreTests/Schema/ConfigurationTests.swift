@@ -130,9 +130,9 @@ import Testing
 
 @Suite struct LocationTests {
     @Test func resolveOrder() throws {
-        #expect(try StoreLocation.resolve(environment: ["OPENHUMAN_HOME": "/tmp/oh-home"]).directory.path == "/tmp/oh-home")
-        #expect(try StoreLocation.resolve(environment: ["OPENHUMAN_HOME": ""]).directory.path.hasSuffix("Application Support/OpenHuman/Mail"))
-        let def = try StoreLocation.resolve(environment: [:])
+        #expect(try StoreLocation.resolve(home: "/tmp/oh-home").directory.path == "/tmp/oh-home")
+        #expect(try StoreLocation.resolve(home: "").directory.path.hasSuffix("Application Support/OpenHuman/Mail"))
+        let def = try StoreLocation.resolve()
         #expect(def.directory.path.hasSuffix("Library/Application Support/OpenHuman/Mail"))
         #expect(def.databaseURL.lastPathComponent == "mail.sqlite")
         #expect(def.attachmentsDirectory.lastPathComponent == "Attachments")

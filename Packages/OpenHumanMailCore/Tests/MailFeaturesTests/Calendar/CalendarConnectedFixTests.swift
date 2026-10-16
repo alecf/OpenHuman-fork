@@ -203,7 +203,7 @@ private struct ConnectedFixFixture {
         let suite = "dev.openhuman.tests.calfix.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let center = DevFeedbackCenter(availability: .debugBuild, settings: DevFeedbackSettings(defaults: defaults),
+        let center = DevFeedbackCenter(availability: .devTools, settings: DevFeedbackSettings(defaults: defaults),
                                        paths: DevFeedbackPaths(support: support), bundledChecklist: nil,
                                        now: { at(10, 10, 9) })
         center.host = FakeDevFeedbackHost()

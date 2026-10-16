@@ -15,10 +15,12 @@ enum CompositionRoot {
     enum DataMode: Equatable { case fake, fixtureStore, fakeGmail, live }
 
     static func dataMode(arguments: [String], environment: [String: String]) -> DataMode {
+        #if DEBUG || OH_DEV_TOOLS
         if arguments.contains("-UseFixtureStore") { return .fixtureStore }
         if arguments.contains("-UseFakeGmail") { return .fakeGmail }
         if arguments.contains("-UseFakeData") { return .fake }
         if environment["XCTestConfigurationFilePath"] != nil { return .fake }
+        #endif
         return .live
     }
 
@@ -28,49 +30,16 @@ enum CompositionRoot {
 
     static func makeApp(arguments: [String] = ProcessInfo.processInfo.arguments,
                         environment: [String: String] = ProcessInfo.processInfo.environment) -> AppModel {
-        switch dataMode(arguments: arguments, environment: environment) {
-        case .fake:
-            return AppModel(screen: .mail(.fake(corpus: .small,
-                                                options: FakeMailStore.Options(
-                                                    relatedSearchMatches: arguments.contains("-UseFakeData")),
-                                                navigationStore: navigationStore("fake", environment),
-                                                ai: AIServices.aiCenter(model: .fake, persistent: false, environment: environment),
-                                                calendar: fakeCalendar(arguments: arguments))))
-        case .fixtureStore:
-            do {
-                let (store, _) = try FixtureStoreSeeder.makeStore(corpus: .make())
-                return AppModel(screen: .mail(AppEnvironment(data: MailStoreAdapter(store: store),
-                                                             settings: MailStoreSettings(store: store), isFake: true,
-                                                             navigationStore: navigationStore("fixtureStore", environment),
-                                                             importance: MailStoreImportance(store: store),
-                                                             ai: AIServices.aiCenter(model: .fake, persistent: false,
-                                                                                     environment: environment))))
-            } catch {
-                return AppModel(screen: .notice(StartupProblem(title: "Couldn't build the fixture store",
-                                                               message: "The test data couldn't be written. Quit Mail and open it again.",
-                                                               details: String(describing: error))))
-            }
-        case .fakeGmail:
-            do {
-                let running = try FakeGmailLaunch.launch()
-                return AppModel(screen: .mail(running.session.environment), session: running.session,
-                                platform: fakeGmailPlatform(arguments: arguments, environment: environment))
-            } catch {
-                return AppModel(screen: .notice(StartupProblem(title: "Couldn't start FakeGmail",
-                                                               message: "The test server didn't start. Quit Mail and open it again.",
-                                                               details: String(describing: error))))
-            }
-        case .live:
-            return live(environment: environment, arguments: arguments)
-        }
-    }
-
-    static func fakeCalendar(arguments: [String]) -> FakeCalendar? {
-        arguments.contains("-UseFakeCalendar") ? FakeCalendar.sample() : nil
+        #if DEBUG || OH_DEV_TOOLS
+        if let app = fakeApp(arguments: arguments, environment: environment) { return app }
+        #endif
+        return live(environment: environment, arguments: arguments)
     }
 
     static func liveCalendarTokenStore(arguments: [String]) -> (any TokenStore)? {
+        #if DEBUG || OH_DEV_TOOLS
         guard !arguments.contains("-UseFakeCalendar") else { return nil }
+        #endif
         return KeychainTokenStore(service: GoogleCalendarAuth.keychainService, label: GoogleCalendarAuth.keychainLabel)
     }
 
@@ -86,22 +55,6 @@ enum CompositionRoot {
         }
     }
 
-    static let fakeGmailNotificationsArgument = "-FakeGmailNotifications"
-
-    static func fakeGmailPlatform(arguments: [String], environment: [String: String]) -> (@MainActor () -> SystemPlatform)? {
-        guard let real = systemPlatform(environment) else { return nil }
-        let notifies = arguments.contains(fakeGmailNotificationsArgument)
-        return { syntheticMailOnly(real(), notifications: notifies) }
-    }
-
-    static func syntheticMailOnly(_ platform: SystemPlatform, notifications: Bool) -> SystemPlatform {
-        var platform = platform
-        if !notifications { platform.notifier = FakeSystemNotifier(authorization: .authorized) }
-        platform.dock = FakeDockBadge()
-        platform.spotlight = FakeSpotlightIndex()
-        return platform
-    }
-
     static let testHostTitle = "Mail didn't start"
     static let testHostMessage = "Real accounts don't open inside a test run. Nothing was read or changed."
 
@@ -112,13 +65,14 @@ enum CompositionRoot {
             return AppModel(screen: .notice(StartupProblem(title: testHostTitle, message: testHostMessage)))
         }
         do {
-            let location = try StoreLocation.resolve(environment: environment)
+            let location = try StoreLocation.resolve(home: BuildFlavor.home(environment))
             if showsStoreRebuildNotice(location) {
                 return AppModel(screen: .notice(StartupProblem(title: storeRebuildTitle, message: storeRebuildMessage)))
             }
             AIServices.cacheDirectory = location.directory
             let store = try MailStore.open(StoreOptions(location: location, processKind: .app, observeExternalChanges: true,
-                                                        appVersion: appVersion))
+                                                        appVersion: appVersion,
+                                                        pollOnly: BuildFlavor.storePollOnly(environment)))
             let userAgent = "OpenHumanMail/\(appVersion)"
             let tokenTransport = URLSessionTransport(userAgent: userAgent)
             let signInBroker = SignInBroker(memory: UserDefaultsSignInBrowserMemory(defaults: .standard))
@@ -177,7 +131,7 @@ enum CompositionRoot {
 
     // Why: a test home gets its own service so its sign-in can never replace or sign out the real install's token
     static func keychainService(environment: [String: String], directory: URL) -> String {
-        guard let home = environment["OPENHUMAN_HOME"], !home.isEmpty else { return OHIdentifiers.keychainService }
+        guard BuildFlavor.home(environment) != nil else { return OHIdentifiers.keychainService }
         return OHIdentifiers.keychainService + ".home." + stableID(directory.standardizedFileURL.path)
     }
 
@@ -187,7 +141,7 @@ enum CompositionRoot {
     }
 
     static func clientKeychainService(environment: [String: String], directory: URL) -> String {
-        guard let home = environment["OPENHUMAN_HOME"], !home.isEmpty else { return KeychainClientStore.service }
+        guard BuildFlavor.home(environment) != nil else { return KeychainClientStore.service }
         return KeychainClientStore.service + ".home." + stableID(directory.standardizedFileURL.path)
     }
 
@@ -304,7 +258,7 @@ enum CompositionRoot {
                                 _ environment: [String: String] = ProcessInfo.processInfo.environment) -> any NavigationStateStoring {
         guard environment["XCTestConfigurationFilePath"] == nil else { return InMemoryNavigationStore() }
         let base: URL
-        if let home = environment["OPENHUMAN_HOME"], !home.isEmpty {
+        if let home = BuildFlavor.home(environment) {
             base = URL(fileURLWithPath: (home as NSString).expandingTildeInPath, isDirectory: true)
         } else {
             let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -315,3 +269,66 @@ enum CompositionRoot {
                                    legacy: UserDefaultsNavigationStore(scope: scope))
     }
 }
+
+#if DEBUG || OH_DEV_TOOLS
+@MainActor
+extension CompositionRoot {
+    static func fakeApp(arguments: [String], environment: [String: String]) -> AppModel? {
+        switch dataMode(arguments: arguments, environment: environment) {
+        case .fake:
+            return AppModel(screen: .mail(.fake(corpus: .small,
+                                                options: FakeMailStore.Options(
+                                                    relatedSearchMatches: arguments.contains("-UseFakeData")),
+                                                navigationStore: navigationStore("fake", environment),
+                                                ai: AIServices.aiCenter(model: .fake, persistent: false, environment: environment),
+                                                calendar: fakeCalendar(arguments: arguments))))
+        case .fixtureStore:
+            do {
+                let (store, _) = try FixtureStoreSeeder.makeStore(corpus: .make())
+                return AppModel(screen: .mail(AppEnvironment(data: MailStoreAdapter(store: store),
+                                                             settings: MailStoreSettings(store: store), isFake: true,
+                                                             navigationStore: navigationStore("fixtureStore", environment),
+                                                             importance: MailStoreImportance(store: store),
+                                                             ai: AIServices.aiCenter(model: .fake, persistent: false,
+                                                                                     environment: environment))))
+            } catch {
+                return AppModel(screen: .notice(StartupProblem(title: "Couldn't build the fixture store",
+                                                               message: "The test data couldn't be written. Quit Mail and open it again.",
+                                                               details: String(describing: error))))
+            }
+        case .fakeGmail:
+            do {
+                let running = try FakeGmailLaunch.launch()
+                return AppModel(screen: .mail(running.session.environment), session: running.session,
+                                platform: fakeGmailPlatform(arguments: arguments, environment: environment))
+            } catch {
+                return AppModel(screen: .notice(StartupProblem(title: "Couldn't start FakeGmail",
+                                                               message: "The test server didn't start. Quit Mail and open it again.",
+                                                               details: String(describing: error))))
+            }
+        case .live:
+            return nil
+        }
+    }
+
+    static func fakeCalendar(arguments: [String]) -> FakeCalendar? {
+        arguments.contains("-UseFakeCalendar") ? FakeCalendar.sample() : nil
+    }
+
+    static let fakeGmailNotificationsArgument = "-FakeGmailNotifications"
+
+    static func fakeGmailPlatform(arguments: [String], environment: [String: String]) -> (@MainActor () -> SystemPlatform)? {
+        guard let real = systemPlatform(environment) else { return nil }
+        let notifies = arguments.contains(fakeGmailNotificationsArgument)
+        return { syntheticMailOnly(real(), notifications: notifies) }
+    }
+
+    static func syntheticMailOnly(_ platform: SystemPlatform, notifications: Bool) -> SystemPlatform {
+        var platform = platform
+        if !notifications { platform.notifier = FakeSystemNotifier(authorization: .authorized) }
+        platform.dock = FakeDockBadge()
+        platform.spotlight = FakeSpotlightIndex()
+        return platform
+    }
+}
+#endif

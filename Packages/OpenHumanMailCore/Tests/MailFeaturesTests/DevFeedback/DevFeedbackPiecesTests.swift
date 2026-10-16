@@ -106,21 +106,21 @@ import Testing
 
 @Suite struct DevFeedbackGateTests {
     @Test func availability() {
-        #expect(DevFeedbackAvailability.resolve(environment: [:], isDebugBuild: true) == .debugBuild)
-        #expect(DevFeedbackAvailability.resolve(environment: [:], isDebugBuild: false) == .off)
-        #expect(DevFeedbackAvailability.resolve(environment: ["OPENHUMAN_DEV_FEEDBACK": "1"], isDebugBuild: false) == .environment)
-        #expect(DevFeedbackAvailability.resolve(environment: ["OPENHUMAN_DEV_FEEDBACK": "0"], isDebugBuild: true) == .off)
-        #expect(DevFeedbackAvailability.resolve(environment: ["OPENHUMAN_DEV_FEEDBACK": "yes"], isDebugBuild: false) == .off)
+        #expect(DevFeedbackAvailability.devTools.isAvailable)
+        #expect(!DevFeedbackAvailability.off.isAvailable)
+        #expect(DevFeedbackAvailability(rawValue: "environment") == nil, "no variable turns it on")
     }
 
-    @Test func pathsFollowTheEnvironment() {
-        let paths = DevFeedbackPaths.resolve(environment: ["OPENHUMAN_HOME": "/tmp/oh home", "OPENHUMAN_FEEDBACK_DIR": "/tmp/fb dir"])
+    @Test func pathsFollowTheGivenFolders() {
+        let paths = DevFeedbackPaths.resolve(home: "/tmp/oh home", feedbackDirectory: "/tmp/fb dir")
         #expect(paths.support.path == "/tmp/oh home")
         #expect(paths.feedbackDirectory.path == "/tmp/fb dir")
         #expect(paths.answers.lastPathComponent == "dev-checklist-answers.json")
         #expect(paths.checklistOverride.lastPathComponent == "dev-test-checklist.json")
-        let fallback = DevFeedbackPaths.resolve(environment: [:])
-        #expect(fallback.feedbackDirectory.path.hasSuffix("Library/Application Support/OpenHuman/Mail/feedback"))
+        for (home, feedback) in [(nil, nil), ("", "")] as [(String?, String?)] {
+            let fallback = DevFeedbackPaths.resolve(home: home, feedbackDirectory: feedback)
+            #expect(fallback.feedbackDirectory.path.hasSuffix("Library/Application Support/OpenHuman/Mail/feedback"))
+        }
     }
 
     @MainActor

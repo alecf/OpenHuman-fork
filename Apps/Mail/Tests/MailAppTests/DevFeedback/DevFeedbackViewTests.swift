@@ -33,7 +33,7 @@ import Testing
         let suite = "dev.openhuman.tests.devfeedback.views"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
-        let center = DevFeedbackCenter(availability: .debugBuild, settings: DevFeedbackSettings(defaults: defaults),
+        let center = DevFeedbackCenter(availability: .devTools, settings: DevFeedbackSettings(defaults: defaults),
                                        paths: DevFeedbackPaths(support: support), bundledChecklist: bundled)
         return center
     }
@@ -99,7 +99,7 @@ import Testing
         defer { try? FileManager.default.removeItem(at: support) }
         let center = try makeCenter(bundled: Bundle.main.url(forResource: "dev-test-checklist", withExtension: "json"))
         let app = AppModel(screen: .mail(.fake(corpus: .make(threadCount: 10))))
-        let host = AppDevFeedbackHost(availability: .debugBuild, arguments: ["-UseFakeData"], environment: [:],
+        let host = AppDevFeedbackHost(availability: .devTools, arguments: ["-UseFakeData"], environment: [:],
                                       app: { app }, theme: { nil })
         center.host = host
         center.checklist.record(.worked, for: "inbox.jk")
@@ -113,7 +113,7 @@ import Testing
         #expect(saved.sendCommand.hasSuffix(" <device-name>:"))
         try render(DevFeedbackSheet(model: model, onClose: {}, copy: { _ in }), size: NSSize(width: 560, height: 420),
                    name: "dev-feedback-sheet-saved")
-        try render(DevFeedbackSettingsView(settings: center.settings, availability: .debugBuild,
+        try render(DevFeedbackSettingsView(settings: center.settings, availability: .devTools,
                                            feedbackFolder: center.paths.feedbackDirectory.path),
                    size: NSSize(width: 640, height: 320), name: "dev-feedback-settings")
     }
@@ -129,23 +129,21 @@ import Testing
             return hosting.fittingSize.height
         }
         #expect(height(.off) < 1, "nothing at all")
-        #expect(height(.debugBuild) > 40, "the developer rows")
+        #expect(height(.devTools) > 40, "the developer rows")
         let suite = "developer-options-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        func options(_ environment: [String: String], _ availability: DevFeedbackAvailability) -> DeveloperOptions {
-            DeveloperOptions(environment: environment, devFeedback: availability, defaults: defaults)
+        func options(_ availability: DevFeedbackAvailability) -> DeveloperOptions {
+            DeveloperOptions(devFeedback: availability, defaults: defaults)
         }
-        #expect(SettingsRoot.showsDeveloperItems(options([:], .off)) == false)
-        #expect(SettingsRoot.showsDeveloperItems(options([:], .debugBuild)) == false, "off by default in Debug too")
-        #expect(SettingsRoot.showsDeveloperItems(options([:], .environment)) == false)
-        #expect(SettingsRoot.showsDeveloperItems(options(["OPENHUMAN_DEVELOPER": "1"], .off)))
-        let debug = options([:], .debugBuild)
-        #expect(debug.isAvailable)
-        debug.isOn = true
-        #expect(SettingsRoot.showsDeveloperItems(debug))
-        #expect(SettingsRoot.showsDeveloperItems(options([:], .debugBuild)), "remembered where the switch is offered")
-        #expect(SettingsRoot.showsDeveloperItems(options([:], .off)) == false, "never in a public build")
-        #expect(!options([:], .off).isAvailable, "and no switch there")
+        #expect(SettingsRoot.showsDeveloperItems(options(.off)) == false)
+        #expect(SettingsRoot.showsDeveloperItems(options(.devTools)) == false, "off by default in a dev-tools build too")
+        let devTools = options(.devTools)
+        #expect(devTools.isAvailable)
+        devTools.isOn = true
+        #expect(SettingsRoot.showsDeveloperItems(devTools))
+        #expect(SettingsRoot.showsDeveloperItems(options(.devTools)), "remembered where the switch is offered")
+        #expect(SettingsRoot.showsDeveloperItems(options(.off)) == false, "never in a public build")
+        #expect(!options(.off).isAvailable, "and no switch there")
     }
 }

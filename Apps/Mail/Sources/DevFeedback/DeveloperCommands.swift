@@ -1,3 +1,4 @@
+#if OH_DEV_TOOLS
 import AppKit
 import MailFeatures
 import MailUI
@@ -97,3 +98,4 @@ extension View {
         modifier(DevFeedbackSheetHost(center: center))
     }
 }
+#endif

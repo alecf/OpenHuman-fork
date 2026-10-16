@@ -1,3 +1,4 @@
+#if DEBUG || OH_DEV_TOOLS
 import Foundation
 import MailFakes
 import MailModel
@@ -90,3 +91,4 @@ enum FakeGmailLaunch {
         return "\(name) <\(address.email)>"
     }
 }
+#endif

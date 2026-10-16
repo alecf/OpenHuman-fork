@@ -21,16 +21,16 @@ private enum Vaulted {
         let all = try store.loadAll()
         #expect(all.count == 2 && all.allSatisfy { $0.sync == .syncing })
         #expect(all.filter(\.isDefault).map(\.config.clientID) == [Vaulted.workID], "a later client does not take over")
-        #expect(try vault.loadDefault(environment: [:]).clientID == work.clientID)
-        #expect(vault.available(environment: [:]).map(\.clientID) == [Vaulted.workID, other.clientID])
-        #expect(vault.source(environment: [:]) == .storeFile)
+        #expect(try vault.loadDefault(clientFile: nil).clientID == work.clientID)
+        #expect(vault.available(clientFile: nil).map(\.clientID) == [Vaulted.workID, other.clientID])
+        #expect(vault.source(clientFile: nil) == .storeFile)
     }
 
     @Test func nothingStoredIsMissingAndABadFileIsRefusedWithoutWriting() throws {
         let store = InMemoryOAuthClientStore()
         let vault = OAuthClientVault(store: store)
-        #expect(vault.source(environment: [:]) == .missing)
-        #expect(throws: OAuthError.self) { _ = try vault.loadDefault(environment: [:]) }
+        #expect(vault.source(clientFile: nil) == .missing)
+        #expect(throws: OAuthError.self) { _ = try vault.loadDefault(clientFile: nil) }
         let evil = Data(#"{"installed":{"client_id":"x","token_uri":"https://evil.example.com/t"}}"#.utf8)
         #expect(throws: OAuthError.self) { _ = try vault.importClient(evil) }
         #expect(try store.loadAll().isEmpty)
@@ -159,9 +159,9 @@ private enum Vaulted {
         let report = vault.migrateLegacyFiles()
         #expect(report.filesDeleted == 0 && report.skipped == 2, "never deleted without a read-back")
         #expect(FileManager.default.fileExists(atPath: dir.url.appendingPathComponent("oauth-client.json").path))
-        #expect(try vault.loadDefault(environment: [:]).clientID == Vaulted.workID)
-        #expect(vault.source(environment: [:]) == .storeFile)
-        #expect(vault.available(environment: [:]).map(\.clientID) == [Vaulted.workID])
+        #expect(try vault.loadDefault(clientFile: nil).clientID == Vaulted.workID)
+        #expect(vault.source(clientFile: nil) == .storeFile)
+        #expect(vault.available(clientFile: nil).map(\.clientID) == [Vaulted.workID])
         store.failLoads(false)
         let again = vault.migrateLegacyFiles()
         #expect(again.filesDeleted == 2)
@@ -172,11 +172,11 @@ private enum Vaulted {
         let store = InMemoryOAuthClientStore()
         store.failLoads(true)
         let vault = OAuthClientVault(store: store)
-        #expect(vault.source(environment: [:]) == .missing)
+        #expect(vault.source(clientFile: nil) == .missing)
         let result = try vault.importClientReporting(Vaulted.json(Vaulted.workID))
         #expect(result.sync == .syncing)
-        #expect(vault.source(environment: [:]) == .storeFile)
-        #expect(try vault.loadDefault(environment: [:]).clientID == Vaulted.workID)
+        #expect(vault.source(clientFile: nil) == .storeFile)
+        #expect(try vault.loadDefault(clientFile: nil).clientID == Vaulted.workID)
     }
 
     @Test func anImportThatNoStoreTakesSaysWhyWithTheCode() throws {
@@ -186,7 +186,7 @@ private enum Vaulted {
         #expect(throws: OAuthClientSaveError(status: -25299, reason: "OSStatus -25299")) {
             _ = try vault.importClient(Vaulted.json(Vaulted.workID))
         }
-        #expect(vault.source(environment: [:]) == .missing)
+        #expect(vault.source(clientFile: nil) == .missing)
         #expect(throws: OAuthError.self) { _ = try vault.importClient(Data("{}".utf8)) }
     }
 
@@ -210,7 +210,7 @@ private enum Vaulted {
         let vault = OAuthClientVault(store: store, storeDirectory: dir.url)
         vault.migrateLegacyFiles()
         try vault.remove(key: work.registryKey)
-        #expect(vault.source(environment: [:]) == .missing, "a removed client never comes back from its file")
+        #expect(vault.source(clientFile: nil) == .missing, "a removed client never comes back from its file")
     }
 }
 

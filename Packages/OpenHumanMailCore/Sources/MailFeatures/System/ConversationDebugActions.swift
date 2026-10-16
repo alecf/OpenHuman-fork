@@ -44,7 +44,7 @@ final class ConversationDebugActionHandler: ActionHandler {
     }
 
     func availability(of id: ActionID, in context: ActionContext, host: (any ActionHost)?) -> ActionAvailability {
-        environment == nil ? .hidden : .enabled
+        environment?.system.showsDebuggingTools() == true ? .enabled : .hidden
     }
 
     func perform(_ request: ActionRequest) -> ActionPerformance {

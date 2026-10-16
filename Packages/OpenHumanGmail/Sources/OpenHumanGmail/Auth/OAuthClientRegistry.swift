@@ -63,12 +63,12 @@ extension OAuthClientConfig {
         return clients
     }
 
-    public static func availableClients(environment: [String: String], storeDirectory: URL?) -> [OAuthClientConfig] {
+    public static func availableClients(clientFile: String?, storeDirectory: URL?) -> [OAuthClientConfig] {
         var result: [OAuthClientConfig] = []
         func add(_ client: OAuthClientConfig) {
             if !result.contains(where: { $0.clientID == client.clientID }) { result.append(client) }
         }
-        if let main = try? load(environment: environment, storeDirectory: storeDirectory) {
+        if let main = try? load(clientFile: clientFile, storeDirectory: storeDirectory) {
             add(main)
         }
         if let storeDirectory {

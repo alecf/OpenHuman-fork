@@ -20,7 +20,9 @@ struct MailApp: App {
         Window("OpenHuman Mail", id: DevFeedbackRuntime.mainWindowID) {
             RootView(app: Self.app)
                 .frame(minWidth: 960, minHeight: 600)
+                #if OH_DEV_TOOLS
                 .devFeedbackSheet(Self.devFeedback)
+                #endif
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1360, height: 860)
@@ -29,17 +31,21 @@ struct MailApp: App {
             AboutCommands(label: .main)
             MailCommands(router: { Self.app.router }, themes: { Self.app.router == nil ? nil : AppThemes.store })
             WindowZoomCommands()
+            #if OH_DEV_TOOLS
             DeveloperCommands(center: Self.devFeedback)
+            #endif
             SystemCommands(environment: { Self.app.router?.environment })
             WelcomeGuideCommands(environment: { Self.app.router?.environment })
         }
 
+        #if OH_DEV_TOOLS
         Window("Test checklist", id: DevFeedbackRuntime.checklistWindowID) {
             DevChecklistWindow(center: Self.devFeedback)
         }
         .defaultSize(width: 680, height: 780)
         .defaultLaunchBehavior(.suppressed)
         .commandsRemoved()
+        #endif
 
         Settings {
             SettingsRoot(devFeedback: Self.devFeedback)
@@ -98,6 +104,7 @@ struct MailWindowView: View {
         MainWindowRoot(environment: environment, themes: themes) { controller in
             DevFeedbackRuntime.attach(controller, to: MailApp.devFeedback)
             SendFeedbackSupport.install(in: environment, window: controller.windowModel)
+            DebuggingTools.install(in: environment)
             environment.system.logLines = { MailApp.devFeedback.logs.diagnosticLines(now: Date()) }
         }
         .ignoresSafeArea()
@@ -110,7 +117,9 @@ struct MailWindowView: View {
             }
         }
         .onAppear {
+            #if OH_DEV_TOOLS
             if MailApp.devFeedback.takeChecklistReopen() { openWindow(id: DevFeedbackRuntime.checklistWindowID) }
+            #endif
             MainWindowPresenter.reopen = openWindow
             let openSettings = self.openSettings
             environment.settingsNavigator.openWindow = { openSettings() }

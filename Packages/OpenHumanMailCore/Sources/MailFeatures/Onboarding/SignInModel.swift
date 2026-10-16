@@ -95,8 +95,7 @@ public final class SignInModel {
     public static let readySentence = "Sign in to use your Gmail on this Mac."
     public static let needsClientSentence = "Set up Google once to use Gmail here."
     public static let importFullFileSentence = "Import the full Google client file to sign in."
-    public static let environmentWithoutSecretSentence = "Point OPENHUMAN_OAUTH_CLIENT_JSON to the full client file, "
-        + "then open Mail again."
+    public static let environmentWithoutSecretSentence = "Use the full client file, then open Mail again."
     public static let waitingSentence = "Finish in your browser; Google shows exactly what Mail asks for."
     public static let checkingSentence = readySentence
     public static let remoteSentence = "Sign in from another device."
@@ -254,8 +253,8 @@ public final class SignInModel {
     public var clientWarning: String? {
         guard case .configuredWithoutSecret(let source) = clientStatus else { return nil }
         if source == .environment {
-            return "OPENHUMAN_OAUTH_CLIENT_JSON points to a file without a secret. Point it to the full file, or quit "
-                + "and open Mail without it."
+            return "The client file set for this development build has no secret. Use the full file, or quit and open "
+                + "Mail without it."
         }
         return "This client file is missing its secret, so Google will refuse the sign-in. Import the full file from "
             + "Google Cloud Console."

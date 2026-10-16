@@ -73,7 +73,7 @@ public final class MailStore: Sendable {
                 try store.replaceInboxesIfPlacementVersionStale()
             }
             if options.observeExternalChanges && !options.readOnly {
-                store.startExternalChangeMonitor(pool: pool)
+                store.startExternalChangeMonitor(pool: pool, pollOnly: options.pollOnly)
             }
             return store
         } catch {
@@ -162,10 +162,10 @@ public final class MailStore: Sendable {
         return error
     }
 
-    private func startExternalChangeMonitor(pool: DatabasePool) {
+    private func startExternalChangeMonitor(pool: DatabasePool, pollOnly: Bool) {
         let me = writerID
         let monitor = ExternalChangeMonitor(
-            notificationName: runtime.notificationName,
+            notificationName: runtime.notificationName, pollOnly: pollOnly,
             readOthers: {
                 try pool.read { db in
                     var seen: [String: Int64] = [:]

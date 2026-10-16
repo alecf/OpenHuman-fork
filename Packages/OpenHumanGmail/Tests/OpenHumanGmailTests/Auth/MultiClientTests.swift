@@ -52,9 +52,9 @@ private enum TwoClients {
                 "one file per client, named by its key; no temporary file left")
         for name in try names(clients) { #expect(posixMode(clients.appendingPathComponent(name)) == 0o600) }
         #expect(posixMode(dir.url.appendingPathComponent("oauth-client.json")) == 0o600)
-        #expect(try OAuthClientConfig.load(environment: [:], storeDirectory: dir.url).clientID
+        #expect(try OAuthClientConfig.load(clientFile: nil, storeDirectory: dir.url).clientID
                 == TwoClients.workID)
-        let available = OAuthClientConfig.availableClients(environment: [:], storeDirectory: dir.url)
+        let available = OAuthClientConfig.availableClients(clientFile: nil, storeDirectory: dir.url)
         #expect(available.map(\.clientID) == [TwoClients.workID, TwoClients.personalID], "default first, each id once")
         #expect(available.map(\.clientSecret) == [TwoClients.workSecret, TwoClients.personalSecret])
         #expect(available.allSatisfy { $0.tokenURI == OAuthClientConfig.defaultTokenURI })
@@ -69,11 +69,11 @@ private enum TwoClients {
         chmod(dir.url.appendingPathComponent("oauth-client.json").path, 0o600)
         _ = try OAuthClientConfig.importClient(TwoClients.json(TwoClients.personalID, secret: "SYNTHETIC-OLD"),
                                                storeDirectory: dir.url)
-        var main = try OAuthClientConfig.load(environment: [:], storeDirectory: dir.url)
+        var main = try OAuthClientConfig.load(clientFile: nil, storeDirectory: dir.url)
         #expect(main.clientID == TwoClients.personalID, "a secret-less default cannot sign in: the import replaces it")
         _ = try OAuthClientConfig.importClient(TwoClients.json(TwoClients.personalID, secret: TwoClients.personalSecret),
                                                storeDirectory: dir.url)
-        main = try OAuthClientConfig.load(environment: [:], storeDirectory: dir.url)
+        main = try OAuthClientConfig.load(clientFile: nil, storeDirectory: dir.url)
         #expect(main.clientSecret == TwoClients.personalSecret, "a newer download of the same client updates it")
         #expect(OAuthClientConfig.importedClients(storeDirectory: dir.url).map(\.clientSecret) == [TwoClients.personalSecret])
     }
@@ -138,16 +138,16 @@ private enum TwoClients {
         _ = try OAuthClientConfig.importClient(TwoClients.json(TwoClients.personalID, secret: "S2"), storeDirectory: store)
         let envFile = dir.url.appendingPathComponent("env.json")
         try Synthetic.installedJSON(clientID: "env-client").write(to: envFile)
-        let env = [OAuthClientConfig.environmentKey: envFile.path]
-        #expect(try OAuthClientConfig.load(environment: env, storeDirectory: store).clientID == "env-client")
-        #expect(try OAuthClientConfig.load(environment: [:], storeDirectory: store).clientID
+        let env = envFile.path
+        #expect(try OAuthClientConfig.load(clientFile: env, storeDirectory: store).clientID == "env-client")
+        #expect(try OAuthClientConfig.load(clientFile: nil, storeDirectory: store).clientID
                 == TwoClients.workID)
-        #expect(throws: OAuthError.self) { try OAuthClientConfig.load(environment: [:], storeDirectory: nil) }
-        #expect(OAuthClientConfig.availableClients(environment: env, storeDirectory: store)
+        #expect(throws: OAuthError.self) { try OAuthClientConfig.load(clientFile: nil, storeDirectory: nil) }
+        #expect(OAuthClientConfig.availableClients(clientFile: env, storeDirectory: store)
             .map(\.clientID) == ["env-client", TwoClients.workID, TwoClients.personalID])
-        #expect(OAuthClientConfig.availableClients(environment: [:], storeDirectory: store)
+        #expect(OAuthClientConfig.availableClients(clientFile: nil, storeDirectory: store)
             .map(\.clientID) == [TwoClients.workID, TwoClients.personalID])
-        #expect(OAuthClientConfig.availableClients(environment: [:], storeDirectory: nil).isEmpty)
+        #expect(OAuthClientConfig.availableClients(clientFile: nil, storeDirectory: nil).isEmpty)
     }
 
     @Test func theShortIDAndTheKeyNeverRevealTheSecret() {

@@ -60,3 +60,32 @@ Hits are per checkout path: another worktree does not reuse them, even with pref
 Local build output is under `build/`; the app product is
 `build/dd/Build/Products/Release/OpenHumanMail.app`. Release signing and binary
 distribution are described in [the release guide](release/RELEASE-HOWTO.md).
+
+## Build flavours
+
+The app has three build configurations, all from the one `Mail` target:
+
+| Configuration | Compilation conditions | What it adds |
+|---|---|---|
+| `Debug` | `DEBUG OH_DEV_TOOLS` | Everything below, unoptimised. Xcode runs and the tests use it. |
+| `DevTools` | `OH_DEV_TOOLS` | Release optimisation plus the developer tools: the Developer menu (test checklist, feedback over Tailscale), Settings › Advanced › Developer options (including Show debugging tools), the sample-data launch arguments and the developer variables below. Same bundle id and data as Release. |
+| `Release` | none | Nothing developer-only. This is the build `Tools/release/make-dmg.sh` ships. |
+
+```sh
+Tools/ci/build-app.sh --configuration DevTools --local-install
+```
+
+Only Debug and DevTools builds read these launch arguments and variables:
+
+- `-UseFakeGmail`, `-UseFakeData`, `-UseFixtureStore`, `-UseFakeCalendar`,
+  `-FakeGmailNotifications`: fake mail, fixtures and a sample calendar.
+- `OPENHUMAN_HOME`: a separate folder for the mail store, window state and its own
+  Keychain entries.
+- `OPENHUMAN_OAUTH_CLIENT_JSON`: a Google client file that outranks the imported one.
+- `OPENHUMAN_STORE_POLL_ONLY=1`: notice other processes' store changes by polling only.
+- `OPENHUMAN_FEEDBACK_DIR` (DevTools and Debug): where developer feedback is saved.
+
+None of them changes whether Mail writes to Gmail. `Tools/release/check-release.sh`
+fails an app that contains any of these names, so a Release build that still
+carries one never ships. The command-line tool reads `OPENHUMAN_HOME` for its
+default `--home` in every build.

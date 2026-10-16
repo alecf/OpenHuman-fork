@@ -2,19 +2,9 @@ import Foundation
 import Observation
 
 public enum DevFeedbackAvailability: String, Sendable, Hashable {
-    case debugBuild, environment, off
+    case devTools, off
 
-    public var isAvailable: Bool { self != .off }
-
-    public static let environmentKey = "OPENHUMAN_DEV_FEEDBACK"
-
-    public static func resolve(environment: [String: String], isDebugBuild: Bool) -> DevFeedbackAvailability {
-        switch environment[environmentKey]?.trimmingCharacters(in: .whitespaces) {
-        case "1": return .environment
-        case "0": return .off
-        default: return isDebugBuild ? .debugBuild : .off
-        }
-    }
+    public var isAvailable: Bool { self == .devTools }
 }
 
 @MainActor
@@ -40,8 +30,6 @@ public final class DevFeedbackSettings {
 }
 
 public struct DevFeedbackPaths: Sendable, Hashable {
-    public static let feedbackDirectoryKey = "OPENHUMAN_FEEDBACK_DIR"
-
     public var support: URL
     public var feedbackDirectory: URL
 
@@ -53,16 +41,17 @@ public struct DevFeedbackPaths: Sendable, Hashable {
     public var checklistOverride: URL { support.appendingPathComponent("dev-test-checklist.json") }
     public var answers: URL { support.appendingPathComponent("dev-checklist-answers.json") }
 
-    public static func resolve(environment: [String: String], fileManager: FileManager = .default) -> DevFeedbackPaths {
+    public static func resolve(home: String?, feedbackDirectory: String?,
+                               fileManager: FileManager = .default) -> DevFeedbackPaths {
         let support: URL
-        if let home = environment["OPENHUMAN_HOME"], !home.isEmpty {
+        if let home, !home.isEmpty {
             support = URL(fileURLWithPath: (home as NSString).expandingTildeInPath, isDirectory: true)
         } else {
             let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
                 ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
             support = base.appendingPathComponent("OpenHuman", isDirectory: true).appendingPathComponent("Mail", isDirectory: true)
         }
-        let feedback = environment[feedbackDirectoryKey].flatMap { $0.isEmpty ? nil : $0 }
+        let feedback = feedbackDirectory.flatMap { $0.isEmpty ? nil : $0 }
             .map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath, isDirectory: true) }
         return DevFeedbackPaths(support: support, feedbackDirectory: feedback)
     }

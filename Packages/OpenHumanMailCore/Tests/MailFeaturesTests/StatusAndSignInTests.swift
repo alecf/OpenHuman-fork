@@ -250,13 +250,13 @@ private final class FakeAccounts: AccountManaging {
 }
 
 @MainActor
-@Test func aSecretlessClientFromTheVariableSaysToFixTheVariable() async throws {
+@Test func aSecretlessDevelopmentClientFileSaysToUseTheFullFile() async throws {
     let model = SignInModel(accounts: FakeAccounts(status: .configuredWithoutSecret(source: .environment)))
     let runner = Task { await model.run() }
     defer { runner.cancel() }
     await eventually { model.phase == .ready }
-    #expect(model.clientWarning == "OPENHUMAN_OAUTH_CLIENT_JSON points to a file without a secret. Point it to the full "
-        + "file, or quit and open Mail without it.")
+    #expect(model.clientWarning == "The client file set for this development build has no secret. Use the full file, or "
+        + "quit and open Mail without it.")
     #expect(!model.canImportClient && !model.canSignIn)
 }
 

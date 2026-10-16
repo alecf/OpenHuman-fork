@@ -17,6 +17,8 @@ REPO = pathlib.Path(__file__).resolve().parents[3]
 RELEASE = REPO / "Tools" / "release"
 CHECK = RELEASE / "check-release.sh"
 NOTICE = "Early development build — expect rough edges. Please send feedback."
+SCAN_CLEAN = "no developer switches or sample-data launch arguments in the app"
+SCAN_FAILED = "developer switches or sample-data launch arguments in the app. Only Debug and DevTools builds"
 
 spec = importlib.util.spec_from_file_location("make_cask", RELEASE / "make-cask.py")
 make_cask = importlib.util.module_from_spec(spec)
@@ -25,6 +27,11 @@ spec.loader.exec_module(make_cask)
 
 def run(args, env=None):
     return subprocess.run([str(a) for a in args], capture_output=True, text=True, env=env, check=False)
+
+
+def developer_names():
+    match = re.search(r'^DEVELOPER_NAMES="([^"]*)"', CHECK.read_text(encoding="utf-8"), re.MULTILINE)
+    return match.group(1).split() if match else []
 
 
 def release_info(**over):
@@ -79,12 +86,15 @@ class BumpVersionTests(unittest.TestCase):
 class CheckReleaseAppTests(unittest.TestCase):
     """Synthetic, ad-hoc signed bundles: a copy of /usr/bin/true with an invented Info.plist."""
 
-    def make_app(self, **info):
+    def make_app(self, resources=None, **info):
         root = pathlib.Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, root)
         app = root / "Synthetic.app"
         (app / "Contents" / "MacOS").mkdir(parents=True)
         shutil.copy(shutil.which("true"), app / "Contents" / "MacOS" / "Synthetic")
+        for name, text in (resources or {}).items():
+            (app / "Contents" / "Resources").mkdir(exist_ok=True)
+            (app / "Contents" / "Resources" / name).write_text(text)
         plist = {"CFBundleExecutable": "Synthetic", "CFBundleIdentifier": "dev.example.synthetic",
                  "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1001",
                  "OHGitCommit": "abc1234", "OHReleaseChannel": "early-development"}
@@ -100,6 +110,36 @@ class CheckReleaseAppTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("ok    early development build (OHReleaseChannel early-development)", result.stdout)
         self.assertIn("ok    app: ad-hoc signature (unsigned build: no Developer ID, not notarized)", result.stdout)
+        self.assertIn(f"ok    {SCAN_CLEAN}", result.stdout)
+
+    def test_a_developer_name_anywhere_in_the_bundle_fails_on_its_own(self):
+        app = self.make_app(resources={"steps.json": '{"step": "Launch with -UseFakeData"}',
+                                       "notes.txt": "nothing to see"})
+        result = run([CHECK, "--unsigned", app])
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(result.stdout.count("  FAIL  "), 1, result.stdout)
+        self.assertIn(f"FAIL  {SCAN_FAILED}", result.stdout)
+        self.assertIn("Contents/Resources/steps.json: -UseFakeData\n", result.stdout)
+        self.assertNotIn("notes.txt", result.stdout)
+
+    def test_the_scan_reads_the_executable_and_names_each_variable_once(self):
+        app = self.make_app()
+        with open(app / "Contents" / "MacOS" / "Synthetic", "ab") as handle:
+            handle.write(b"\0OPENHUMAN_HOME\0-UseFakeGmail\0OPENHUMAN_HOME\0OPENHUMAN_DEVELOPER_NOTE\0")
+        result = run([CHECK, "--unsigned", app])
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn(f"FAIL  {SCAN_FAILED}", result.stdout)
+        self.assertIn("Contents/MacOS/Synthetic: -UseFakeGmail OPENHUMAN_DEVELOPER OPENHUMAN_HOME\n", result.stdout)
+
+    def test_every_listed_name_is_caught(self):
+        names = developer_names()
+        self.assertLessEqual({"-UseFakeGmail", "-UseFakeData", "-UseFixtureStore", "-UseFakeCalendar",
+                              "-FakeGmailNotifications", "OPENHUMAN_DEV_FEEDBACK", "OPENHUMAN_DEVELOPER",
+                              "OPENHUMAN_HOME", "OPENHUMAN_OAUTH_CLIENT_JSON", "OPENHUMAN_INSECURE_FILE_TOKENS",
+                              "OPENHUMAN_STORE_POLL_ONLY"}, set(names))
+        result = run([CHECK, "--unsigned", self.make_app(resources={"x.txt": " | ".join(reversed(names))})])
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn(f"Contents/Resources/x.txt: {' '.join(sorted(set(names)))}\n", result.stdout)
 
     def test_a_build_without_the_marker_fails(self):
         for channel in (None, "", "stable"):
@@ -401,6 +441,63 @@ class PublishGitHubTests(unittest.TestCase):
         self.refused("--notes", other, "--dmg", self.dmg, "0.1.0", says="the release notes must say")
         other.write_text(NOTICE + "\n")
         self.refused("--notes", other, "--dmg", self.dmg, "0.1.0", says="must explain how to open it")
+
+
+class DeveloperNamesInSourcesTests(unittest.TestCase):
+    """The scan reads bytes, and Swift can fold a short literal into instructions, so the sources are held to the
+    same list: app code names them only inside Debug or dev-tools clauses, package code linked into the app never."""
+
+    NOT_IN_THE_APP = {"OPENHUMAN_HOME": ("Packages/OpenHumanCLI/Sources/",
+                                         "Packages/OpenHumanStore/Sources/ohstore-helper/")}
+    DEV_CLAUSE = re.compile(r"^\s*(DEBUG|OH_DEV_TOOLS)(\s*\|\|\s*(DEBUG|OH_DEV_TOOLS))*\s*$")
+
+    @classmethod
+    def lines(cls, text):
+        stack = []
+        for number, line in enumerate(text.splitlines(), 1):
+            code = line.strip()
+            if code.startswith("#if "):
+                stack.append(bool(cls.DEV_CLAUSE.match(code[4:])))
+            elif code.startswith("#elseif ") and stack:
+                stack[-1] = bool(cls.DEV_CLAUSE.match(code[8:]))
+            elif code == "#else" and stack:
+                stack[-1] = False
+            elif code == "#endif" and stack:
+                stack.pop()
+            elif not code.startswith("//"):
+                yield number, line, any(stack)
+
+    def hits(self, *folders):
+        names = developer_names()
+        for folder in folders:
+            for directory, subdirectories, files in os.walk(folder):
+                subdirectories[:] = sorted(d for d in subdirectories if not d.startswith("."))
+                for file in sorted(f for f in files if f.endswith(".swift")):
+                    path = pathlib.Path(directory) / file
+                    for number, line, gated in self.lines(path.read_text(encoding="utf-8")):
+                        for name in names:
+                            if name in line:
+                                yield path.relative_to(REPO).as_posix(), number, name, gated
+
+    def test_the_clause_reader_follows_nesting_and_else(self):
+        text = "#if DEBUG || OH_DEV_TOOLS\na\n#if os(macOS)\nb\n#endif\n#else\nc\n#endif\n#if !DEBUG\nd\n#endif\ne\n"
+        gated = {line: flag for _, line, flag in self.lines(text)}
+        self.assertEqual(gated, {"a": True, "b": True, "c": False, "d": False, "e": False})
+        flavor = {line: flag for _, line, flag in self.lines("#if DEBUG\nx\n#elseif OH_DEV_TOOLS\ny\n#else\nz\n#endif\n")}
+        self.assertEqual(flavor, {"x": True, "y": True, "z": False})
+
+    def test_the_app_names_them_only_in_debug_or_dev_tools_code(self):
+        found = list(self.hits(REPO / "Apps" / "Mail" / "Sources"))
+        self.assertTrue(any(name == "-UseFakeGmail" for _, _, name, _ in found), "the reader found the fake launch")
+        self.assertEqual([hit[:3] for hit in found if not hit[3]], [])
+
+    def test_package_code_in_the_app_never_names_them(self):
+        sources = sorted(package / "Sources" for package in (REPO / "Packages").iterdir()
+                         if (package / "Sources").is_dir())
+        self.assertGreater(len(sources), 5, "found the packages")
+        stray = [(path, number, name) for path, number, name, _ in self.hits(*sources)
+                 if not path.startswith(self.NOT_IN_THE_APP.get(name, ()))]
+        self.assertEqual(stray, [])
 
 
 class SharedTextTests(unittest.TestCase):

@@ -71,6 +71,8 @@ final class LiveAccountManager: AccountManaging {
 
     private var session: SessionLink? { link.withLock { $0 } }
 
+    private var developerClientFile: String? { BuildFlavor.oauthClientFile(dependencies.environment) }
+
     private func makeFlow(_ client: OAuthClientConfig) -> OAuthFlow {
         OAuthFlow(client: client, scopes: OAuthScopes.mailRequest, transport: dependencies.transport,
                   receiver: dependencies.makeReceiver(), browser: dependencies.browser, clock: dependencies.clock)
@@ -78,7 +80,7 @@ final class LiveAccountManager: AccountManaging {
 
     func loadClient() throws(AccountSetupError) -> OAuthClientConfig {
         do {
-            return try vault.loadDefault(environment: dependencies.environment)
+            return try vault.loadDefault(clientFile: developerClientFile)
         } catch let OAuthError.configurationMissing(why) {
             throw Self.clientMissingError(why)
         } catch {
@@ -88,7 +90,7 @@ final class LiveAccountManager: AccountManaging {
 
     func knownClients() -> [OAuthClientConfig] {
         if let cached = clientList.withLock({ $0 }) { return cached }
-        let fresh = vault.available(environment: dependencies.environment)
+        let fresh = vault.available(clientFile: developerClientFile)
         clientList.withLock { $0 = fresh }
         return fresh
     }
@@ -178,12 +180,12 @@ final class LiveAccountManager: AccountManaging {
     }
 
     func currentClientStatus() -> OAuthClientStatus {
-        let main = try? vault.loadDefault(environment: dependencies.environment)
+        let main = try? vault.loadDefault(clientFile: developerClientFile)
         if let chosen = selectedClient(), chosen.clientID != main?.clientID {
             return chosen.hasClientSecret ? .configured(source: .file) : .configuredWithoutSecret(source: .file)
         }
         let withoutSecret = main.map { !$0.hasClientSecret } ?? false
-        switch vault.source(environment: dependencies.environment) {
+        switch vault.source(clientFile: developerClientFile) {
         case .missing: return .missing
         case .environment: return withoutSecret ? .configuredWithoutSecret(source: .environment) : .configured(source: .environment)
         case .storeFile: return withoutSecret ? .configuredWithoutSecret(source: .file) : .configured(source: .file)
@@ -259,7 +261,7 @@ final class LiveAccountManager: AccountManaging {
 
     func oauthClients() async -> [OAuthClientSummary] {
         let known = knownClients()
-        let main = (try? vault.loadDefault(environment: dependencies.environment))?.clientID
+        let main = (try? vault.loadDefault(clientFile: developerClientFile))?.clientID
         let selected = selectedClient()?.clientID ?? main
         return known.map { client in
             OAuthClientSummary(id: client.registryKey, shortID: client.shortID, isDefault: client.clientID == main,

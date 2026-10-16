@@ -8,8 +8,9 @@ usage() {
 Usage: Tools/release/check-release.sh [options] <path.app | path.dmg | path/release-info.txt>...
 
 Checks a release build of OpenHuman Mail: the early development marker, signature, hardened
-runtime, entitlements, no baked-in OAuth client, notarization ticket and Gatekeeper
-(docs/release/RELEASE-HOWTO.md). Read-only: it never signs, submits or changes what it checks.
+runtime, entitlements, no baked-in OAuth client, no developer switches or sample-data launch
+arguments anywhere in the app, notarization ticket and Gatekeeper (docs/release/RELEASE-HOWTO.md).
+Read-only: it never signs, submits or changes what it checks.
 A .dmg is attached read-only and hidden from Finder, checked (with the app inside it), then
 detached. A release-info.txt (written by make-dmg.sh) is checked for the marker, and so are the
 release-notes.md beside it.
@@ -40,6 +41,12 @@ NOTES_MARKER="Early development build"
 # Empty on purpose: add a key here only together with the same key in Mail.entitlements
 ALLOWED_ENTITLEMENTS=""
 IDENTITY_ENTITLEMENTS="com.apple.application-identifier com.apple.developer.team-identifier"
+
+# Only Debug and DevTools builds may carry these; a Release build compiles them out
+DEVELOPER_NAMES="-UseFakeGmail -UseFakeData -UseFixtureStore -UseFakeCalendar -FakeGmailNotifications
+OPENHUMAN_SAFE_MODE write-allowlist OPENHUMAN_DEV_FEEDBACK OPENHUMAN_DEVELOPER OPENHUMAN_HOME
+OPENHUMAN_OAUTH_CLIENT_JSON OPENHUMAN_INSECURE_FILE_TOKENS OPENHUMAN_STORE_POLL_ONLY OPENHUMAN_FEEDBACK_DIR
+fake-gmail-access-token OpenHumanMail-FakeGmail-"
 
 PRE=0; UNSIGNED=0; TEAM=""; EXPECT_COMMIT=""; ALLOW_DIRTY=0; TARGETS=(); RELEASES=()
 while [[ $# -gt 0 ]]; do
@@ -113,6 +120,23 @@ check_signed_entitlements() {
     done
 }
 
+check_developer_names() {
+    local app="$1" patterns found f hits
+    patterns="$(mktemp)"; found="$(mktemp)"
+    printf '%s\n' $DEVELOPER_NAMES >"$patterns"
+    while IFS= read -r -d '' f; do
+        hits="$(LC_ALL=C grep -a -o -F -f "$patterns" "$f" 2>/dev/null | LC_ALL=C sort -u | tr '\n' ' ' || true)"
+        [[ -z "$hits" ]] || printf '%s: %s\n' "${f#"$app"/}" "${hits% }" >>"$found"
+    done < <(find "$app/Contents" -type f -print0 2>/dev/null)
+    if [[ -s "$found" ]]; then
+        bad "developer switches or sample-data launch arguments in the app. Only Debug and DevTools builds may carry them; hand out a Release build:"
+        sed 's/^/          /' "$found"
+    else
+        ok "no developer switches or sample-data launch arguments in the app"
+    fi
+    rm -f "$patterns" "$found"
+}
+
 FIRST_TEAM=""
 check_signature() {
     local path="$1" label="$2" needs_runtime="$3" out authority team
@@ -167,6 +191,7 @@ check_app() {
     else
         ok "no Google OAuth client in Info.plist (people import their own in onboarding)"
     fi
+    check_developer_names "$app"
 
     case "$commit" in
         ""|unknown) bad "OHGitCommit is '${commit:-empty}': the build does not say which commit it is" ;;

@@ -38,10 +38,10 @@ private enum Hostile {
         let suite = "dev.openhuman.tests.devfeedback.privacy"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
-        let center = DevFeedbackCenter(availability: .debugBuild, settings: DevFeedbackSettings(defaults: defaults),
+        let center = DevFeedbackCenter(availability: .devTools, settings: DevFeedbackSettings(defaults: defaults),
                                        paths: DevFeedbackPaths(support: support),
                                        bundledChecklist: Bundle.main.url(forResource: "dev-test-checklist", withExtension: "json"))
-        let host = AppDevFeedbackHost(availability: .debugBuild, arguments: ["-UseFakeGmail"], environment: [:],
+        let host = AppDevFeedbackHost(availability: .devTools, arguments: ["-UseFakeGmail"], environment: [:],
                                       app: { app }, theme: { nil })
         center.host = host
         return (center, host)

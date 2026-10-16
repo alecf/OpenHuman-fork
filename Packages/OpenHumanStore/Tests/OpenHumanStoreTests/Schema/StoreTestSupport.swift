@@ -10,12 +10,13 @@ func tempDirectory() -> URL {
 
 @discardableResult
 func openTemp(kind: ProcessKind = .test, readOnly: Bool = false, observe: Bool = false,
-              dir: URL? = nil, notificationName: String = OHIdentifiers.storeChangedNotification) throws -> (store: MailStore, dir: URL) {
+              dir: URL? = nil, notificationName: String = OHIdentifiers.storeChangedNotification,
+              pollOnly: Bool = false) throws -> (store: MailStore, dir: URL) {
     let directory = dir ?? tempDirectory()
     let store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: kind,
                                                 readOnly: readOnly, observeExternalChanges: observe,
                                                 appVersion: "0.0.0-test",
-                                                changeNotificationName: notificationName))
+                                                changeNotificationName: notificationName, pollOnly: pollOnly))
     return (store, directory)
 }
 

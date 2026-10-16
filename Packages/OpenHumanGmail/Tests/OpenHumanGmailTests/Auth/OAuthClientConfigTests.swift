@@ -3,8 +3,6 @@ import Testing
 @testable import OpenHumanGmail
 
 @Suite struct OAuthClientConfigTests {
-    private let envKey = OAuthClientConfig.environmentKey
-
     private func write(_ data: Data, _ url: URL, mode: mode_t = 0o600) throws {
         try data.write(to: url)
         chmod(url.path, mode)
@@ -25,8 +23,8 @@ import Testing
         let file = dir.url.appendingPathComponent("oauth-client.json")
         #expect(posixMode(file) == 0o600)
         #expect(try FileManager.default.contentsOfDirectory(atPath: dir.url.path) == ["oauth-client.json"])
-        #expect(OAuthClientConfig.resolveSource(environment: [:], storeDirectory: dir.url) == .storeFile)
-        let loaded = try OAuthClientConfig.load(environment: [:], storeDirectory: dir.url)
+        #expect(OAuthClientConfig.resolveSource(clientFile: nil, storeDirectory: dir.url) == .storeFile)
+        let loaded = try OAuthClientConfig.load(clientFile: nil, storeDirectory: dir.url)
         #expect(loaded.clientID == config.clientID && loaded.clientSecret == config.clientSecret)
         #expect(loaded.authURI == config.authURI && loaded.tokenURI == config.tokenURI)
     }
@@ -138,7 +136,7 @@ import Testing
         #expect(config.clientID == Synthetic.clientID && config.clientSecret == Synthetic.clientSecret)
         #expect(config.authURI == OAuthClientConfig.defaultAuthURI)
         #expect(config.tokenURI == OAuthClientConfig.defaultTokenURI)
-        let loaded = try OAuthClientConfig.load(environment: [:], storeDirectory: dir.url)
+        let loaded = try OAuthClientConfig.load(clientFile: nil, storeDirectory: dir.url)
         #expect(loaded.authURI == OAuthClientConfig.defaultAuthURI && loaded.tokenURI == OAuthClientConfig.defaultTokenURI)
     }
 
@@ -148,12 +146,12 @@ import Testing
         let hostile = clientJSON(tokenURI: "https://oauth2.example.invalid/token")
         try write(hostile, dir.url.appendingPathComponent("oauth-client.json"))
         #expect(throws: OAuthError.self) {
-            _ = try OAuthClientConfig.load(environment: [:], storeDirectory: dir.url)
+            _ = try OAuthClientConfig.load(clientFile: nil, storeDirectory: dir.url)
         }
         let envFile = dir.url.appendingPathComponent("client_env.json")
         try write(hostile, envFile)
         #expect(throws: OAuthError.self) {
-            _ = try OAuthClientConfig.load(environment: [envKey: envFile.path], storeDirectory: nil)
+            _ = try OAuthClientConfig.load(clientFile: envFile.path, storeDirectory: nil)
         }
     }
 
@@ -164,15 +162,15 @@ import Testing
         try write(Synthetic.installedJSON(clientID: "env-client"), envFile)
         let store = dir.url.appendingPathComponent("store", isDirectory: true)
         _ = try OAuthClientConfig.importGoogleJSON(Synthetic.installedJSON(clientID: "store-client"), storeDirectory: store)
-        let env = [envKey: envFile.path]
-        #expect(OAuthClientConfig.resolveSource(environment: env, storeDirectory: store) == .environment)
-        #expect(try OAuthClientConfig.load(environment: env, storeDirectory: store).clientID == "env-client")
-        for noEnv in [[:], [envKey: "  "]] {
-            #expect(OAuthClientConfig.resolveSource(environment: noEnv, storeDirectory: store) == .storeFile)
-            #expect(try OAuthClientConfig.load(environment: noEnv, storeDirectory: store).clientID
+        let env = envFile.path
+        #expect(OAuthClientConfig.resolveSource(clientFile: env, storeDirectory: store) == .environment)
+        #expect(try OAuthClientConfig.load(clientFile: env, storeDirectory: store).clientID == "env-client")
+        for noEnv in [nil, "  "] as [String?] {
+            #expect(OAuthClientConfig.resolveSource(clientFile: noEnv, storeDirectory: store) == .storeFile)
+            #expect(try OAuthClientConfig.load(clientFile: noEnv, storeDirectory: store).clientID
                     == "store-client")
         }
-        #expect(OAuthClientConfig.resolveSource(environment: [:], storeDirectory: dir.url) == .missing)
+        #expect(OAuthClientConfig.resolveSource(clientFile: nil, storeDirectory: dir.url) == .missing)
     }
 
     @Test func malformedOrUnreadableEnvironmentSourceIsAnErrorNotAFallThrough() throws {
@@ -183,10 +181,10 @@ import Testing
         let malformed = dir.url.appendingPathComponent("bad.json")
         try write(Data(#"{"web":"x"}"#.utf8), malformed)
         for path in [malformed.path, dir.url.appendingPathComponent("missing.json").path] {
-            let env = [envKey: path]
-            #expect(OAuthClientConfig.resolveSource(environment: env, storeDirectory: store) == .environment)
+            let env = path
+            #expect(OAuthClientConfig.resolveSource(clientFile: env, storeDirectory: store) == .environment)
             #expect(throws: OAuthError.self) {
-                _ = try OAuthClientConfig.load(environment: env, storeDirectory: store)
+                _ = try OAuthClientConfig.load(clientFile: env, storeDirectory: store)
             }
         }
     }
@@ -196,7 +194,7 @@ import Testing
         defer { dir.cleanup() }
         try write(Data("{\"installed\":{}}".utf8), dir.url.appendingPathComponent("oauth-client.json"))
         #expect(throws: OAuthError.self) {
-            _ = try OAuthClientConfig.load(environment: [:], storeDirectory: dir.url)
+            _ = try OAuthClientConfig.load(clientFile: nil, storeDirectory: dir.url)
         }
     }
 
@@ -208,7 +206,7 @@ import Testing
         try FileManager.default.createSymbolicLink(at: dir.url.appendingPathComponent("oauth-client.json"),
                                                    withDestinationURL: real)
         #expect(throws: OAuthError.self) {
-            _ = try OAuthClientConfig.load(environment: [:], storeDirectory: dir.url)
+            _ = try OAuthClientConfig.load(clientFile: nil, storeDirectory: dir.url)
         }
     }
 
@@ -217,16 +215,16 @@ import Testing
         defer { dir.cleanup() }
         let file = dir.url.appendingPathComponent("oauth-client.json")
         try write(Synthetic.installedJSON(), file, mode: 0o644)
-        _ = try OAuthClientConfig.load(environment: [:], storeDirectory: dir.url)
+        _ = try OAuthClientConfig.load(clientFile: nil, storeDirectory: dir.url)
         #expect(posixMode(file) == 0o600)
     }
 
     @Test func noSourceIsConfigurationMissing() throws {
         let dir = try TempDirectory()
         defer { dir.cleanup() }
-        #expect(OAuthClientConfig.resolveSource(environment: [:], storeDirectory: dir.url) == .missing)
+        #expect(OAuthClientConfig.resolveSource(clientFile: nil, storeDirectory: dir.url) == .missing)
         do {
-            _ = try OAuthClientConfig.load(environment: [:], storeDirectory: dir.url)
+            _ = try OAuthClientConfig.load(clientFile: nil, storeDirectory: dir.url)
             Issue.record("expected configurationMissing")
         } catch {
             #expect(isConfigError(error))

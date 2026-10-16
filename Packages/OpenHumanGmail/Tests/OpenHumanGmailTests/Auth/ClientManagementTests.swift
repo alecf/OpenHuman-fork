@@ -53,7 +53,7 @@ private enum Managed {
         #expect(names == ["\(work.registryKey).json"])
         #expect((OAuthClientConfig.importedAt(key: work.registryKey, storeDirectory: dir.url) ?? past) > past)
         #expect(OAuthClientConfig.importedClients(storeDirectory: dir.url).map(\.clientSecret) == ["SYNTHETIC-NEW"])
-        #expect(try OAuthClientConfig.load(environment: [:], storeDirectory: dir.url).clientSecret
+        #expect(try OAuthClientConfig.load(clientFile: nil, storeDirectory: dir.url).clientSecret
                 == "SYNTHETIC-NEW")
         #expect(posixMode(file) == 0o600)
     }
@@ -71,7 +71,7 @@ private enum Managed {
         #expect(try Data(contentsOf: defaultFile) == defaultBefore, "the default file is never touched")
         try OAuthClientConfig.removeImportedClient(key: work.registryKey, storeDirectory: dir.url)
         #expect(OAuthClientConfig.importedClients(storeDirectory: dir.url).isEmpty)
-        #expect(try OAuthClientConfig.load(environment: [:], storeDirectory: dir.url).clientID
+        #expect(try OAuthClientConfig.load(clientFile: nil, storeDirectory: dir.url).clientID
                 == Managed.workID)
         try OAuthClientConfig.removeImportedClient(key: work.registryKey, storeDirectory: dir.url)
         #expect(throws: OAuthError.self) {

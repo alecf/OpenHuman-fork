@@ -174,6 +174,19 @@ import notify
         #expect(monitor.currentPollInterval == nil)
     }
 
+    @Test func aPollOnlyMonitorUsesTheFastPollOnlyWhenAsked() {
+        let monitor = ExternalChangeMonitor(notificationName: uniqueNotificationName(), pollOnly: true,
+                                            readOthers: { [:] }, pulse: {})
+        monitor.start(active: true)
+        #expect(monitor.currentPollInterval == 1)
+        monitor.setActive(false)
+        #expect(monitor.currentPollInterval == 10)
+        monitor.stop()
+        let options = StoreOptions(location: StoreLocation(directory: URL(fileURLWithPath: "/tmp/oh")), processKind: .app,
+                                   observeExternalChanges: true, appVersion: "0.0.0-test")
+        #expect(options.pollOnly == false)
+    }
+
     @Test func theStoreForwardsAppActivationToTheMonitor() throws {
         let (store, dir) = try openTemp(kind: .app, observe: true)
         defer { try? FileManager.default.removeItem(at: dir) }
