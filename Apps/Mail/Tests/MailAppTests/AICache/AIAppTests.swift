@@ -5,6 +5,7 @@ import OpenHumanAIAgentCLI
 import OpenHumanCore
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 @Suite struct SQLiteAIResultCacheTests {
     static func directory() -> URL {

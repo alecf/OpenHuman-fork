@@ -8,6 +8,7 @@ import OpenHumanStore
 import Synchronization
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private enum ParityClients {
     static let workID = "333333333333-syntheticcal1.apps.googleusercontent.com"

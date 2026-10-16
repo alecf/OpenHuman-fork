@@ -2,17 +2,19 @@ import Foundation
 import MailFakes
 import MailFeatures
 import MailModel
+import MailSystem
 import MailUI
 import MailUIMac
 import OpenHumanCore
 import OpenHumanGmail
 import OpenHumanGmailApple
+import OpenHumanMailLive
 import OpenHumanStore
 import OpenHumanAI
 import Security
 
 @MainActor
-enum CompositionRoot {
+extension CompositionRoot {
     enum DataMode: Equatable { case fake, fixtureStore, fakeGmail, live }
 
     static func dataMode(arguments: [String], environment: [String: String]) -> DataMode {
@@ -25,12 +27,10 @@ enum CompositionRoot {
         return .live
     }
 
-    static var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
-    }
-
     static func makeApp(arguments: [String] = ProcessInfo.processInfo.arguments,
                         environment: [String: String] = ProcessInfo.processInfo.environment) -> AppModel {
+        PlatformServices.current = .mac
+        developerHome = BuildFlavor.home
         #if DEBUG || OH_DEV_TOOLS
         if let app = fakeApp(arguments: arguments, environment: environment) { return app }
         #endif
@@ -76,7 +76,7 @@ enum CompositionRoot {
                                                         pollOnly: BuildFlavor.storePollOnly(environment)))
             let userAgent = "OpenHumanMail/\(appVersion)"
             let tokenTransport = URLSessionTransport(userAgent: userAgent)
-            let signInBroker = SignInBroker(memory: UserDefaultsSignInBrowserMemory(defaults: .standard))
+            let signInBroker = SignInBroker(platform: .system, memory: UserDefaultsSignInBrowserMemory(defaults: .standard))
             SignInPanelController.install(signInBroker)
             let keychain = keychainStores(environment: environment, directory: location.directory,
                                           accessGroup: keychainAccessGroup())
@@ -87,46 +87,15 @@ enum CompositionRoot {
                     clientStore: keychain.client, tokenStore: keychain.tokens,
                     transport: tokenTransport, makeReceiver: { signInBroker.wrap(NWLoopbackReceiver()) },
                     browser: signInBroker,
-                    clock: SystemClock(), calendarTokenStore: liveCalendarTokenStore(arguments: arguments)),
+                    clock: SystemClock(), calendarTokenStore: liveCalendarTokenStore(arguments: arguments),
+                    developerClientFile: BuildFlavor.oauthClientFile),
                 transports: LiveBackend.Transports(api: URLSessionTransport(userAgent: userAgent), token: tokenTransport,
                                                    unsubscribe: OneClickTransport(userAgent: userAgent)),
-                userAgent: userAgent)
+                userAgent: userAgent, makeSystemEvents: { AppSystemEvents() })
             return AppModel(live: backend, platform: systemPlatform(environment))
         } catch {
             return AppModel(screen: .notice(storeProblem(error)))
         }
-    }
-
-    static let storeNoticeTitle = "Mail couldn't open the mail on this Mac"
-
-    static func storeNoticeMessage(_ error: any Error) -> String {
-        if case StoreError.schemaTooNew = error {
-            return "A newer version of Mail last used the mail on this Mac. Install the newest version of Mail."
-        }
-        return "Quit and open Mail again. Your Gmail is unchanged."
-    }
-
-    static func storeProblem(_ error: any Error) -> StartupProblem {
-        if case StoreError.schemaTooNew = error {
-            return StartupProblem(title: storeNoticeTitle, message: storeNoticeMessage(error))
-        }
-        return StartupProblem(title: storeNoticeTitle, message: storeNoticeMessage(error), details: detailCode(error))
-    }
-
-    static func syncStartMessage(_ error: any Error) -> String {
-        if case GmailError.reauthRequired = error {
-            return "Google needs you to sign in again."
-        }
-        return "Sign in again, or quit and open Mail again."
-    }
-
-    static func detailCode(_ error: any Error) -> String {
-        if let gmail = error as? GmailError { return gmail.code }
-        if error is StoreError {
-            let text = String(describing: error)
-            return String(text.prefix { $0 != "(" })
-        }
-        return String(describing: type(of: error))
     }
 
     // Why: a test home gets its own service so its sign-in can never replace or sign out the real install's token
@@ -164,130 +133,6 @@ enum CompositionRoot {
     static func clientKeychainService(environment: [String: String], directory: URL) -> String {
         guard BuildFlavor.home(environment) != nil else { return KeychainClientStore.service }
         return KeychainClientStore.service + ".home." + stableID(directory.standardizedFileURL.path)
-    }
-
-    static func stableID(_ text: String) -> String {
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
-        for byte in text.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* 0x0000_0100_0000_01b3
-        }
-        let hex = String(hash, radix: 16)
-        return String(repeating: "0", count: 16 - hex.count) + hex
-    }
-
-    static let storeRebuildTitle = "Mail needs to rebuild the mail on this Mac"
-    static let storeRebuildMessage = "This development build keeps mail in a new format, so the next time Mail opens it "
-        + "starts over with an empty copy: you sign in again and your mail downloads again. The current copy is kept as a "
-        + "backup (mail.sqlite.pre-erase-… in Mail's folder); splits, snippets, reminders and changes not yet sent to "
-        + "Gmail stay only in that backup. Your Gmail is unchanged. Quit Mail and open it again to continue."
-
-    static func storeRebuildMarker(_ location: StoreLocation) -> URL {
-        location.directory.appendingPathComponent("mail.sqlite.rebuild-notice-shown")
-    }
-
-    static func showsStoreRebuildNotice(_ location: StoreLocation,
-                                        wouldErase: (StoreLocation) -> Bool = MailStore.schemaChangeWouldErase) -> Bool {
-        let marker = storeRebuildMarker(location)
-        let shown = FileManager.default.fileExists(atPath: marker.path)
-        guard wouldErase(location) else {
-            if shown { try? FileManager.default.removeItem(at: marker) }
-            return false
-        }
-        if shown {
-            try? FileManager.default.removeItem(at: marker)
-            Log(.app).notice("debug store rebuild: the notice was shown at the last launch; the store backs up and erases now")
-            return false
-        }
-        FileManager.default.createFile(atPath: marker.path, contents: Data(), attributes: [.posixPermissions: 0o600])
-        Log(.app).notice("debug store rebuild: schema v1 changed; the notice shows before anything is erased")
-        return true
-    }
-
-    static func environment(store: any MailStoreAdapter.Store & MailStoreSettings.Store & ImportanceRulesStoring,
-                            ensureBody: (@Sendable (MessageKey) async throws -> Void)? = nil,
-                            attachmentFile: (@Sendable (MessageKey, AttachmentInfo) async throws -> URL)? = nil,
-                            connectivity: (@Sendable () -> AsyncStream<[AccountID: ConnectivityState]>)? = nil,
-                            syncProgress: (@Sendable () -> AsyncStream<[AccountID: String]>)? = nil,
-                            commands: (any MailCommanding)? = nil, accounts: (any AccountManaging)? = nil,
-                            draftsDirectory: URL? = nil,
-                            isFake: Bool = false, isLiveAccount: Bool = false,
-                            onDemand: MailStoreAdapter.OnDemand? = nil,
-                            calendar: (any CalendarProviding)? = nil,
-                            calendarConnection: (any CalendarConnecting)? = nil,
-                            calendarConnections: (any CalendarConnectionsProviding)? = nil) -> AppEnvironment {
-        let ai = AIServices.aiCenter(model: .onDevice, persistent: !isFake)
-        let semanticStorage: SemanticServices.Storage = isFake ? .inMemory
-            : AIServices.cacheDirectory.map { .directory(SemanticServices.folder(storeDirectory: $0)) } ?? .inMemory
-        let semantic = SemanticServices(store: store, storage: semanticStorage, ai: ai,
-                                        makeProvider: { SemanticServices.appleProvider(ai.settings.smartSearch) })
-        SemanticServices.current = semantic
-        let autoLabelStore: any AutoLabelStoring = isFake ? InMemoryAutoLabelStore()
-            : AIServices.cacheDirectory.flatMap {
-                try? SQLiteAutoLabelStore(url: $0.appendingPathComponent(SQLiteAutoLabelStore.fileName))
-            } ?? InMemoryAutoLabelStore()
-        let calendarCache: (any CalendarCachePersisting)? = isFake ? nil : AIServices.cacheDirectory.flatMap {
-            try? SQLiteCalendarCache(url: $0.appendingPathComponent(SQLiteCalendarCache.fileName))
-        }
-        let searchRanking = searchRankingService(store: store, isFake: isFake)
-        let environment = AppEnvironment(data: MailStoreAdapter(store: store, ensureBody: ensureBody, attachmentFile: attachmentFile,
-                                                     connectivity: connectivity, syncProgress: syncProgress,
-                                                     onDemand: onDemand, semantic: semantic?.arm, ranking: searchRanking),
-                              commands: commands, accounts: accounts, settings: MailStoreSettings(store: store),
-                              isFake: isFake, navigationStore: navigationStore(isFake ? "fakeGmail" : "live"),
-                              importance: MailStoreImportance(store: store),
-                              draftsDirectory: draftsDirectory,
-                              aiOnboarding: aiOnboarding(isFake: isFake, center: ai), secrets: secretStore(isFake: isFake),
-                              ai: ai, isLiveAccount: isLiveAccount, calendar: calendar,
-                              calendarConnection: calendarConnection, calendarConnections: calendarConnections,
-                              autoLabelStore: autoLabelStore, calendarCache: calendarCache,
-                              learnedBehaviourStore: isFake ? nil
-                                  : AIServices.cacheDirectory.map { LearnedBehaviourFile(directory: $0) },
-                              waiting: (store as? any WaitingOverrideStoring).map { MailStoreWaiting(store: $0) })
-        attachClassification(environment, isFake: isFake)
-        environment.installSearchRanking(searchRanking)
-        CategoryImportanceMatcher.install(on: environment.autoLabels, store: store)
-        if let searching = store as? any MailSearching {
-            environment.overlays.search.interpretation.resolver = SearchPlanResolver(isValidQuery: { text in
-                (try? searching.parseSearch(text)) != nil
-            })
-        }
-        if let semantic, environment.smartSearchEnabled {
-            Task { await semantic.apply() }
-            if let syncProgress {
-                Task { for await _ in syncProgress() { semantic.nudge() } }
-            }
-        }
-        return environment
-    }
-
-    static func aiOnboarding(isFake: Bool, center: AICenter? = nil,
-                             underTest: Bool = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil)
-        -> (any AIOnboardingPort)? {
-        if isFake { return FakeAIOnboarding() }
-        if underTest { return nil }
-        return center.map { AICenterOnboarding(center: $0) } ?? AISettingsOnboarding()
-    }
-
-    static func secretStore(isFake: Bool, underTest: Bool = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil)
-        -> (any SecretStoring)? {
-        if isFake { return InMemorySecretStore() }
-        return underTest ? nil : KeychainSecretStore()
-    }
-
-    static func navigationStore(_ scope: String,
-                                _ environment: [String: String] = ProcessInfo.processInfo.environment) -> any NavigationStateStoring {
-        guard environment["XCTestConfigurationFilePath"] == nil else { return InMemoryNavigationStore() }
-        let base: URL
-        if let home = BuildFlavor.home(environment) {
-            base = URL(fileURLWithPath: (home as NSString).expandingTildeInPath, isDirectory: true)
-        } else {
-            let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-                ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
-            base = support.appendingPathComponent("OpenHuman", isDirectory: true).appendingPathComponent("Mail", isDirectory: true)
-        }
-        return FileNavigationStore(directory: base.appendingPathComponent("State", isDirectory: true), scope: scope,
-                                   legacy: UserDefaultsNavigationStore(scope: scope))
     }
 }
 

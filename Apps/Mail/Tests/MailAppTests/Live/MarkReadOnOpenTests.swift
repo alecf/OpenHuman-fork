@@ -9,6 +9,7 @@ import OpenHumanStore
 import OpenHumanSync
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 @MainActor
 @Suite(.serialized)

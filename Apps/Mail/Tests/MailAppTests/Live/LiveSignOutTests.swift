@@ -8,6 +8,7 @@ import OpenHumanGmailTesting
 import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private func synthetic(_ scopes: [String] = [GmailScope.modify]) -> StoredToken {
     StoredToken(refreshToken: "synthetic-refresh", grantedScopes: scopes, clientID: SyntheticClient.clientID)
@@ -20,7 +21,7 @@ private func manager(store: MailStore, tokens: InMemoryTokenStore, transport: Fa
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()],
             storeDirectory: FileManager.default.temporaryDirectory.appendingPathComponent("oh-none-\(UUID().uuidString)"), tokenStore: tokens, transport: transport,
             makeReceiver: { AnsweringReceiver(browser: RecordingBrowser()) }, browser: RecordingBrowser(),
-            clock: TestClock()))
+            clock: TestClock(), developerClientFile: BuildFlavor.oauthClientFile))
 }
 
 @Test func signOutRemovesTheAccountsTokenRowsFilesAndDraftsOnly() async throws {

@@ -8,6 +8,7 @@ import OpenHumanStore
 import Synchronization
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private enum Clients {
     static let workID = "111111111111-syntheticwork1.apps.googleusercontent.com"

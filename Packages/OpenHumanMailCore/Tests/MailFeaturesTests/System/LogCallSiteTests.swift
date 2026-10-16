@@ -5,7 +5,7 @@ import Testing
     static let folders = [
         "Packages/OpenHumanMailCore/Sources", "Packages/OpenHumanMailUI/Sources", "Packages/OpenHumanAI/Sources",
         "Packages/OpenHumanAIMLX/Sources", "Packages/OpenHumanCore/Sources", "Packages/OpenHumanLinks/Sources",
-        "Packages/OpenHumanCLI/Sources", "Apps/Mail/Sources",
+        "Packages/OpenHumanCLI/Sources", "Packages/OpenHumanMailLive/Sources", "Apps/Mail/Sources",
     ]
 
     static func patterns() throws -> (call: Regex<AnyRegexOutput>, raw: Regex<AnyRegexOutput>) {

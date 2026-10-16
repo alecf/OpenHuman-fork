@@ -11,6 +11,7 @@ import OpenHumanStore
 import OpenHumanSync
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 @MainActor
 private func waitFor(_ what: String, timeout: Duration = .seconds(30), _ condition: () async -> Bool,
@@ -67,7 +68,7 @@ private final class RealLaunch {
                 environment: environment.merging(["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()]) { a, _ in a },
                 storeDirectory: directory.appendingPathComponent("none"), tokenStore: tokens,
                 transport: google.http, makeReceiver: { AnsweringReceiver(browser: browser) }, browser: browser,
-                clock: SystemClock(), signInTimeout: .seconds(30)),
+                clock: SystemClock(), signInTimeout: .seconds(30), developerClientFile: BuildFlavor.oauthClientFile),
             transports: LiveBackend.Transports(api: google.http, token: google.http),
             userAgent: "OpenHumanMail/test", pollInterval: .seconds(3600), makeSystemEvents: { AppSystemEvents.quiet() })
         app = AppModel(live: backend)

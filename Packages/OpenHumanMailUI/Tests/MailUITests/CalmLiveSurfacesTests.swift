@@ -10,7 +10,8 @@ private enum CalmSources {
         .deletingLastPathComponent()
     static let repo = package.deletingLastPathComponent().deletingLastPathComponent()
     static var roots: [URL] {
-        [package.appendingPathComponent("Sources"), repo.appendingPathComponent("Apps/Mail/Sources")]
+        [package.appendingPathComponent("Sources"), repo.appendingPathComponent("Packages/OpenHumanMailLive/Sources"),
+         repo.appendingPathComponent("Apps/Mail/Sources")]
     }
 
     static func files(under roots: [URL]) -> [URL] {

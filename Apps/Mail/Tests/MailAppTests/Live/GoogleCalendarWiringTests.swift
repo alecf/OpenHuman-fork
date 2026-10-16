@@ -7,6 +7,7 @@ import OpenHumanGmailTesting
 import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private let readScopes = CalendarScopes.request.read
 private let writeScopes = CalendarScopes.request.write
@@ -62,7 +63,8 @@ private final class CalendarHarness {
                 environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()],
                 storeDirectory: directory.appendingPathComponent("none"), tokenStore: mailTokens,
                 transport: http, makeReceiver: { AnsweringReceiver(browser: browser) }, browser: browser,
-                clock: SystemClock(), signInTimeout: .seconds(30), calendarTokenStore: calendarStore ?? calendarTokens),
+                clock: SystemClock(), signInTimeout: .seconds(30), calendarTokenStore: calendarStore ?? calendarTokens,
+                developerClientFile: BuildFlavor.oauthClientFile),
             transports: LiveBackend.Transports(api: http, token: http),
             userAgent: "OpenHumanMail/test", pollInterval: .seconds(3600), makeSystemEvents: { AppSystemEvents.quiet() })
         let account = try #require(backend.account(id))
@@ -327,7 +329,7 @@ private final class CalendarHarness {
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()],
             storeDirectory: h.directory.appendingPathComponent("none"), tokenStore: h.mailTokens,
             transport: h.http, makeReceiver: { AnsweringReceiver(browser: RecordingBrowser()) }, browser: RecordingBrowser(),
-            clock: SystemClock()),
+            clock: SystemClock(), developerClientFile: BuildFlavor.oauthClientFile),
         transports: LiveBackend.Transports(api: h.http, token: h.http),
         userAgent: "OpenHumanMail/test", pollInterval: .seconds(3600), makeSystemEvents: { AppSystemEvents.quiet() })
     let session = try plain.makeSession(for: h.account)

@@ -37,6 +37,7 @@ for manifest in Packages/*/Package.swift; do
 done
 
 APPLE_SYSTEM="Foundation Synchronization os Dispatch Darwin Glibc"
+SYSTEM_SERVICES="CoreSpotlight Security UniformTypeIdentifiers UserNotifications"
 allowed_imports() {
     local pkg="$1" target="$2"
     case "$pkg/$target" in
@@ -48,6 +49,8 @@ allowed_imports() {
         OpenHumanMailCore/MailTheme)            echo "$APPLE_SYSTEM" ;;
         OpenHumanCloudSync/OpenHumanCloudSync)  echo "$APPLE_SYSTEM SQLite3 Crypto OpenHumanCore" ;;
         OpenHumanCloudSync/OpenHumanCloudSyncTesting) echo "$APPLE_SYSTEM OpenHumanCore OpenHumanCloudSync" ;;
+        OpenHumanMailLive/MailSystem)           echo "$APPLE_SYSTEM $SYSTEM_SERVICES MailModel OpenHumanCore" ;;
+        OpenHumanMailLive/MailSystemTests)      echo "$APPLE_SYSTEM $SYSTEM_SERVICES Testing MailModel MailSystem" ;;
         *)                                      echo "*" ;;
     esac
 }
@@ -69,6 +72,11 @@ forbidden_imports() {
         OpenHumanAI|OpenHumanAIMLX) echo "$data" ;;
         OpenHumanSemanticIndex) echo "$data" ;;
         OpenHumanCloudSync) echo "$data $app" ;;
+        OpenHumanMailLive)
+            case "$target" in
+                *Tests) echo "AppKit UIKit MailUIMac" ;;
+                *) echo "AppKit UIKit MailUIMac OpenHumanGmailTesting OpenHumanStoreTesting OpenHumanSemanticIndexTesting" ;;
+            esac ;;
         *) echo "" ;;
     esac
 }
@@ -97,6 +105,12 @@ while IFS= read -r file; do
         fi
     done < <(grep -E '^[[:space:]]*(@testable[[:space:]]+|@_exported[[:space:]]+|(public|package|internal|private|fileprivate)[[:space:]]+)*import[[:space:]]' "$file")
 done < <(find ./Packages -path '*/.build' -prune -o -name '*.swift' -path '*/Sources/*' -print -o -name '*.swift' -path '*/Tests/*' -print)
+
+# Why: the shared app glue builds for iOS, which has no Process to run an assistant CLI
+while IFS= read -r file; do
+    awk '/^[[:space:]]*import[[:space:]]+OpenHumanAIAgentCLI/ && prev != "#if os(macOS)" { bad = 1 } { prev = $0 } END { exit bad }' \
+        "$file" || fail "$file: import OpenHumanAIAgentCLI only directly inside #if os(macOS)"
+done < <(grep -rlE --include='*.swift' '^[[:space:]]*import[[:space:]]+OpenHumanAIAgentCLI' Packages/OpenHumanMailLive/Sources)
 
 if command -v python3 >/dev/null 2>&1; then
     python3 Tools/ci/gen-public-inits.py --check || fail "contract public inits are stale: run Tools/ci/gen-public-inits.py"

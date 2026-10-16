@@ -8,6 +8,7 @@ import OpenHumanGmailTesting
 import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private struct Rig {
     let manager: LiveAccountManager
@@ -30,7 +31,7 @@ private func rig(grantedScope: String = GmailScope.modify, timeout: Duration = .
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()],
             storeDirectory: FileManager.default.temporaryDirectory.appendingPathComponent("oh-none-\(UUID().uuidString)"), tokenStore: tokens, transport: google.http,
             makeReceiver: { AnsweringReceiver(browser: browser) }, browser: browser, clock: clock,
-            signInTimeout: .seconds(30), remoteSignInTimeout: timeout))
+            signInTimeout: .seconds(30), remoteSignInTimeout: timeout, developerClientFile: BuildFlavor.oauthClientFile))
     return Rig(manager: manager, google: google, tokens: tokens, browser: browser, store: store, clock: clock)
 }
 
@@ -165,8 +166,9 @@ private func setupError(_ rig: Rig, _ pasted: String) async -> AccountSetupError
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()],
             storeDirectory: FileManager.default.temporaryDirectory.appendingPathComponent("oh-none-\(UUID().uuidString)"), tokenStore: tokens, transport: google.http,
             makeReceiver: { AnsweringReceiver(browser: browser) }, browser: browser, clock: SystemClock(),
-            signInTimeout: .seconds(30)),
-        transports: LiveBackend.Transports(api: google.http, token: google.http), userAgent: "OpenHumanMail/test")
+            signInTimeout: .seconds(30), developerClientFile: BuildFlavor.oauthClientFile),
+        transports: LiveBackend.Transports(api: google.http, token: google.http), userAgent: "OpenHumanMail/test",
+        makeSystemEvents: { AppSystemEvents() })
     let app = AppModel(live: backend)
     guard case .signIn(let signIn) = app.screen else {
         Issue.record("expected the sign-in screen")

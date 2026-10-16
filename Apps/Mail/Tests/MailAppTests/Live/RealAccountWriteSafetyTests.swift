@@ -12,6 +12,7 @@ import OpenHumanSync
 import Synchronization
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private final class RecordingEngine: MailEngineWriting {
     private let log = Mutex<[String]>([])
@@ -246,10 +247,14 @@ private enum AppSources {
     static let app = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
 
+    static let glue = app.deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Packages/OpenHumanMailLive/Sources/OpenHumanMailLive")
+
     static func all() throws -> [String: String] {
-        let root = app.appendingPathComponent("Sources")
-        let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?
-            .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" } ?? []
+        let files = [app.appendingPathComponent("Sources"), glue].flatMap { root in
+            FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)?
+                .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" } ?? []
+        }
         var out: [String: String] = [:]
         for file in files {
             let text = try String(contentsOf: file, encoding: .utf8).components(separatedBy: "\n")

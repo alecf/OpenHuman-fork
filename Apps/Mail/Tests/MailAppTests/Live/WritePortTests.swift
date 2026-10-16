@@ -11,6 +11,7 @@ import OpenHumanStore
 import OpenHumanSync
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private final class HeldGate: @unchecked Sendable {
     private let lock = NSLock()

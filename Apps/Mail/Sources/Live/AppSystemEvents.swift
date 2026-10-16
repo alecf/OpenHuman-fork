@@ -1,10 +1,11 @@
 import AppKit
 import Foundation
 import Network
+import OpenHumanMailLive
 import OpenHumanSync
 import Synchronization
 
-final class AppSystemEvents: SystemEventsSource {
+final class AppSystemEvents: StoppableSystemEvents {
     let events: AsyncStream<SystemEvent>
     private let continuation: AsyncStream<SystemEvent>.Continuation
     private let observers = Mutex<[(center: NotificationCenter, token: any NSObjectProtocol)]>([])

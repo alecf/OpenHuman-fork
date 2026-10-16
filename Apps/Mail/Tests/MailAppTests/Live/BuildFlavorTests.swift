@@ -3,6 +3,7 @@ import MailFakes
 import MailFeatures
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 @MainActor
 struct BuildFlavorTests {

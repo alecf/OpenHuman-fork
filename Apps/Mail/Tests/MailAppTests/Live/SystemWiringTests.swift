@@ -10,6 +10,7 @@ import OpenHumanStore
 import OpenHumanSync
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private func ref(_ account: Int64, _ row: Int64, _ id: String) -> ThreadRef {
     ThreadRef(accountID: AccountID(account), rowID: ThreadRowID(rawValue: row), gmailThreadID: GmailThreadID(id))

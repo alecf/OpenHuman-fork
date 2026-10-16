@@ -11,6 +11,7 @@ import OpenHumanStore
 import OpenHumanSync
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private func requests(_ wire: FakeGmailTransport, endingWith suffix: String) -> Int {
     wire.requests.filter { $0.url.path(percentEncoded: false).hasSuffix(suffix) }.count

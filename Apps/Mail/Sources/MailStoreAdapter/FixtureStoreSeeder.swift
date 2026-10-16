@@ -3,6 +3,7 @@ import Foundation
 import MailFakes
 import MailModel
 import OpenHumanCore
+import OpenHumanMailLive
 import OpenHumanStore
 
 public enum FixtureStoreSeeder {

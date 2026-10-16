@@ -12,6 +12,7 @@ import OpenHumanLinks
 import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 @MainActor
 @Suite(.serialized)

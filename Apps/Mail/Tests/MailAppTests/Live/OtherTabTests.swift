@@ -8,6 +8,7 @@ import OpenHumanStore
 import SwiftUI
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private func removeSeededCalendarSplit(_ store: MailStore, _ account: AccountID) throws {
     for split in try store.splits(account: account) where split.name == "Calendar" { try store.deleteSplit(split.id) }
