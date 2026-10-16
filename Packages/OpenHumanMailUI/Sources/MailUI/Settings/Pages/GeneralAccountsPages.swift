@@ -107,6 +107,9 @@ struct GeneralSettingsPage: View {
                         .accessibilityLabel("Run welcome tour again")
                 }
             }
+            if let updates = environment.system.updates {
+                UpdateCheckSettingsSection(center: updates)
+            }
             InboxAutomationSection(environment: environment)
             SettingsSection("Scheduling on this Mac", footnote: Self.schedulingNote) {
                 if modules.contains(.snooze) {

@@ -1,0 +1,14 @@
+{
+  "id": "links.mailto",
+  "area": "Links",
+  "title": "A mailto link opens a draft and never sends",
+  "steps": [
+    "Launch with -UseFakeData so the mail window is open",
+    "In Terminal run: open -a 'OpenHuman Mail' 'mailto:dana@example.test?cc=lee@example.test&subject=Lunch%3F&body=Noon%0D%0Aworks&bcc=spy@example.test'",
+    "Press Command-Return in the composer",
+    "Run: open -a 'OpenHuman Mail' 'mailto:a@example.test%0D%0ABcc:%20spy@example.test'"
+  ],
+  "expected": "A new message opens with Dana and Lee, the subject Lunch? and two body lines, a note that the link added recipients and no Bcc. Sending first asks to confirm the recipients. The second link shows Mail can't open that link. and opens nothing.",
+  "requires": "fake",
+  "addedIn": "2026-10-16"
+}

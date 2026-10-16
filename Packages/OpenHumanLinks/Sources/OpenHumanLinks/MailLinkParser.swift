@@ -56,7 +56,7 @@ public enum MailLinkParser {
             let to = try addresses(query["to"])
             let cc = try addresses(query["cc"])
             guard to.count + cc.count <= LinkGrammar.maxRecipients else { throw MailLinkError.tooManyItems }
-            let subject = query["subject"].map(stripControls)
+            let subject = query["subject"].map { singleLine(stripControls($0)) }
             if let s = subject, s.count > LinkGrammar.maxSubjectCharacters { throw MailLinkError.tooLong }
             let body = query["body"].map(stripControls)
             if let b = body, b.utf8.count > LinkGrammar.maxBodyBytes { throw MailLinkError.tooLong }
@@ -153,5 +153,10 @@ public enum MailLinkParser {
 
     static func stripControls(_ text: String) -> String {
         String(String.UnicodeScalarView(text.unicodeScalars.filter { $0 == "\n" || $0 == "\t" || !isControl($0) }))
+    }
+
+    // Why: a subject is one header line; a line break from a link would leave a message that cannot be sent
+    static func singleLine(_ text: String) -> String {
+        text.split(whereSeparator: { $0.isNewline || $0 == "\t" }).joined(separator: " ")
     }
 }

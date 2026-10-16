@@ -31,5 +31,6 @@ extension ActionCatalog {
         shortcutHints,
         classification,
         searchRanking,
+        updates,
     ].flatMap { $0 }
 }

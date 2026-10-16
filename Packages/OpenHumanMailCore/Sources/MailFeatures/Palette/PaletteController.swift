@@ -225,7 +225,7 @@ public final class PaletteController {
         .addAccount: "person.crop.circle.badge.plus", .refresh: "arrow.clockwise", .commandPalette: "command",
         .importSuperhumanLabels: "square.and.arrow.down", .sendFeedback: "paperplane.circle",
         .shortcutHelp: "keyboard", .undo: "arrow.uturn.backward", .redo: "arrow.uturn.forward",
-        .resetShortcutHints: "arrow.counterclockwise",
+        .resetShortcutHints: "arrow.counterclockwise", .checkForUpdates: "arrow.down.circle",
         .resetSearchLearning: "arrow.counterclockwise", .toggleSearchSort: "arrow.up.arrow.down",
         .copySearchRanking: "list.number",
         .nextMessage: "chevron.down", .previousMessage: "chevron.up", .toggleMessage: "rectangle.expand.vertical",

@@ -41,6 +41,9 @@ struct RenderSweepSettingsTests {
         environment.installPlatform(SystemPlatform(notifier: FakeSystemNotifier(authorization: .denied), dock: FakeDockBadge(),
                                                    loginItem: FakeLoginItem(status: .requiresApproval),
                                                    urlOpener: FakeURLOpener(), isAppActive: { false }))
+        UpdateCheckSupport.install(in: environment, center: UpdateCheckSupport.makeCenter(
+            environment: ["XCTestConfigurationFilePath": "render"],
+            label: BuildLabel(version: "0.1.0", build: "1001", channel: BuildLabel.earlyDevelopmentChannel)))
         environment.runLaunchTasks()
         await eventually("the system modules") {
             environment.system.notifications != nil && environment.system.launchAtLogin != nil
