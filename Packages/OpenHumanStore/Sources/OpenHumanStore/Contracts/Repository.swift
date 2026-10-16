@@ -23,8 +23,28 @@ public struct StoreOptions: Sendable {   // no-generated-init
 }
 public enum ProcessKind: String, Sendable { case app, cli, test }
 
+public enum StoreFileProtection: String, Sendable, Hashable {
+    case untilFirstUnlock
+}
+
+public struct StoreFilePolicy: Sendable, Hashable {
+    public var protection: StoreFileProtection?
+    public var excludesStoreFromBackup: Bool
+
+    // generated-init: Tools/ci/gen-public-inits.py
+    public init(
+        protection: StoreFileProtection? = nil,
+        excludesStoreFromBackup: Bool
+    ) {
+        self.protection = protection
+        self.excludesStoreFromBackup = excludesStoreFromBackup
+    }
+    // end generated-init
+}
+
 public struct StoreLocation: Sendable, Hashable {
     public var directory: URL
+    public var files: StoreFilePolicy = .platformDefault
     public var databaseURL: URL { directory.appendingPathComponent("mail.sqlite") }
     public var attachmentsDirectory: URL { directory.appendingPathComponent("Attachments", isDirectory: true) }
     public var draftsDirectory: URL { directory.appendingPathComponent("Drafts", isDirectory: true) }
@@ -32,9 +52,11 @@ public struct StoreLocation: Sendable, Hashable {
 
     // generated-init: Tools/ci/gen-public-inits.py
     public init(
-        directory: URL
+        directory: URL,
+        files: StoreFilePolicy = .platformDefault
     ) {
         self.directory = directory
+        self.files = files
     }
     // end generated-init
 }
