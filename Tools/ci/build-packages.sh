@@ -2,21 +2,31 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 APPLE_ONLY="OpenHumanMailUI OpenHumanAIMLX OpenHumanCloudSync"
+# Why: AppKit-only views, and subprocess-based assistants (Process does not exist on iOS)
+IOS_SKIP="MailUIMac OpenHumanAIAgentCLI"
 
 usage() {
     cat <<'EOF'
-Usage: Tools/ci/build-packages.sh [--platform macos|linux] [--build-only | --test-only] [Package ...]
+Usage: Tools/ci/build-packages.sh [--platform macos|linux|ios] [--build-only | --test-only] [Package ...]
 
 Builds and tests every package in Packages/, or only the packages named.
 
-  --platform <macos|linux>  default: the host. On linux the Apple-only packages are skipped;
-                            the product targets macOS, so a linux run is a convenience only.
-  --build-only              build the packages and their tests, run nothing
-  --test-only               run the tests (swift test still builds first)
-  -h, --help                show this help
+  --platform <macos|linux|ios>  default: the host. On linux the Apple-only packages are skipped;
+                                the product targets macOS, so a linux run is a convenience only.
+                                ios compiles each library product for the iOS Simulator with
+                                xcodebuild and runs no tests. It skips packages that do not declare
+                                iOS, executables, and the macOS-only products MailUIMac and
+                                OpenHumanAIAgentCLI.
+  --build-only                  build the packages and their tests, run nothing
+  --test-only                   run the tests (swift test still builds first)
+  -h, --help                    show this help
 
 OH_SCRATCH_ROOT=<dir>  build each package in <dir>/<Package> (swift --scratch-path) instead of its
                        .build folder, so the cache can live outside the checkout between runs.
+                       With --platform ios, derived data goes to <dir>/ios-dd/<Package>
+                       (default build/ios-dd/<Package>).
+OH_COMPILATION_CACHE_PATH=<dir>  compilation cache for --platform ios
+                       (default ~/Library/Caches/OpenHuman/compilation-cache).
 EOF
 }
 
@@ -33,10 +43,62 @@ done
 if [[ -z "$platform" ]]; then
     [[ "$(uname -s)" == "Darwin" ]] && platform="macos" || platform="linux"
 fi
-[[ "$platform" == "macos" || "$platform" == "linux" ]] || { echo "unknown platform: $platform" >&2; exit 2; }
+[[ "$platform" == "macos" || "$platform" == "linux" || "$platform" == "ios" ]] || { echo "unknown platform: $platform" >&2; exit 2; }
+[[ "$platform" != "ios" || "$mode" != "test" ]] || { echo "--test-only is not available with --platform ios: the iOS lane only compiles" >&2; exit 2; }
+
+ios_library_products() {
+    (cd "$1" && swift package --scratch-path "$2" dump-package) | python3 -c '
+import json, sys
+manifest = json.load(sys.stdin)
+if any(p["platformName"] == "ios" for p in manifest.get("platforms") or []):
+    for product in manifest["products"]:
+        if "library" in product["type"]:
+            print(product["name"])
+'
+}
+
+build_ios() {
+    local sdk
+    if ! sdk="$(xcrun --sdk iphonesimulator --show-sdk-path 2>/dev/null)"; then
+        echo "The iOS Simulator SDK is not installed. Install it with: xcodebuild -downloadPlatform iOS" >&2
+        exit 1
+    fi
+    echo "iOS Simulator SDK: $sdk"
+    local cache_dir="${OH_COMPILATION_CACHE_PATH:-$HOME/Library/Caches/OpenHuman/compilation-cache}"
+    local dd_root="${OH_SCRATCH_ROOT:-$ROOT/build}/ios-dd"
+    local manifest dir pkg scratch products product
+    for manifest in "$ROOT"/Packages/*/Package.swift; do
+        dir="$(dirname "$manifest")"; pkg="$(basename "$dir")"
+        if (( ${#selected[@]} )) && [[ " ${selected[*]} " != *" $pkg "* ]]; then continue; fi
+        scratch="$dir/.build"
+        [[ -z "${OH_SCRATCH_ROOT:-}" ]] || scratch="$OH_SCRATCH_ROOT/$pkg"
+        products="$(ios_library_products "$dir" "$scratch")" || { failed+=("$pkg"); continue; }
+        if [[ -z "$products" ]]; then
+            echo "== $pkg: skipped on ios (does not declare iOS)"; continue
+        fi
+        for product in $products; do
+            if [[ " $IOS_SKIP " == *" $product "* ]]; then
+                echo "== $pkg/$product: skipped on ios (macOS only)"; continue
+            fi
+            echo "== $pkg/$product (build, ios)"
+            (cd "$dir" && xcodebuild build -quiet -skipPackageUpdates -scheme "$product" \
+                -destination 'generic/platform=iOS Simulator' -derivedDataPath "$dd_root/$pkg" \
+                COMPILATION_CACHE_ENABLE_CACHING=YES "COMPILATION_CACHE_CAS_PATH=$cache_dir") || failed+=("$pkg/$product")
+        done
+    done
+}
 
 swift --version | head -1
 failed=()
+if [[ "$platform" == "ios" ]]; then
+    build_ios
+    if (( ${#failed[@]} )); then
+        echo "FAILED: ${failed[*]}"
+        exit 1
+    fi
+    echo "All packages OK (build, ios)"
+    exit 0
+fi
 for manifest in "$ROOT"/Packages/*/Package.swift; do
     dir="$(dirname "$manifest")"; pkg="$(basename "$dir")"
     if (( ${#selected[@]} )) && [[ " ${selected[*]} " != *" $pkg "* ]]; then continue; fi

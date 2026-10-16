@@ -79,18 +79,18 @@ struct RulesTab: View {
                     statusTone: .warning) {
             HStack(spacing: theme.space3) {
                 Button("Up") { Task { _ = await ruleSet.move(ruleID: rule.id, by: -1) } }
-                    .buttonStyle(.link).disabled(index == 0)
+                    .ohLinkButtonStyle().disabled(index == 0)
                     .accessibilityLabel("Move \(rule.title) up")
                 Button("Down") { Task { _ = await ruleSet.move(ruleID: rule.id, by: 1) } }
-                    .buttonStyle(.link).disabled(index == ruleSet.config.rules.count - 1)
+                    .ohLinkButtonStyle().disabled(index == ruleSet.config.rules.count - 1)
                     .accessibilityLabel("Move \(rule.title) down")
                 if let editable = RuleDraft(rule: rule) {
                     Button("Edit") { draft = editable }
-                        .buttonStyle(.link)
+                        .ohLinkButtonStyle()
                         .accessibilityLabel("Edit \(rule.title)")
                 }
                 Button("Delete") { Task { _ = await ruleSet.delete(ruleID: rule.id) } }
-                    .buttonStyle(.link)
+                    .ohLinkButtonStyle()
                     .accessibilityLabel("Delete \(rule.title)")
                 SettingsSwitch(title: rule.title, isOn: Binding(get: { rule.enabled }, set: { on in
                     Task { _ = await ruleSet.setEnabled(ruleID: rule.id, on) }
@@ -156,7 +156,7 @@ struct RulesTab: View {
 
     private func conditionHead(_ condition: RuleDraft.Condition, index: Int) -> some View {
         HStack(spacing: theme.space2) {
-            Toggle("Not", isOn: conditionBinding(index, \.negated)).toggleStyle(.checkbox).fixedSize()
+            Toggle("Not", isOn: conditionBinding(index, \.negated)).ohCheckboxToggleStyle().fixedSize()
             Picker("If", selection: Binding(get: { condition.predicate }, set: { id in
                 draft?.conditions[index] = RuleDraft.Condition(predicate: id, value: condition.value, negated: condition.negated)
             })) {
@@ -173,7 +173,7 @@ struct RulesTab: View {
             }
             Spacer(minLength: 0)
             Button("Remove") { draft?.conditions.remove(at: index) }
-                .buttonStyle(.link)
+                .ohLinkButtonStyle()
                 .fixedSize()
                 .disabled((draft?.conditions.count ?? 0) <= 1)
         }
@@ -234,12 +234,12 @@ struct RulesTab: View {
             HStack(spacing: theme.space3) {
                 if DefaultRules.hasParams(rule.id) {
                     Button("Edit") { paramsDraft = DefaultParamsDraft(rule: rule) }
-                        .buttonStyle(.link)
+                        .ohLinkButtonStyle()
                         .accessibilityLabel("Edit \(rule.title)")
                 }
                 if rule.edited {
                     Button("Reset") { Task { _ = await ruleSet.setDefault(rule.id, params: nil) } }
-                        .buttonStyle(.link)
+                        .ohLinkButtonStyle()
                         .accessibilityLabel("Reset \(rule.title)")
                 }
                 SettingsSwitch(title: rule.title, isOn: Binding(get: { rule.enabled }, set: { on in
