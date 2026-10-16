@@ -98,8 +98,8 @@ final class ProbeGmail: GmailAPI {
         await gate.pass()
     }
 
-    func holdAfterCommit(_ method: GmailMethod) -> Hold {
-        let hold = Hold()
+    func holdAfterCommit(_ method: GmailMethod, outlastingCancellation: Bool = false) -> Hold {
+        let hold = Hold(outlastsCancellation: outlastingCancellation)
         holds.withLock { $0[method] = hold }
         return hold
     }
@@ -245,7 +245,8 @@ final class Gate: Sendable {
     }
 }
 
-// A Gmail answer held after the change is committed; cancelling the caller fails it the way URLSession does
+// A Gmail answer held after the change is committed; cancelling the caller fails it the way URLSession does, unless
+// the hold outlasts cancellation and waits for the test to finish it
 final class Hold: Sendable {
     private struct State {
         var arrived = false
@@ -253,36 +254,64 @@ final class Hold: Sendable {
         var outcome: Result<Void, GmailError>?
         var waiter: CheckedContinuation<Void, Error>?
         var arrivals: [UUID: CheckedContinuation<Void, Never>] = [:]
+        var cancellations: [UUID: CheckedContinuation<Void, Never>] = [:]
     }
     private let state = Mutex(State())
+    private let outlastsCancellation: Bool
+
+    init(outlastsCancellation: Bool = false) { self.outlastsCancellation = outlastsCancellation }
 
     var wasCancelled: Bool { state.withLock { $0.cancelled } }
 
     func pass() async throws {
+        let outlasts = outlastsCancellation
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                let (arrivals, now) = state.withLock { s -> ([CheckedContinuation<Void, Never>], Result<Void, GmailError>?) in
+                let (woken, now) = state.withLock { s -> ([CheckedContinuation<Void, Never>], Result<Void, GmailError>?) in
                     s.arrived = true
-                    defer { s.arrivals = [:] }
+                    var woken = Array(s.arrivals.values)
+                    s.arrivals = [:]
                     if Task.isCancelled {
                         s.cancelled = true
-                        return (Array(s.arrivals.values), .failure(.cancelled))
+                        woken += s.cancellations.values
+                        s.cancellations = [:]
+                        if !outlasts { return (woken, .failure(.cancelled)) }
                     }
-                    if let outcome = s.outcome { return (Array(s.arrivals.values), outcome) }
+                    if let outcome = s.outcome { return (woken, outcome) }
                     s.waiter = continuation
-                    return (Array(s.arrivals.values), nil)
+                    return (woken, nil)
                 }
-                for arrival in arrivals { arrival.resume() }
+                for signal in woken { signal.resume() }
                 if let now { continuation.resume(with: now.mapError { $0 as Error }) }
             }
         } onCancel: {
-            let waiter = state.withLock { s -> CheckedContinuation<Void, Error>? in
-                guard let waiter = s.waiter else { return nil }
-                s.waiter = nil
+            let (waiter, woken) = state.withLock { s -> (CheckedContinuation<Void, Error>?, [CheckedContinuation<Void, Never>]) in
+                guard let waiter = s.waiter else { return (nil, []) }
                 s.cancelled = true
-                return waiter
+                let woken = Array(s.cancellations.values)
+                s.cancellations = [:]
+                if outlasts { return (nil, woken) }
+                s.waiter = nil
+                return (waiter, woken)
             }
+            for signal in woken { signal.resume() }
             waiter?.resume(throwing: GmailError.cancelled)
+        }
+    }
+
+    func cancellation() async {
+        let id = UUID()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                let now = state.withLock { s -> Bool in
+                    if s.cancelled || Task.isCancelled { return true }
+                    s.cancellations[id] = continuation
+                    return false
+                }
+                if now { continuation.resume() }
+            }
+        } onCancel: {
+            state.withLock { $0.cancellations.removeValue(forKey: id) }?.resume()
         }
     }
 

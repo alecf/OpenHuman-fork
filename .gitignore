@@ -27,6 +27,7 @@ Apps/MailiOS/Config/Secrets.xcconfig
 oauth-client.json
 client_secret_*.json
 *.local.xcconfig
+*.provisionprofile
 
 # Downloaded reference material. Never committed.
 design-ref/

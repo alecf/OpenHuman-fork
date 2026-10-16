@@ -453,6 +453,22 @@ private enum RepoSources {
         == ["await flushPendingSends(deadline: Self.backgroundFlushDeadline)"])
     #expect(AppSources.files(everything, matching: #"refreshOnce\("#)
         == ["OpenHumanSync/MailEngine+Background.swift", "SyncSession.swift"])
+    let repoSwift = repo.filter { $0.key.hasSuffix(".swift") }
+    let engineDir = "/Packages/OpenHumanSync/Sources/OpenHumanSync/Engine/"
+    let liveDir = "/Packages/OpenHumanMailLive/Sources/OpenHumanMailLive/Live/"
+    #expect(AppSources.files(repoSwift, matching: #"refreshPass\("#) == [engineDir + "MailEngine+Background.swift"])
+    #expect(codeLines(try #require(everything["OpenHumanSync/MailEngine+Background.swift"]), containing: "refreshPass(") == [
+        "let pass = refreshPass(deadline: deadline, maxOperations: maxOperations)",
+        "func refreshPass(deadline: Date, maxOperations: Int) -> Task<RefreshReport, Never> {",
+    ])
+    #expect(AppSources.files(repoSwift, matching: #"refreshOnce\(|refreshInBackground\("#)
+        == [engineDir + "MailEngine+Background.swift", liveDir + "SyncSession.swift"])
+    #expect(AppSources.files(repoSwift, matching: #"flushPendingSends\("#)
+        == [engineDir + "MailEngine+Background.swift", engineDir + "MailEngine.swift", liveDir + "SyncSession.swift"])
+    #expect(AppSources.files(repoSwift, matching: #"\.didEnterBackground\b"#)
+        == [engineDir + "MailEngine.swift", liveDir + "SceneSystemEvents.swift"])
+    #expect(codeLines(try #require(everything["OpenHumanSync/MailEngine.swift"]), containing: ".didEnterBackground")
+        == ["case .didEnterBackground:"])
 
     let session = try text("SyncSession.swift")
     #expect(AppSources.files(sources, matching: #"MailStoreCommands\("#) == ["SyncSession.swift"])

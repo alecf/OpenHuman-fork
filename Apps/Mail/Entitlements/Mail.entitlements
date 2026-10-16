@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Deliberately empty (least privilege). The app is not sandboxed, so outbound network
-     (com.apple.security.network.client) and the app's own legacy-keychain items need no entitlement.
-     Do NOT add keychain-access-groups: it is restricted, needs a provisioning profile, and would break
-     ad-hoc CI builds. A new entitlement also needs ALLOWED_ENTITLEMENTS in Tools/release/check-release.sh. -->
+<!-- Empty on purpose: ad-hoc, CI and contributor builds sign with it and have no provisioning profile.
+     The signed release adds Mail-iCloud.entitlements; Tools/release/check-release.sh keeps this file empty. -->
 <plist version="1.0">
 <dict>
 </dict>
