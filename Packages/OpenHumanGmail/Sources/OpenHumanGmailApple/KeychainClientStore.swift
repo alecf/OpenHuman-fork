@@ -8,23 +8,30 @@ public struct KeychainClientStore: OAuthClientStore {
     public static let label = "OpenHuman Mail (Google sign-in client)"
 
     let service: String
+    public let accessGroup: String?
     public let items: KeychainItems
     var backend: any KeychainBackend { items.backend }
     let isAppProcess: @Sendable () -> Bool
     let diagnostics: KeychainDiagnostics
+    let log: CredentialChainLog
 
     static let maxItemBytes = 8 * 1024
 
-    public init(service: String = KeychainClientStore.service) {
-        self.init(service: service, items: .shared, isAppProcess: { KeychainTokenStore.runningInAppBundle() })
+    public var canHoldSharedCopies: Bool { items.canHoldSynchronizableItems }
+
+    public init(service: String = KeychainClientStore.service, accessGroup: String? = nil) {
+        self.init(service: service, items: .shared, isAppProcess: { KeychainTokenStore.runningInAppBundle() },
+                  accessGroup: accessGroup)
     }
 
     init(service: String, items: KeychainItems, isAppProcess: @escaping @Sendable () -> Bool,
-         diagnostics: KeychainDiagnostics = .shared) {
+         diagnostics: KeychainDiagnostics = .shared, accessGroup: String? = nil, log: CredentialChainLog = .shared) {
         self.service = service
         self.items = items
         self.isAppProcess = isAppProcess
         self.diagnostics = diagnostics
+        self.accessGroup = accessGroup
+        self.log = log
     }
 
     private struct Payload: Codable {
@@ -32,6 +39,7 @@ public struct KeychainClientStore: OAuthClientStore {
         var clientSecret: String?
         var isDefault: Bool
         var wantsSync: Bool?
+        var shared: Bool?
     }
 
     private struct Found {
@@ -42,6 +50,7 @@ public struct KeychainClientStore: OAuthClientStore {
 
     public func loadAll() throws -> [StoredOAuthClient] {
         try requireAppProcess()
+        moveOnce()
         let local = read(.login)
         let synced = read(.dataProtection)
         var byKey: [String: StoredOAuthClient] = [:]
@@ -50,7 +59,8 @@ public struct KeychainClientStore: OAuthClientStore {
             let sync: OAuthClientSyncState = syncedCopy?.synchronizable == true ? .syncing
                 : (item.payload.wantsSync == true ? .unavailable : .notSyncing)
             byKey[key] = StoredOAuthClient(config: Self.config(item.payload), isDefault: item.payload.isDefault,
-                                           sync: sync, modifiedAt: item.modifiedAt ?? syncedCopy?.modifiedAt)
+                                           sync: sync, modifiedAt: item.modifiedAt ?? syncedCopy?.modifiedAt,
+                                           wasShared: item.payload.shared == true)
         }
         for (key, item) in synced.items where byKey[key] == nil {
             byKey[key] = StoredOAuthClient(config: Self.config(item.payload), isDefault: item.payload.isDefault,
@@ -66,21 +76,25 @@ public struct KeychainClientStore: OAuthClientStore {
     @discardableResult
     public func save(_ client: OAuthClientConfig, isDefault: Bool, synchronizable: Bool) throws -> OAuthClientSyncState {
         try requireAppProcess()
-        let payload = Payload(clientID: client.clientID, clientSecret: client.clientSecret, isDefault: isDefault,
+        var payload = Payload(clientID: client.clientID, clientSecret: client.clientSecret, isDefault: isDefault,
                               wantsSync: synchronizable)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         guard let data = try? encoder.encode(payload), data.count <= Self.maxItemBytes else {
             throw OAuthClientStoreError.corrupt
         }
+        moveOnce()
         let account = client.registryKey
         var result: OAuthClientSyncState = .notSyncing
         if synchronizable {
             let status = replace(.dataProtection, account: account, data: data)
+            let subject = CredentialChainLog.subject(clientKey: account)
             if status == errSecSuccess {
                 result = .syncing
+                log.record(.shareClient, .ok, subject: subject)
             } else {
                 diagnostics.record(.clientSyncedWrite, status)
+                log.record(.shareClient, KeychainItems.outcome(status), subject: subject)
                 Log(.keychain).notice("client: the iCloud Keychain copy could not be written (OSStatus \(status)); "
                                       + "this Mac's own copy is used")
                 result = .unavailable
@@ -91,7 +105,11 @@ public struct KeychainClientStore: OAuthClientStore {
                 diagnostics.record(.clientSyncedDelete, status)
             }
         }
-        let local = replace(.login, account: account, data: data)
+        payload.shared = result == .syncing ? true : nil
+        guard let localData = try? encoder.encode(payload), localData.count <= Self.maxItemBytes else {
+            throw OAuthClientStoreError.corrupt
+        }
+        let local = replace(.login, account: account, data: localData)
         diagnostics.record(.clientLocalWrite, local)
         guard local == errSecSuccess else {
             Log(.keychain).error("client: this Mac's own copy could not be written (OSStatus \(local))")
@@ -104,6 +122,7 @@ public struct KeychainClientStore: OAuthClientStore {
     public func delete(key: String) throws {
         try requireAppProcess()
         guard OAuthClientConfig.isRegistryKey(key) else { throw OAuthClientStoreError.corrupt }
+        moveOnce()
         let local: OSStatus
         do { try items.delete(.init(service: service, account: key)); local = errSecSuccess }
         catch KeychainItemsError.status(let status) { local = status }
@@ -119,21 +138,51 @@ public struct KeychainClientStore: OAuthClientStore {
         }
     }
 
+    public func markShared(key: String) throws {
+        try requireAppProcess()
+        guard OAuthClientConfig.isRegistryKey(key) else { throw OAuthClientStoreError.corrupt }
+        let entry: KeychainItems.Entry?
+        do { entry = try items.read(.init(service: service, account: key)) }
+        catch KeychainItemsError.status(let status) { throw OAuthClientStoreError.keychain(status) }
+        catch { throw OAuthClientStoreError.corrupt }
+        guard let entry else { return }
+        guard entry.data.count <= Self.maxItemBytes,
+              var payload = try? JSONDecoder().decode(Payload.self, from: entry.data),
+              Self.config(payload).registryKey == key else { throw OAuthClientStoreError.corrupt }
+        guard payload.shared != true else { return }
+        payload.shared = true
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        guard let data = try? encoder.encode(payload), data.count <= Self.maxItemBytes else {
+            throw OAuthClientStoreError.corrupt
+        }
+        let status = replace(.login, account: key, data: data)
+        diagnostics.record(.clientLocalWrite, status)
+        guard status == errSecSuccess else { throw OAuthClientStoreError.keychain(status) }
+    }
+
     enum Place { case dataProtection, login }
 
     func baseQuery(place: Place, account: String?) -> [String: Any] {
+        switch place {
+        case .dataProtection: syncedQuery(account: account, group: accessGroup)
+        case .login: items.query(service: service, account: account)
+        }
+    }
+
+    // Why: in the data-protection style this device's own copy lives in the same keychain, so only true excludes it
+    func syncedQuery(account: String?, group: String?, synchronizableOnly: Bool = false) -> [String: Any] {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
+            kSecUseDataProtectionKeychain as String: true,
         ]
-        switch place {
-        case .dataProtection:
-            query[kSecUseDataProtectionKeychain as String] = true
+        if synchronizableOnly || items.style == .dataProtection {
+            query[kSecAttrSynchronizable as String] = true
+        } else {
             query[kSecAttrSynchronizable as String] = kSecAttrSynchronizableAny
-        case .login:
-            query[kSecUseDataProtectionKeychain as String] = false
-            query[kSecAttrSynchronizable as String] = false
         }
+        if let group { query[kSecAttrAccessGroup as String] = group }
         if let account { query[kSecAttrAccount as String] = account }
         return query
     }
@@ -180,6 +229,7 @@ public struct KeychainClientStore: OAuthClientStore {
         }
         guard status == errSecSuccess else {
             diagnostics.record(operation, status)
+            log.record(.readClient, KeychainItems.outcome(status))
             if place == .login {
                 Log(.keychain).error("client: this Mac's own copies could not be listed (OSStatus \(status))")
             } else {
@@ -188,7 +238,7 @@ public struct KeychainClientStore: OAuthClientStore {
             return ([:], status)
         }
         diagnostics.record(operation, errSecSuccess)
-        let listed = (result as? [[String: Any]]) ?? KeychainSharedGrantStore.single(result).map { [$0] } ?? []
+        let listed = KeychainItems.listed(result)
         var foundItems: [String: Found] = [:]
         for attributes in listed {
             guard let account = attributes[kSecAttrAccount as String] as? String, OAuthClientConfig.isRegistryKey(account),
@@ -262,6 +312,73 @@ public struct KeychainClientStore: OAuthClientStore {
         let synchronizable = place == .dataProtection && Self.flag(item[kSecAttrSynchronizable as String])
         return Found(payload: payload, synchronizable: synchronizable,
                      modifiedAt: item[kSecAttrModificationDate as String] as? Date)
+    }
+
+    private func moveOnce() {
+        guard let accessGroup, items.canHoldSynchronizableItems else { return }
+        items.once("oauth-client|\(service)|\(accessGroup)") { _ = moveFromDefaultGroup(into: accessGroup) }
+    }
+
+    // Why: copies written before the shared group existed are invisible to the other app until they move into it
+    @discardableResult
+    func moveFromDefaultGroup(into group: String) -> Int {
+        var list = syncedQuery(account: nil, group: nil, synchronizableOnly: true)
+        list[kSecReturnAttributes as String] = true
+        list[kSecMatchLimit as String] = kSecMatchLimitAll
+        let (status, result) = backend.copyMatching(list)
+        items.synchronizableRefused(status)
+        guard status == errSecSuccess else {
+            if status != errSecItemNotFound { log.record(.groupMove, KeychainItems.outcome(status)) }
+            return 0
+        }
+        var moved = 0
+        var seen = Set<String>()
+        for attributes in KeychainItems.listed(result) {
+            guard let account = attributes[kSecAttrAccount as String] as? String,
+                  OAuthClientConfig.isRegistryKey(account),
+                  let from = attributes[kSecAttrAccessGroup as String] as? String, from != group,
+                  seen.insert(from + "\n" + account).inserted,
+                  (attributes[kSecAttrService as String] as? String).map({ $0 == service }) ?? true else { continue }
+            let outcome = move(account: account, from: from, into: group)
+            log.record(.groupMove, outcome, subject: CredentialChainLog.subject(clientKey: account))
+            if outcome == .ok { moved += 1 }
+        }
+        return moved
+    }
+
+    // Why: the old copy is deleted only after the shared group holds this client
+    private func move(account: String, from old: String, into group: String) -> CredentialOutcome {
+        var source = syncedQuery(account: account, group: old, synchronizableOnly: true)
+        source[kSecReturnData as String] = true
+        source[kSecReturnAttributes as String] = true
+        source[kSecMatchLimit as String] = kSecMatchLimitOne
+        let (got, value) = backend.copyMatching(source)
+        items.synchronizableRefused(got)
+        guard got == errSecSuccess else { return KeychainItems.outcome(got) }
+        guard let item = KeychainSharedGrantStore.single(value), let data = item[kSecValueData as String] as? Data,
+              (item[kSecAttrAccessGroup as String] as? String).map({ $0 == old }) ?? true,
+              decode(item, account: account, place: .dataProtection) != nil else { return .unreadable }
+        var target = syncedQuery(account: account, group: group, synchronizableOnly: true)
+        target[kSecReturnAttributes as String] = true
+        target[kSecMatchLimit as String] = kSecMatchLimitOne
+        let (present, _) = backend.copyMatching(target)
+        items.synchronizableRefused(present)
+        if present == errSecItemNotFound {
+            let added = backend.add(addAttributes(place: .dataProtection, account: account, data: data))
+            items.synchronizableRefused(added)
+            guard added == errSecSuccess || added == errSecDuplicateItem else { return KeychainItems.outcome(added) }
+            let (check, _) = backend.copyMatching(target)
+            items.synchronizableRefused(check)
+            guard check == errSecSuccess else {
+                return check == errSecItemNotFound ? .unreadable : KeychainItems.outcome(check)
+            }
+        } else if present != errSecSuccess {
+            return KeychainItems.outcome(present)
+        }
+        let deleted = backend.delete(syncedQuery(account: account, group: old, synchronizableOnly: true))
+        items.synchronizableRefused(deleted)
+        guard deleted == errSecSuccess || deleted == errSecItemNotFound else { return KeychainItems.outcome(deleted) }
+        return .ok
     }
 
     private static func config(_ payload: Payload) -> OAuthClientConfig {

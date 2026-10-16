@@ -434,3 +434,44 @@ private func runLaunch(_ install: Install, _ endpoint: FakeTokenEndpoint,
         #expect(budget.dataProtection <= 1, "\(budget.summary)")
     }
 }
+
+@Suite struct ClientShareLaunchBudgetTests {
+    @Test func theClientShareAtLaunchTouchesNoKeychainItemOnABuildThatCannotSync() async throws {
+        let keychain = CountingKeychain()
+        keychain.refuseDataProtection(errSecMissingEntitlement)
+        let clock = TestClock(now: Date(timeIntervalSince1970: 1_790_000_000))
+        try Fixture.plantExistingInstall(keychain, clock)
+        let install = Install.launch(keychain: keychain, canSync: false)
+        _ = try await runLaunch(install, FakeTokenEndpoint(), clock)
+        let mark = keychain.mark()
+        #expect(install.vault.migrateSyncWanted() == OAuthClientShareReport())
+        let budget = Budget(ops: keychain.ops(since: mark))
+        #expect(budget.total == 0, "\(budget.summary)")
+    }
+
+    @Test func theClientShareAtLaunchWritesOnceAndThenNothing() async throws {
+        let keychain = CountingKeychain()
+        let clock = TestClock(now: Date(timeIntervalSince1970: 1_790_000_000))
+        try Fixture.plantExistingInstall(keychain, clock)
+        let install = Install.launch(keychain: keychain, canSync: true)
+        _ = try await runLaunch(install, FakeTokenEndpoint(), clock)
+        let mark = keychain.mark()
+        var shared = OAuthClientShareReport()
+        shared.shared = 1
+        #expect(install.vault.migrateSyncWanted() == shared)
+        let first = Budget(ops: keychain.ops(since: mark))
+        #expect(first.dataProtectionWrites <= 2, "\(first.summary)")
+        #expect(first.loginWrites <= 2, "\(first.summary)")
+        #expect(first.dataReads.isEmpty, "the launch already read the client: \(first.summary)")
+
+        let relaunchMark = keychain.mark()
+        let relaunched = Install.launch(keychain: keychain, canSync: true)
+        _ = try await runLaunch(relaunched, FakeTokenEndpoint(), clock)
+        var again = OAuthClientShareReport()
+        again.alreadyShared = 1
+        #expect(relaunched.vault.migrateSyncWanted() == again)
+        let relaunch = Budget(ops: keychain.ops(since: relaunchMark).filter { $0.service == Fixture.clientService })
+        #expect(relaunch.loginWrites == 0 && relaunch.dataProtectionWrites == 0, "\(relaunch.summary)")
+        #expect(relaunch.dataReads.values.allSatisfy { $0 <= 1 }, "\(relaunch.summary)")
+    }
+}

@@ -11,6 +11,7 @@ public final class AccountCredentials: Sendable {
     private let retryWaits: [Duration]
     private let onEvent: (@Sendable (TokenEvent) -> Void)?
     private let knownClients: (@Sendable () -> [OAuthClientConfig])?
+    private let log: CredentialChainLog
     private let managers = Mutex<[String: Entry]>([:])
 
     private struct Entry: Sendable {
@@ -35,7 +36,7 @@ public final class AccountCredentials: Sendable {
 
     init(store: any TokenStore, client: OAuthClientConfig, transport: any HTTPTransport, clock: any OHClock,
          minimumValidity: Duration, retryWaits: [Duration], onEvent: (@Sendable (TokenEvent) -> Void)?,
-         knownClients: (@Sendable () -> [OAuthClientConfig])? = nil) {
+         knownClients: (@Sendable () -> [OAuthClientConfig])? = nil, log: CredentialChainLog = .shared) {
         self.store = store
         self.client = client
         self.transport = transport
@@ -44,6 +45,7 @@ public final class AccountCredentials: Sendable {
         self.retryWaits = retryWaits
         self.onEvent = onEvent
         self.knownClients = knownClients
+        self.log = log
     }
 
     public static func accountKey(_ email: String) -> String {
@@ -69,7 +71,8 @@ public final class AccountCredentials: Sendable {
         managers.withLock { managers in
             if let existing = managers[key], existing.clientID == client.clientID { return existing.manager }
             let manager = TokenManager(account: key, store: store, client: client, transport: transport, clock: clock,
-                                       minimumValidity: minimumValidity, retryWaits: retryWaits, onEvent: onEvent)
+                                       minimumValidity: minimumValidity, retryWaits: retryWaits, onEvent: onEvent,
+                                       log: log)
             managers[key] = Entry(manager: manager, clientID: client.clientID)
             return manager
         }

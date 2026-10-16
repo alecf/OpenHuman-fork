@@ -42,12 +42,15 @@ public final class SyncedTokenStore: SharedTokenStore {
     public let local: any TokenStore
     public let shared: any SharedGrantStore
     public let device: any TokenDeviceRecordStore
+    public let log: CredentialChainLog
     private let lock = Mutex(())
 
-    public init(local: any TokenStore, shared: any SharedGrantStore, device: any TokenDeviceRecordStore) {
+    public init(local: any TokenStore, shared: any SharedGrantStore, device: any TokenDeviceRecordStore,
+                log: CredentialChainLog = .shared) {
         self.local = local
         self.shared = shared
         self.device = device
+        self.log = log
     }
 
     private enum Source: Equatable { case nothing, local, shared(SharedGrant) }
@@ -223,6 +226,10 @@ public final class SyncedTokenStore: SharedTokenStore {
                    case .found(let back)? = try? shared.read(account: key), back == next {
                     confirmed = true
                 }
+                if rotated {
+                    log.record(.writeBack, confirmed ? .ok : .keptLocal,
+                               subject: CredentialChainLog.subject(account: key))
+                }
                 if confirmed, rotated { record.wrote = tokenFingerprint(token.refreshToken) }
                 if !confirmed, rotated {
                     // Never lose a rotated refresh token: keep it on this device in case the shared one is refused
@@ -356,7 +363,10 @@ public final class SyncedTokenStore: SharedTokenStore {
 
     @discardableResult
     public func migrateLocalSignIns() -> TokenSyncMigrationReport {
-        guard shared.canHoldSharedCopies else { return TokenSyncMigrationReport() }
+        guard shared.canHoldSharedCopies else {
+            log.record(.entitlement, .noEntitlement)
+            return TokenSyncMigrationReport()
+        }
         var report = TokenSyncMigrationReport()
         let accounts = (try? local.allAccounts()) ?? []
         for account in accounts {
@@ -365,14 +375,21 @@ public final class SyncedTokenStore: SharedTokenStore {
             do {
                 outcome = try lock.withLock { _ in try migrate(key) }
             } catch {
-                outcome = .skipped
+                outcome = .skipped(Self.outcome(error))
             }
+            let subject = CredentialChainLog.subject(account: key)
             switch outcome {
             case .shared: report.shared += 1
             case .alreadyShared: report.alreadyShared += 1
-            case .removedElsewhere: report.removedElsewhere += 1
-            case .stayLocal: report.stayLocal += 1
-            case .skipped: report.skipped += 1
+            case .removedElsewhere:
+                report.removedElsewhere += 1
+                log.record(.shareSignIn, .removedElsewhere, subject: subject)
+            case .stayLocal(let why):
+                report.stayLocal += 1
+                log.record(.shareSignIn, why, subject: subject)
+            case .skipped(let why):
+                report.skipped += 1
+                log.record(.shareSignIn, why, subject: subject)
             }
         }
         if report != TokenSyncMigrationReport() {
@@ -383,12 +400,21 @@ public final class SyncedTokenStore: SharedTokenStore {
         return report
     }
 
-    private enum Outcome { case shared, alreadyShared, removedElsewhere, stayLocal, skipped }
+    private enum Outcome {
+        case shared, alreadyShared, removedElsewhere
+        case stayLocal(CredentialOutcome)
+        case skipped(CredentialOutcome)
+    }
+
+    static func outcome(_ error: any Error) -> CredentialOutcome {
+        if case TokenStoreError.keychain(let status) = error { return .keychain(status: status) }
+        return .unreadable
+    }
 
     private func migrate(_ key: String) throws -> Outcome {
         var record = try device.load(account: key) ?? TokenDeviceRecord()
-        guard record.choice == nil else { return .stayLocal }
-        guard let own = try local.load(account: key) else { return .skipped }
+        guard record.choice == nil else { return .stayLocal(.keptLocal) }
+        guard let own = try local.load(account: key) else { return .skipped(.noItem) }
         let print = tokenFingerprint(own.refreshToken)
         switch try shared.read(account: key) {
         case .unavailable:
@@ -396,7 +422,7 @@ public final class SyncedTokenStore: SharedTokenStore {
                 record.cannotSync = true
                 try device.save(record, account: key)
             }
-            return .stayLocal
+            return .stayLocal(.noEntitlement)
         case .found(let grant):
             if tokenFingerprint(grant.refreshToken) == print, record.wrote == nil {
                 record.wrote = print
@@ -415,7 +441,9 @@ public final class SyncedTokenStore: SharedTokenStore {
                                    grantedScopes: own.grantedScopes, version: 1)
             switch try shared.save(next, account: key) {
             case .written:
-                guard case .found(let back) = try shared.read(account: key), back == next else { return .skipped }
+                guard case .found(let back) = try shared.read(account: key), back == next else {
+                    return .skipped(.unreadable)
+                }
                 record.wrote = print
                 record.cannotSync = nil
                 try device.save(record, account: key)
@@ -423,8 +451,18 @@ public final class SyncedTokenStore: SharedTokenStore {
             case .unavailable:
                 record.cannotSync = true
                 try device.save(record, account: key)
-                return .stayLocal
+                return .stayLocal(.noEntitlement)
             }
+        }
+    }
+
+    public func setSource(_ source: CredentialSource?, account email: String) throws {
+        let key = try normalizedAccount(email)
+        try lock.withLock { _ in
+            var record = try device.load(account: key) ?? TokenDeviceRecord()
+            guard record.source != source else { return }
+            record.source = source
+            try device.save(record, account: key)
         }
     }
 

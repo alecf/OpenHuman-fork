@@ -1,9 +1,24 @@
 import Foundation
+import OpenHumanGmail
 import Security
 
 public final class KeychainItems: @unchecked Sendable {
+    public enum QueryStyle: Sendable, Equatable {
+        case macLegacy
+        case dataProtection
+
+        public static var platformDefault: QueryStyle {
+            #if os(macOS)
+            return .macLegacy
+            #else
+            return .dataProtection
+            #endif
+        }
+    }
+
     public static let shared = KeychainItems(backend: SecItemBackend(),
-                                             canHoldSynchronizableItems: entitledForSynchronizableItems())
+                                             canHoldSynchronizableItems: entitledForSynchronizableItems(),
+                                             style: .platformDefault)
 
     struct Item: Hashable, Sendable { var service: String; var account: String }
 
@@ -23,9 +38,14 @@ public final class KeychainItems: @unchecked Sendable {
 
     private var values: [Item: any Sendable] = [:]
 
-    init(backend: any KeychainBackend, canHoldSynchronizableItems: Bool = true) {
+    private var finished: Set<String> = []
+
+    public let style: QueryStyle
+
+    init(backend: any KeychainBackend, canHoldSynchronizableItems: Bool = true, style: QueryStyle = .platformDefault) {
         self.backend = backend
         canSync = canHoldSynchronizableItems
+        self.style = style
     }
 
     public var canHoldSynchronizableItems: Bool { exclusively { canSync } }
@@ -42,6 +62,23 @@ public final class KeychainItems: @unchecked Sendable {
         return try body()
     }
 
+    func once(_ key: String, _ body: () -> Void) {
+        exclusively {
+            guard finished.insert(key).inserted else { return }
+            body()
+        }
+    }
+
+    static func outcome(_ status: OSStatus) -> CredentialOutcome {
+        if status == errSecMissingEntitlement || status == errSecNotAvailable { return .noEntitlement }
+        if status == errSecItemNotFound { return .noItem }
+        return .keychain(status: status)
+    }
+
+    static func listed(_ result: CFTypeRef?) -> [[String: Any]] {
+        (result as? [[String: Any]]) ?? KeychainSharedGrantStore.single(result).map { [$0] } ?? []
+    }
+
     func memory<T: Sendable>(_ item: Item, as type: T.Type) -> T? { exclusively { values[item] as? T } }
 
     func setMemory(_ item: Item, _ value: (any Sendable)?) { exclusively { values[item] = value } }
@@ -49,7 +86,7 @@ public final class KeychainItems: @unchecked Sendable {
     func query(service: String, account: String? = nil) -> [String: Any] {
         var result: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service, kSecAttrSynchronizable as String: false,
-            kSecUseDataProtectionKeychain as String: false]
+            kSecUseDataProtectionKeychain as String: style == .dataProtection]
         if let account { result[kSecAttrAccount as String] = account }
         return result
     }

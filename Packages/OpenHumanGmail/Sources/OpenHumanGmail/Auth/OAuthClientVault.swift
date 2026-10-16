@@ -14,22 +14,31 @@ public struct StoredOAuthClient: Sendable {
     public var sync: OAuthClientSyncState
     public var modifiedAt: Date?
     public var isLocal: Bool
+    public var wasShared: Bool
 
     public init(config: OAuthClientConfig, isDefault: Bool, sync: OAuthClientSyncState, modifiedAt: Date? = nil,
-                isLocal: Bool = true) {
+                isLocal: Bool = true, wasShared: Bool = false) {
         self.config = config
         self.isDefault = isDefault
         self.sync = sync
         self.modifiedAt = modifiedAt
         self.isLocal = isLocal
+        self.wasShared = wasShared
     }
 }
 
 public protocol OAuthClientStore: Sendable {
+    var canHoldSharedCopies: Bool { get }
     func loadAll() throws -> [StoredOAuthClient]
     @discardableResult
     func save(_ client: OAuthClientConfig, isDefault: Bool, synchronizable: Bool) throws -> OAuthClientSyncState
     func delete(key: String) throws
+    func markShared(key: String) throws
+}
+
+extension OAuthClientStore {
+    public var canHoldSharedCopies: Bool { true }
+    public func markShared(key: String) throws {}
 }
 
 public enum OAuthClientStoreError: Error, Equatable, Sendable {
@@ -54,14 +63,26 @@ public final class InMemoryOAuthClientStore: OAuthClientStore {
         var clock = 0
         var failSaves = false
         var failLoads = false
+        var syncAvailable: Bool
+        var saves = 0
     }
-    private let state = Mutex(State())
-    private let syncAvailable: Bool
+    private let state: Mutex<State>
 
-    public init(syncAvailable: Bool = true) { self.syncAvailable = syncAvailable }
+    public init(syncAvailable: Bool = true) { state = Mutex(State(syncAvailable: syncAvailable)) }
+
+    public var canHoldSharedCopies: Bool { state.withLock { $0.syncAvailable } }
+    public var saveCount: Int { state.withLock { $0.saves } }
 
     public func failSaves(_ fail: Bool) { state.withLock { $0.failSaves = fail } }
     public func failLoads(_ fail: Bool) { state.withLock { $0.failLoads = fail } }
+    public func setSyncAvailable(_ available: Bool) { state.withLock { $0.syncAvailable = available } }
+
+    public func removeSharedCopy(key: String) {
+        state.withLock { s in
+            guard s.items[key]?.sync == .syncing else { return }
+            s.items[key]?.sync = .unavailable
+        }
+    }
 
     public func loadAll() throws -> [StoredOAuthClient] {
         try state.withLock { s in
@@ -74,17 +95,23 @@ public final class InMemoryOAuthClientStore: OAuthClientStore {
     public func save(_ client: OAuthClientConfig, isDefault: Bool, synchronizable: Bool) throws -> OAuthClientSyncState {
         try state.withLock { s in
             if s.failSaves { throw OAuthClientStoreError.keychain(-25299) }
-            let result: OAuthClientSyncState = !synchronizable ? .notSyncing : (syncAvailable ? .syncing : .unavailable)
+            let result: OAuthClientSyncState = !synchronizable ? .notSyncing
+                : (s.syncAvailable ? .syncing : .unavailable)
             s.clock += 1
+            s.saves += 1
             s.items[client.registryKey] = StoredOAuthClient(
                 config: client, isDefault: isDefault, sync: result,
-                modifiedAt: Date(timeIntervalSince1970: 1_790_000_000 + Double(s.clock)))
+                modifiedAt: Date(timeIntervalSince1970: 1_790_000_000 + Double(s.clock)), wasShared: result == .syncing)
             return result
         }
     }
 
     public func delete(key: String) throws {
         _ = state.withLock { $0.items.removeValue(forKey: key) }
+    }
+
+    public func markShared(key: String) throws {
+        state.withLock { $0.items[key]?.wasShared = true }
     }
 }
 
@@ -95,14 +122,26 @@ public struct OAuthClientMigrationReport: Sendable, Equatable {
     public var skipped = 0
 }
 
+public struct OAuthClientShareReport: Sendable, Equatable {
+    public var shared = 0
+    public var alreadyShared = 0
+    public var stayLocal = 0
+    public var removedElsewhere = 0
+    public var failed = 0
+
+    public init() {}
+}
+
 public final class OAuthClientVault: Sendable {
     public let store: any OAuthClientStore
     private let storeDirectory: URL?
+    private let log: CredentialChainLog
     private let importedHere = Mutex<[OAuthClientConfig]>([])
 
-    public init(store: any OAuthClientStore, storeDirectory: URL? = nil) {
+    public init(store: any OAuthClientStore, storeDirectory: URL? = nil, log: CredentialChainLog = .shared) {
         self.store = store
         self.storeDirectory = storeDirectory
+        self.log = log
     }
 
     public func stored() -> [StoredOAuthClient] {
@@ -233,6 +272,67 @@ public final class OAuthClientVault: Sendable {
         do { return try store.save(entry.config, isDefault: entry.isDefault, synchronizable: on) } catch {
             throw OAuthError.configurationMissing("clients: the Keychain item could not be changed")
         }
+    }
+
+    // Why: a client saved while iCloud Keychain was unavailable would otherwise stay on this device forever
+    @discardableResult
+    public func migrateSyncWanted() -> OAuthClientShareReport {
+        var report = OAuthClientShareReport()
+        guard store.canHoldSharedCopies else {
+            log.record(.entitlement, .noEntitlement)
+            return report
+        }
+        let entries: [StoredOAuthClient]
+        do { entries = try store.loadAll() } catch {
+            log.record(.shareClient, Self.outcome(error))
+            Log(.keychain).error("OAuth clients: the Keychain could not be read at launch (\(Self.code(error)))")
+            return report
+        }
+        for entry in entries where entry.isLocal {
+            let subject = CredentialChainLog.subject(client: entry.config.clientID)
+            switch entry.sync {
+            case .notSyncing:
+                report.stayLocal += 1
+            case .syncing where entry.wasShared:
+                report.alreadyShared += 1
+            case .syncing:
+                // Why: remembered here, so a later removal on another device is not undone by sharing it again
+                do {
+                    try store.markShared(key: entry.config.registryKey)
+                    report.alreadyShared += 1
+                } catch {
+                    report.failed += 1
+                    log.record(.shareClient, Self.outcome(error), subject: subject)
+                }
+            case .unavailable where entry.wasShared:
+                report.removedElsewhere += 1
+                log.record(.shareClient, .removedElsewhere, subject: subject)
+            case .unavailable:
+                do {
+                    let result = try store.save(entry.config, isDefault: entry.isDefault, synchronizable: true)
+                    if result == .syncing {
+                        report.shared += 1
+                    } else {
+                        report.failed += 1
+                        if !store.canHoldSharedCopies { log.record(.shareClient, .noEntitlement, subject: subject) }
+                    }
+                } catch {
+                    report.failed += 1
+                    log.record(.shareClient, Self.outcome(error), subject: subject)
+                }
+            }
+        }
+        if report.shared + report.removedElsewhere + report.failed > 0 {
+            Log(.oauth).notice("OAuth clients at launch: \(report.shared) shared, \(report.alreadyShared) already shared, "
+                               + "\(report.removedElsewhere) removed on another device, \(report.failed) left for the next "
+                               + "launch")
+        }
+        return report
+    }
+
+    static func outcome(_ error: any Error) -> CredentialOutcome {
+        if case OAuthClientStoreError.keychain(let status) = error { return .keychain(status: status) }
+        return .unreadable
     }
 
     static func code(_ error: any Error) -> String {
