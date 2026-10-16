@@ -14,8 +14,8 @@ struct RulesTab: View {
 
     var body: some View {
         SettingsSectionStack {
-            SettingsSection("How mail is sorted", footnote: "The first step that decides wins. Nothing here changes mail by "
-                            + "itself: labels reach Gmail only while Mail may change your mailbox.") {
+            SettingsSection("How mail is sorted", footnote: "The first step that decides wins. Rules only choose a label; "
+                            + "labels reach Gmail when Mail applies them. “Tell Gmail when I move mail” controls Important moves.") {
                 ForEach(Array(Self.steps(modelLine: modelLine).enumerated()), id: \.offset) { index, step in
                     SettingsRow("\(index + 1). \(step.0)", detail: step.1)
                 }
