@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-APPLE_ONLY="OpenHumanMailUI OpenHumanAIMLX"
+APPLE_ONLY="OpenHumanMailUI OpenHumanAIMLX OpenHumanCloudSync"
 
 usage() {
     cat <<'EOF'
