@@ -16,10 +16,12 @@ struct OverlayFixture {
     init(corpus: FakeCorpus = .make(threadCount: 10, now: fixedNow), options: FakeMailStore.Options = .init(remoteAck: .immediate),
          flags: FeatureFlags = FeatureFlags(), writePort: Bool = true, now: @escaping @Sendable () -> Date = { fixedNow }) {
         if writePort {
-            env = AppEnvironment.fake(corpus: corpus, options: options, featureFlags: flags)
+            env = AppEnvironment.fake(corpus: corpus, options: options, featureFlags: flags,
+                                      notices: NoticeCenter(autoExpire: false))
         } else {
             let store = FakeMailStore(corpus: corpus, options: options)
             env = AppEnvironment(data: store, accounts: store, settings: store, isFake: true,
+                                 notices: NoticeCenter(autoExpire: false),
                                  importance: FakeImportanceRules(corpus: corpus), featureFlags: flags)
         }
         store = env.data as! FakeMailStore
@@ -37,9 +39,18 @@ struct OverlayFixture {
     var rows: [ThreadRow] { router.list?.rows ?? [] }
 
     func loaded(_ count: Int? = nil) async {
-        await eventually { router.active != nil }
+        await untilObserved { router.active != nil }
         if router.active?.location != .system(.inbox) { router.go(to: .system(.inbox)) }
-        await eventually { router.list?.state == .loaded && (count.map { router.list?.rows.count == $0 } ?? true) }
+        await untilObserved { router.list?.state == .loaded && (count.map { router.list?.rows.count == $0 } ?? true) }
+    }
+
+    func settled() async {
+        await registry.lastTask?.value
+        await registry.threadActions?.lastTask?.value
+    }
+
+    func hasToast(_ prefix: String) -> Bool {
+        env.notices.toasts.contains { $0.message.hasPrefix(prefix) }
     }
 
     @discardableResult

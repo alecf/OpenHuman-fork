@@ -14,6 +14,10 @@ import Testing
         f.store.labelNames(of: key).contains { $0.uppercased() == "INBOX" }
     }
 
+    func archived(_ f: ActionFixture, _ key: ThreadKey) -> Bool {
+        f.store.isVisible(key) && !inInbox(f, key)
+    }
+
     @Test func theFirstMuteCreatesTheLabelAndOneUndoTakesItAllBack() async throws {
         let f = ActionFixture()
         await f.loaded(10)
@@ -28,7 +32,7 @@ import Testing
         await f.loaded(9)
         await eventually { state.mutedLabel != nil }
         #expect(f.store.labelNames(of: key).contains(Self.muted))
-        #expect(!inInbox(f, key))
+        #expect(archived(f, key))
         #expect(f.env.undo?.stack.count == 1, "label creation and mark done are one entry")
 
         #expect(await f.run(.undo))
@@ -39,7 +43,7 @@ import Testing
         #expect(await f.run(.redo))
         await f.loaded(9)
         await eventually { f.store.labelNames(of: key).contains(Self.muted) }
-        #expect(!inInbox(f, key))
+        #expect(archived(f, key))
     }
 
     @Test func theMutedListUnmutesWithMAndShowsUnmuteInTheHintBar() async throws {
@@ -118,17 +122,17 @@ import Testing
         #expect(!f.store.labelNames(of: key).contains(OHGmailLabels.snoozed))
         #expect(f.env.undo?.stack.count == entries + 1, "ending the snooze and the mute are one entry")
         f.store.runSchedulers(now: wake.addingTimeInterval(60))
-        #expect(!inInbox(f, key), "no wake brings the muted conversation back")
+        #expect(archived(f, key), "no wake brings the muted conversation back")
 
         #expect(await f.run(.undo))
         await eventually { !f.store.labelNames(of: key).contains(Self.muted) }
         await eventually { f.store.labelNames(of: key).contains(stamp) }
-        #expect(!inInbox(f, key))
+        #expect(archived(f, key))
 
         #expect(await f.run(.redo))
         await eventually { f.store.labelNames(of: key).contains(Self.muted) }
         await eventually { !f.store.labelNames(of: key).contains(stamp) }
-        #expect(!inInbox(f, key))
+        #expect(archived(f, key))
     }
 
     @Test func theMutedListOpensWithNothingMuted() async throws {

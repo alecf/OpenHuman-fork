@@ -123,7 +123,7 @@ struct ReaderWebKitTests {
             <html><head><script>document.title = 'pwned'</script></head>
             <body><img src="x" onerror="document.title = 'pwned2'"><div id="oh-root">x</div></body></html>
             """, baseURL: URL(string: "about:blank"))
-        try await until { delegate.finished }
+        await delegate.loaded()
         let title = try await view.evaluateJavaScript("document.title", in: nil, contentWorld: .defaultClient) as? String
         #expect(title == "")
     }
@@ -138,7 +138,7 @@ struct ReaderWebKitTests {
         let controlDelegate = LoadDelegate()
         control.navigationDelegate = controlDelegate
         control.loadHTMLString(HitServer.hostileDocument(port: controlServer.port), baseURL: URL(string: "about:blank"))
-        try await until(timeout: .seconds(60)) { controlServer.hits.count >= 3 }
+        await controlServer.received(atLeast: 3)
 
         for (mode, document) in [(ReaderWebKit.Mode.blocked, HitServer.hostileDocument), (.imagesAllowed, HitServer.nonImageDocument)] {
             let server = try await HitServer.start()
@@ -148,7 +148,7 @@ struct ReaderWebKitTests {
             let delegate = LoadDelegate()
             reader.navigationDelegate = delegate
             reader.loadHTMLString(document(server.port), baseURL: URL(string: "about:blank"))
-            try await until { delegate.finished }
+            await delegate.loaded()
             try await server.fence()
             #expect(server.hits.isEmpty, "\(mode): requests leaked: \(server.hits)")
         }
@@ -165,7 +165,7 @@ struct ReaderWebKitTests {
         let view = try #require(ReaderWebView.make(for: rendered, width: 600))
         defer { ReaderWebKit.shared.pool.recycle(view) }
         await Reports.heights(of: view).wait { view.isShown }
-        try await until { (try? await view.evaluateJavaScript("document.readyState", in: nil, contentWorld: .defaultClient) as? String) == "complete" }
+        #expect(try await documentLoaded(view) == "complete")
         try await server.fence()
         #expect(server.hits.isEmpty, "requests leaked: \(server.hits)")
     }
@@ -499,15 +499,13 @@ struct ReaderWebKitTests {
         defer { window.close() }
         view.widthAnchor.constraint(equalToConstant: 600).isActive = true
         await Reports.heights(of: view).wait { view.isShown }
-        try await until {
-            let width = try? await view.evaluateJavaScript("window.innerWidth", in: nil, contentWorld: .defaultClient) as? NSNumber
-            return width?.intValue == 600
-        }
+        #expect(try await innerWidth(of: view, reaching: 600) == 600)
         #expect(await view.findNext("needle", backwards: false))
-        let first = try #require(await stableSelectionRect(view))
+        let first = try #require(await selectedMatch(view))
         #expect(await view.findNext("needle", backwards: false))
-        let second = try #require(await stableSelectionRect(view))
-        #expect(second.minY > first.minY)
+        let second = try #require(await selectedMatch(view))
+        #expect(first.text.lowercased() == "needle" && second.text.lowercased() == "needle")
+        #expect(second.top > first.top)
         #expect(await view.findNext("needle", backwards: false) == false, "no wrapping inside one message")
         await view.clearSelection()
         #expect(await view.findNext("NEEDLE", backwards: false), "case-insensitive")
@@ -515,17 +513,39 @@ struct ReaderWebKitTests {
     }
 }
 
+// Document-relative, so a scroll that settles after the find cannot move it
 @MainActor
-func stableSelectionRect(_ view: ReaderWebView, timeout: Duration = .seconds(60)) async throws -> CGRect? {
-    var last: CGRect?
-    var result: CGRect?
-    try await until(timeout: timeout) {
-        guard let rect = await view.selectionRect() else { last = nil; return false }
-        defer { last = rect }
-        if rect == last { result = rect; return true }
-        return false
+func selectedMatch(_ view: ReaderWebView) async -> (text: String, top: Double)? {
+    let script = """
+    (function(){var s=window.getSelection();if(!s||s.rangeCount===0){return null;}\
+    return [s.toString(), s.getRangeAt(0).getBoundingClientRect().top + window.scrollY];})();
+    """
+    guard let values = try? await view.evaluateJavaScript(script, in: nil, contentWorld: .defaultClient) as? [Any],
+          values.count == 2, let text = values[0] as? String, let top = values[1] as? NSNumber else { return nil }
+    return (text, top.doubleValue)
+}
+
+@MainActor
+func innerWidth(of view: ReaderWebView, reaching width: Int) async throws -> Int? {
+    let body = """
+    while (window.innerWidth !== width) {
+        await new Promise(function (resolve) { window.addEventListener('resize', resolve, { once: true }); });
     }
-    return result
+    return window.innerWidth;
+    """
+    let value = try await view.callAsyncJavaScript(body, arguments: ["width": width], in: nil, contentWorld: .defaultClient)
+    return (value as? NSNumber)?.intValue
+}
+
+@MainActor
+func documentLoaded(_ view: ReaderWebView) async throws -> String? {
+    let body = """
+    if (document.readyState !== 'complete') {
+        await new Promise(function (resolve) { window.addEventListener('load', resolve, { once: true }); });
+    }
+    return document.readyState;
+    """
+    return try await view.callAsyncJavaScript(body, arguments: [:], in: nil, contentWorld: .defaultClient) as? String
 }
 
 @MainActor
@@ -570,10 +590,20 @@ final class Reports {
 @MainActor
 final class LoadDelegate: NSObject, WKNavigationDelegate {
     var finished = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
         action.request.url?.absoluteString == "about:blank" ? .allow : .cancel
     }
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { finished = true }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        finished = true
+        let waiting = waiters
+        waiters = []
+        for waiter in waiting { waiter.resume() }
+    }
+    func loaded() async {
+        if finished { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
 }
 
 @MainActor
@@ -633,6 +663,7 @@ final class HitServer: @unchecked Sendable {
     private let lock = NSLock()
     private var recorded: [String] = []
     private var fences = 0
+    private var waiters: [(met: @Sendable ([String]) -> Bool, continuation: CheckedContinuation<Void, Never>)] = []
 
     var hits: [String] { lock.withLock { recorded.filter { !$0.contains("/__fence") } } }
     var port: UInt16 { listener.port?.rawValue ?? 0 }
@@ -664,17 +695,41 @@ final class HitServer: @unchecked Sendable {
         return server
     }
 
-    func record(_ line: String) { lock.withLock { recorded.append(line) } }
+    func record(_ line: String) {
+        let ready = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            recorded.append(line)
+            let lines = recorded
+            let met = waiters.filter { $0.met(lines) }.map { $0.continuation }
+            waiters.removeAll { $0.met(lines) }
+            return met
+        }
+        for continuation in ready { continuation.resume() }
+    }
+
     func stop() { listener.cancel() }
+
+    private func arrival(_ met: @escaping @Sendable ([String]) -> Bool) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let already = lock.withLock { () -> Bool in
+                if met(recorded) { return true }
+                waiters.append((met, continuation))
+                return false
+            }
+            if already { continuation.resume() }
+        }
+    }
+
+    func received(atLeast count: Int) async {
+        await arrival { lines in lines.count { !$0.contains("/__fence") } >= count }
+    }
 
     @MainActor
     func fence() async throws {
         let n = lock.withLock { fences += 1; return fences }
         let path = "/__fence\(n)"
-        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)\(path)")!)
-        request.timeoutInterval = 10
+        let request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)\(path)")!)
         _ = try? await URLSession(configuration: .ephemeral).data(for: request)
-        try await until { self.lock.withLock { self.recorded.contains { $0.contains(path) } } }
+        await arrival { lines in lines.contains { $0.contains(path) } }
     }
 
     static func hostileDocument(port: UInt16) -> String {
