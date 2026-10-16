@@ -1,3 +1,4 @@
+import MailActions
 import MailFeatures
 import MailModel
 import MailTheme
@@ -155,7 +156,7 @@ struct RightPaneTabs: View {
                 Image(systemName: "xmark").foregroundStyle(Self.closeTint(theme.tokens).color).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(hide)
+            .shortcutTip(selected == .contact ? .toggleContextSidebar : .calendarToggleSidebar, title: hide)
             .accessibilityLabel(hide)
         }
         .padding(.horizontal, theme.space5)
@@ -172,6 +173,8 @@ struct RightPaneTabs: View {
         } else if let action {
             Button(title, action: action).buttonStyle(.borderless)
                 .themeFont(theme.typeHeadline).foregroundStyle(theme.textSecondary.color)
+                .shortcutTip(tab == .calendar ? .calendarToggleSidebar : .toggleContextSidebar,
+                             title: "Show \(title.lowercased())")
         }
     }
 }

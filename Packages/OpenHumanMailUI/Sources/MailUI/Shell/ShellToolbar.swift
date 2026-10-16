@@ -1,3 +1,4 @@
+import MailActions
 import MailFeatures
 import MailModel
 import MailTheme
@@ -16,18 +17,17 @@ public struct ShellToolbar: View {
         HStack(spacing: 0) {
             Color.clear.frame(width: titleBarInset > 0 ? theme.component.toolbar.paddingX : ShellMetrics.trafficLightInset, height: 1)
             glyphButton("line.3.horizontal") { _ = router.perform(.toggleLabelSidebar, source: .toolbar) }
-                .help("Labels  ⌃⌘S")
+                .shortcutTip(.toggleLabelSidebar, title: "Labels")
                 .accessibilityLabel("Show or hide labels")
-                .accessibilityHint("Control Command S")
             let calendarWindow = router.environment.calendarWindow
             if let calendarWindow {
                 let open = calendarWindow.isOpen
+                let action: ActionID = open ? .calendarBackToMail : .calendarOpen
                 glyphButton(open ? "envelope" : "calendar") {
-                    _ = router.perform(open ? .calendarBackToMail : .calendarOpen, source: .toolbar)
+                    _ = router.perform(action, source: .toolbar)
                 }
-                .help(open ? "Back to Mail  1" : "Calendar  2")
+                .shortcutTip(action, title: open ? "Back to Mail" : "Calendar")
                 .accessibilityLabel(open ? "Back to Mail" : "Calendar")
-                .accessibilityHint(open ? "1" : "2")
                 .accessibilityIdentifier("toolbar.calendar")
             }
             Color.clear.frame(width: theme.space3, height: 1)
@@ -86,9 +86,8 @@ public struct ShellToolbar: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Back to the list  Esc")
+            .shortcutTip(.backToList, title: "Back to the list", alignment: .leading)
             .accessibilityLabel("Back")
-            .accessibilityHint("Escape")
         }
     }
 
@@ -134,13 +133,11 @@ public struct ShellToolbar: View {
         HStack(spacing: theme.space3) {
             let canCompose = router.isEnabled(.compose)
             glyphButton("square.and.pencil", enabled: canCompose) { _ = router.perform(.compose, source: .toolbar) }
-                .help(canCompose ? "New message  C" : "Compose is not available here")
+                .shortcutTip(.compose, hint: canCompose ? nil : "Compose is not available here")
                 .accessibilityLabel("Compose")
-                .accessibilityHint("C")
             glyphButton("magnifyingglass", enabled: router.unifiedInbox == nil) { _ = router.perform(.search, source: .toolbar) }
-                .help("Search  /")
+                .shortcutTip(.search)
                 .accessibilityLabel("Search")
-                .accessibilityHint("Slash")
         }
     }
 

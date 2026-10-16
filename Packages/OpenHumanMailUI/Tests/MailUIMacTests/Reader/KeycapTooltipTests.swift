@@ -17,14 +17,62 @@ struct KeycapTooltipTests {
         #expect(tip.plainText == ReaderActions.availability(done, decided: .enabled).help)
     }
 
-    @Test func aSequenceShowsOneKeycapPerChordAndAShiftedKeyOne() {
+    @Test func aSequenceShowsOneKeycapPerChordAndAShiftedKeyShowsShift() {
         let sequence = KeycapTooltipContent.make(title: "Go to Inbox", bindings: [.sequence("g", "i")], enabled: true, reason: nil)
         #expect(sequence.keycaps == ["G", "I"])
         #expect(sequence.plainText == "Go to Inbox  G I")
         let shifted = KeycapTooltipContent.make(title: "Snooze…", bindings: [.key("H")], enabled: true, reason: nil)
-        #expect(shifted.keycaps == ["⇧H"])
+        #expect(shifted.keycaps == ["shift", "H"])
+        #expect(shifted.title == "Snooze" && shifted.plainText == "Snooze…  ⇧H")
         let first = KeycapTooltipContent.make(title: "Mute", bindings: [.key("M"), .key("m")], enabled: true, reason: nil)
-        #expect(first.keycaps == ["⇧M"], "the first binding only")
+        #expect(first.keycaps == ["shift", "M"], "the first binding only")
+        let chord = KeycapTooltipContent.make(title: "Attach files…", bindings: [.chord("U", .command)], enabled: true, reason: nil)
+        #expect(chord.keycaps == ["⌘", "shift", "U"])
+    }
+
+    @Test func aShortcutTipCarriesItsHintAndTheHintTakesALine() {
+        let tip = ShortcutTip(title: "Attach files", keycaps: ["⌘", "shift", "U"], hint: "(or drag ’n’ drop files)")
+        let content = KeycapTooltipContent(tip)
+        #expect(content.title == "Attach files" && content.keycaps == ["⌘", "shift", "U"])
+        #expect(content.hint == "(or drag ’n’ drop files)")
+        let view = KeycapTooltipView(theme: .light)
+        let plain = view.pillSize(for: KeycapTooltipContent(title: "Attach files", keycaps: ["⌘", "shift", "U"]))
+        let hinted = view.pillSize(for: content)
+        let theme = ThemeTokens.light
+        #expect(abs(hinted.height - (plain.height + theme.space1 + CGFloat(theme.typeLabel.lineHeight))) < 0.5)
+        #expect(hinted.width >= plain.width)
+    }
+
+    @Test func theListRowTipNamesTheActionAndItsKey() throws {
+        let controller = ThreadListViewController(theme: .light)
+        let done = try #require(controller.rowActionTip(ThreadRowView.HoverAction(action: .markDone, symbol: "checkmark",
+                                                                                  title: "Mark done")))
+        #expect(done.title == "Mark done" && done.keycaps == ["E"])
+        let remind = try #require(controller.rowActionTip(ThreadRowView.HoverAction(action: .remind, symbol: "bell",
+                                                                                    title: "Remind me")))
+        let remindKeys = try #require(ActionCatalog.descriptor(.remind).map(ShortcutTip.keycaps))
+        #expect(remind.title == "Remind me" && !remindKeys.isEmpty && remind.keycaps == remindKeys)
+    }
+
+    @Test func thePresenterPlacesTheTipUnderTheButtonAndHidesIt() {
+        let presenter = KeycapTooltipPresenter(theme: .light)
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        let button = NSView(frame: NSRect(x: 300, y: 500, width: 28, height: 28))
+        root.addSubview(button)
+        root.addSubview(presenter.view)
+        let content = KeycapTooltipContent(title: "Mark done", keycaps: ["E"])
+        presenter.show(content, for: button)
+        #expect(!presenter.view.isHidden && presenter.anchor === button)
+        #expect(presenter.view.pillFrame.maxY == button.frame.minY - KeycapTooltipView.gap, "below the button")
+        #expect(!presenter.view.pillFrame.intersects(button.frame))
+        presenter.hover(button, content: content, inside: false)
+        #expect(presenter.view.isHidden && presenter.anchor == nil)
+        presenter.show(content, for: button)
+        presenter.apply(theme: .dark)
+        #expect(presenter.view.isHidden, "a theme change drops the tip")
+        let stray = NSView(frame: NSRect(x: 0, y: 0, width: 10, height: 10))
+        presenter.show(content, for: stray)
+        #expect(presenter.view.isHidden, "only buttons inside the host get a tip")
     }
 
     @Test func aDisabledActionShowsTheReasonWithoutKeys() {

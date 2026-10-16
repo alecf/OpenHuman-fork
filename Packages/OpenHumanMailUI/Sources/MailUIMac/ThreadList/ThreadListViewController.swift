@@ -39,6 +39,7 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
     private var appliedPagingFailed = false
     private var routerHost: RouterThreadListHost?
     private var notificationTokens: [NSObjectProtocol] = []
+    let tipPresenter: KeycapTooltipPresenter
 
     public var model: ThreadListModel? {
         didSet { if model !== oldValue { bind(previous: oldValue) } }
@@ -64,6 +65,7 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
         self.zoom = zoom
         appliedZoom = zoom.textZoom
         style = ThreadRowStyle(theme: theme.listZoomed(zoom.textZoom))
+        tipPresenter = KeycapTooltipPresenter(theme: theme)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -154,6 +156,7 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
         retryBar = bar
         self.retryLabel = retryLabel
         styleRetryBar()
+        container.addSubview(tipPresenter.view)
         view = container
         bind(previous: nil)
         zoomObservation = ObservationLoop.observe { [weak self] in self?.zoomChanged() }
@@ -485,6 +488,7 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
         let key = row.id
         cell.onAction = { [weak self] action in self?.performRowAction(action, key: key) }
         cell.hoverActions = { [weak self] in self?.availableHoverActions() ?? [] }
+        cell.onActionHover = { [weak self] button, action, inside in self?.rowActionHover(button, action, inside: inside) }
         cell.cursorRowShowsActions = Self.cursorRowShowsActions(in: model.location)
         cell.configure(row, texts: texts, date: date, indicators: indicators, isChecked: checked, isMuted: muted)
         cell.accessibilityContent = { [weak self, weak model] in
@@ -532,6 +536,15 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
         case ThreadListActionIDs.toggleRead: "envelope.badge"
         default: nil
         }
+    }
+
+    func rowActionTip(_ action: ThreadRowView.HoverAction) -> KeycapTooltipContent? {
+        let descriptors = resolvedHost?.threadListDescriptors() ?? ActionCatalog.all
+        return ShortcutTip.action(action.action, in: descriptors, title: action.title).map { KeycapTooltipContent($0) }
+    }
+
+    private func rowActionHover(_ button: NSView, _ action: ThreadRowView.HoverAction, inside: Bool) {
+        tipPresenter.hover(button, content: rowActionTip(action), inside: inside)
     }
 
     private func availableHoverActions() -> [ThreadRowView.HoverAction] {
@@ -732,6 +745,7 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
     }
 
     @objc private func scrolled() {
+        tipPresenter.hide()
         reportVisibleRange(force: false)
     }
 
@@ -850,6 +864,7 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
     private func restyle() {
         let oldHeight = max(tableView.rowHeight, 1)
         style = ThreadRowStyle(theme: baseTheme.listZoomed(appliedZoom))
+        tipPresenter.apply(theme: baseTheme)
         guard isViewLoaded else { return }
         let clip = scrollView.contentView
         let top = clip.bounds.origin.y / oldHeight

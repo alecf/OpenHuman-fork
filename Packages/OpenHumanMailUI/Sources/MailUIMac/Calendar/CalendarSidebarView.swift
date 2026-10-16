@@ -1,4 +1,5 @@
 import AppKit
+import MailActions
 import MailFeatures
 import MailModel
 import MailTheme
@@ -95,7 +96,7 @@ public struct CalendarSidebarView: View {
                     Button(title) { contact.setVisible(true) }
                         .buttonStyle(.borderless)
                         .themeFont(theme.typeHeadline).foregroundStyle(theme.textSecondary.color)
-                        .help("Show \(title.lowercased())")
+                        .shortcutTip(.toggleContextSidebar, title: "Show \(title.lowercased())")
                 }
                 Text("Calendar").themeFont(theme.typeHeadline).foregroundStyle(theme.textPrimary.color)
                     .overlay(alignment: .bottom) {
@@ -118,7 +119,8 @@ public struct CalendarSidebarView: View {
                 CalendarHeaderGlyph(symbol: "arrow.clockwise", help: "Refresh", label: "Refresh calendar") {
                     Task { await model.refresh() }
                 }
-                CalendarHeaderGlyph(symbol: "xmark", help: "Hide calendar  ⌃⌘C", label: "Hide calendar") {
+                CalendarHeaderGlyph(symbol: "xmark", help: "Hide calendar", label: "Hide calendar",
+                                    shortcut: .calendarToggleSidebar) {
                     model.setVisible(false)
                 }
             }
@@ -146,12 +148,12 @@ public struct CalendarSidebarView: View {
     private var dayNavigationRow: some View {
         HStack(spacing: theme.space2) {
             Button { dayKeys.take(); model.moveDayInstantly(by: -1) } label: { Image(systemName: "chevron.left") }
-                .buttonStyle(.borderless).help("Previous day  −")
+                .buttonStyle(.borderless).dayKeyTip(.previousDay)
                 .accessibilityLabel("Previous day")
             Button("Today") { dayKeys.take(); model.goToTodayInstantly() }
-                .buttonStyle(.borderless).help("Today  T")
+                .buttonStyle(.borderless).dayKeyTip(.today)
             Button { dayKeys.take(); model.moveDayInstantly(by: 1) } label: { Image(systemName: "chevron.right") }
-                .buttonStyle(.borderless).help("Next day  =")
+                .buttonStyle(.borderless).dayKeyTip(.nextDay)
                 .accessibilityLabel("Next day")
             Spacer(minLength: 0)
         }
@@ -501,6 +503,7 @@ private struct CalendarHeaderGlyph: View {
     let symbol: String
     let help: String
     let label: String
+    var shortcut: ActionID?
     let action: () -> Void
     @Environment(\.theme) private var theme
     @State private var hovered = false
@@ -513,7 +516,26 @@ private struct CalendarHeaderGlyph: View {
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
-        .help(help)
+        .shortcutTip(shortcut, title: help, orHelp: help)
         .accessibilityLabel(label)
+    }
+}
+
+enum CalendarDayKey {
+    case previousDay, today, nextDay
+
+    var tip: ShortcutTip {
+        switch self {
+        case .previousDay: ShortcutTip(title: String(localized: "Previous day"), keycaps: ["−"])
+        case .today: ShortcutTip(title: String(localized: "Today"), keycaps: ["T"])
+        case .nextDay: ShortcutTip(title: String(localized: "Next day"), keycaps: ["="])
+        }
+    }
+}
+
+extension View {
+    func dayKeyTip(_ key: CalendarDayKey) -> some View {
+        let tip = key.tip
+        return shortcutTip(tip).accessibilityHint(tip.spokenDetail)
     }
 }

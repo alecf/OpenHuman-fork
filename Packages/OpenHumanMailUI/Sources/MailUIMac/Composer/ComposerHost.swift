@@ -153,6 +153,7 @@ struct ComposerWindowRoot: View {
             }
             .environment(\.composerReveal, ComposerReveal { _ in proxy.scrollTo(ComposerReveal.panelID) })
         }
+        .shortcutTipRoot()
         .background(theme.bgCanvas.color)
     }
 }

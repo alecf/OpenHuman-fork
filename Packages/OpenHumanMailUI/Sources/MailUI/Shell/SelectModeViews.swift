@@ -8,8 +8,6 @@ struct SelectAllCheckbox: View {
     let descriptors: [ActionDescriptor]
     @Environment(\.theme) private var theme
     @Environment(\.selectAllTipPinned) private var tipPinned
-    @State private var hovering = false
-    @State private var showsTip = false
 
     var body: some View {
         let check = list.headerCheck
@@ -21,10 +19,7 @@ struct SelectAllCheckbox: View {
                 .accessibilityHidden(true)
         } else {
             let rows = SelectAllShortcuts.tipRows(descriptors)
-            let tip = (showsTip || tipPinned) && !rows.isEmpty
             Button {
-                hovering = false
-                showsTip = false
                 list.headerCheckClicked()
             } label: {
                 SelectCheckboxGlyph(checked: check == .all)
@@ -32,22 +27,7 @@ struct SelectAllCheckbox: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .onHover { hovering = $0 }
-            .onDisappear {
-                hovering = false
-                showsTip = false
-            }
-            .task(id: hovering) {
-                guard hovering else {
-                    showsTip = false
-                    return
-                }
-                try? await Task.sleep(for: .milliseconds(Int(theme.motionTooltipDelay.rounded())))
-                if !Task.isCancelled { showsTip = true }
-            }
-            .anchorPreference(key: SelectAllTipKey.self, value: .bounds) { anchor in
-                tip ? SelectAllTipRequest(anchor: anchor, rows: rows) : nil
-            }
+            .shortcutTip(SelectAllShortcuts.tip(descriptors), alignment: .leading, pinned: tipPinned)
             .padding(.trailing, theme.space3)
             .accessibilityLabel(check == .all ? "Clear selection" : "Select all")
             .accessibilityValue(check == .all ? "All conversations checked" : "Some conversations checked")
@@ -63,59 +43,6 @@ struct SelectAllCheckbox: View {
 
 extension EnvironmentValues {
     @Entry public var selectAllTipPinned = false
-}
-
-struct SelectAllTipRequest {
-    let anchor: Anchor<CGRect>
-    let rows: [SelectAllShortcuts.TipRow]
-}
-
-struct SelectAllTipKey: PreferenceKey {
-    static var defaultValue: SelectAllTipRequest? { nil }
-
-    static func reduce(value: inout SelectAllTipRequest?, nextValue: () -> SelectAllTipRequest?) {
-        if value == nil { value = nextValue() }
-    }
-}
-
-struct SelectAllTipLayer: View {
-    let request: SelectAllTipRequest
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        GeometryReader { proxy in
-            let button = proxy[request.anchor]
-            SelectAllTip(rows: request.rows)
-                .fixedSize()
-                .padding(.leading, max(0, button.minX))
-                .padding(.top, button.maxY + theme.space2)
-        }
-        .allowsHitTesting(false)
-        .transaction { $0.disablesAnimations = true }
-    }
-}
-
-struct SelectAllTip: View {
-    let rows: [SelectAllShortcuts.TipRow]
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        let toast = theme.component.toast
-        Grid(alignment: .leading, horizontalSpacing: theme.space6, verticalSpacing: theme.space3) {
-            ForEach(rows, id: \.title) { row in
-                GridRow {
-                    Text(row.title).font(theme.typeBody.swiftUIFont)
-                    ToastKeycapRow(keycaps: row.keycaps).gridColumnAlignment(.trailing)
-                }
-            }
-        }
-        .foregroundStyle(toast.text.color)
-        .padding(.horizontal, theme.space4)
-        .padding(.vertical, theme.space3)
-        .background(RoundedRectangle(cornerRadius: toast.radius).fill(toast.bg.color))
-        .themeShadow(theme.shadow2)
-        .accessibilityHidden(true)
-    }
 }
 
 struct ToastKeycapRow: View {

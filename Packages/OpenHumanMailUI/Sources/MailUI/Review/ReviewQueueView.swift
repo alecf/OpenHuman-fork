@@ -109,7 +109,8 @@ public struct ReviewQueueView: View {
     private var finished: some View {
         VStack(spacing: theme.space4) {
             Text(model.summary).font(theme.typeTitle.swiftUIFont).foregroundStyle(theme.textPrimary.color)
-            TextButton(title: String(localized: "Back to Inbox"), help: "G I") { router.perform(.goInbox, source: .toolbar) }
+            TextButton(title: String(localized: "Back to Inbox"), help: "G I", shortcut: .goInbox,
+                       tipTitle: String(localized: "Back to Inbox")) { router.perform(.goInbox, source: .toolbar) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -250,12 +251,17 @@ public struct ReviewQueueView: View {
 
     private var actions: some View {
         HStack(spacing: theme.space2) {
-            TextButton(title: String(localized: "Send"), help: "Send it  ⌘↵", strong: true) { router.perform(.reviewSend, source: .toolbar) }
-            TextButton(title: String(localized: "Edit"), help: "Edit in the composer  ↩") { router.perform(.reviewEdit, source: .toolbar) }
-            TextButton(title: String(localized: "Keep"), help: "Keep as a draft  A") { router.perform(.reviewKeep, source: .toolbar) }
-            TextButton(title: String(localized: "Skip"), help: "Next draft  S") { router.perform(.reviewSkip, source: .toolbar) }
+            TextButton(title: String(localized: "Send"), help: "Send it", strong: true, shortcut: .reviewSend,
+                       tipTitle: String(localized: "Send it")) { router.perform(.reviewSend, source: .toolbar) }
+            TextButton(title: String(localized: "Edit"), help: "Edit in the composer", shortcut: .reviewEdit,
+                       tipTitle: String(localized: "Edit in the composer")) { router.perform(.reviewEdit, source: .toolbar) }
+            TextButton(title: String(localized: "Keep"), help: "Keep as a draft", shortcut: .reviewKeep,
+                       tipTitle: String(localized: "Keep as a draft")) { router.perform(.reviewKeep, source: .toolbar) }
+            TextButton(title: String(localized: "Skip"), help: "Next draft", shortcut: .reviewSkip,
+                       tipTitle: String(localized: "Next draft")) { router.perform(.reviewSkip, source: .toolbar) }
             Spacer(minLength: 0)
-            TextButton(title: String(localized: "Discard"), help: "Discard, with undo  #") { router.perform(.reviewDiscard, source: .toolbar) }
+            TextButton(title: String(localized: "Discard"), help: "Discard, with undo", shortcut: .reviewDiscard,
+                       tipTitle: String(localized: "Discard, with undo")) { router.perform(.reviewDiscard, source: .toolbar) }
         }
     }
 }

@@ -50,21 +50,21 @@ struct CalendarDayView: View {
                 Image(systemName: "chevron.left").frame(width: 20, height: 20).contentShape(Rectangle())
             }
             .buttonStyle(.plain).foregroundStyle(theme.textSecondary.color)
-            .help("Previous day  −").accessibilityLabel("Previous day")
+            .dayKeyTip(.previousDay).accessibilityLabel("Previous day")
             Text(model.dayHeader(day)).themeFont(theme.typeBodyStrong).foregroundStyle(theme.textPrimary.color)
                 .accessibilityAddTraits(.isHeader)
             Button { takeKeys(); model.moveDayInstantly(by: 1) } label: {
                 Image(systemName: "chevron.right").frame(width: 20, height: 20).contentShape(Rectangle())
             }
             .buttonStyle(.plain).foregroundStyle(theme.textSecondary.color)
-            .help("Next day  =").accessibilityLabel("Next day")
+            .dayKeyTip(.nextDay).accessibilityLabel("Next day")
             if day.isMentioned {
                 Image(systemName: "text.bubble").font(.system(size: 11)).foregroundStyle(theme.textTertiary.color)
                     .help("Mentioned in this conversation").accessibilityLabel("Mentioned in this conversation")
             }
             Spacer(minLength: 0)
             Button("Today") { takeKeys(); model.goToTodayInstantly() }
-                .buttonStyle(.borderless).themeFont(theme.typeMeta).help("Today  T")
+                .buttonStyle(.borderless).themeFont(theme.typeMeta).dayKeyTip(.today)
         }
         .accessibilityIdentifier("calendar.dayView.header")
     }

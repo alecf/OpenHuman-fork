@@ -40,6 +40,7 @@ public final class ThreadRowView: NSTableCellView {
     }
     var onAction: ((ActionID) -> Void)?
     var hoverActions: (() -> [HoverAction])?
+    var onActionHover: ((NSView, HoverAction, Bool) -> Void)?
     var accessibilityContent: (() -> (label: String, actions: [NSAccessibilityCustomAction]))?
 
     private var content: Content?
@@ -344,8 +345,8 @@ public final class ThreadRowView: NSTableCellView {
             button.target = self
             button.action = #selector(hoverButtonClicked(_:))
             button.tag = index
-            button.toolTip = action.title
             button.setAccessibilityLabel(action.title)
+            button.onHoverChange = { [weak self] button, inside in self?.onActionHover?(button, action, inside) }
             plate.addSubview(button)
             return button
         }
@@ -375,6 +376,7 @@ public final class ThreadRowView: NSTableCellView {
         setHovering(false)
         onAction = nil
         hoverActions = nil
+        onActionHover = nil
         accessibilityContent = nil
     }
 
@@ -455,7 +457,14 @@ final class RowActionButton: NSButton {
     var style: ThreadRowStyle {
         didSet { if style !== oldValue { update() } }
     }
-    private var isHovered = false { didSet { if isHovered != oldValue { update() } } }
+    private var isHovered = false {
+        didSet {
+            guard isHovered != oldValue else { return }
+            update()
+            onHoverChange?(self, isHovered)
+        }
+    }
+    var onHoverChange: ((RowActionButton, Bool) -> Void)?
     private var isPressed = false { didSet { if isPressed != oldValue { update() } } }
 
     init(image: NSImage, style: ThreadRowStyle) {
@@ -494,6 +503,7 @@ final class RowActionButton: NSButton {
     override func mouseExited(with event: NSEvent) { isHovered = false }
 
     override func mouseDown(with event: NSEvent) {
+        onHoverChange?(self, false)
         isPressed = true
         super.mouseDown(with: event)
         isPressed = false

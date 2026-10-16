@@ -22,7 +22,9 @@ struct ListRemindTests {
         rowView.mouseEntered(with: enter)
         view.layoutSubtreeIfNeeded()
         let plate = try #require(view.subviews.first)
-        #expect(plate.subviews.compactMap { $0 as? NSButton }.map(\.toolTip) == ["Mark done", "Remind me"])
+        let buttons = plate.subviews.compactMap { $0 as? NSButton }
+        #expect(buttons.map { $0.accessibilityLabel() } == ["Mark done", "Remind me"])
+        #expect(buttons.allSatisfy { $0.toolTip == nil }, "the shortcut tip replaces the native tooltip")
         rowView.mouseExited(with: enter)
         let actions = try #require(view.accessibilityCustomActions())
         #expect(actions.map(\.name) == ["Mark done", "Trash", "Remind me"])

@@ -131,6 +131,7 @@ struct InlineComposerRoot: View {
                          onClose: { manager.close(session) })
         }
         .frame(width: layout.width)
+        .shortcutTipRoot()
         .environment(\.composerReveal, layout.reveal)
         .environment(\.theme, theme)
         .environment(\.colorScheme, theme.appearance == .dark ? .dark : .light)

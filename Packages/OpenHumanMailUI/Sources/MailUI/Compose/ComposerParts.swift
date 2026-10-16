@@ -60,7 +60,7 @@ struct FromLine: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Change the From address  ⇧⌘F")
+            .shortcutTip(.chooseFrom, title: "Change the From address", alignment: .leading)
             .popover(isPresented: Binding(get: { session.isFromPickerOpen }, set: { session.isFromPickerOpen = $0 }),
                      arrowEdge: .bottom) {
                 FromPicker(session: session)
@@ -382,16 +382,24 @@ struct ComposerBanners: View {
             if session.draftStatus == .failed, let error = session.draftError {
                 HStack(spacing: theme.space3) {
                     Banner(symbol: "exclamationmark.triangle", text: String(localized: "Not sent: \(error)."))
-                    TextButton(title: "Send now", help: "Send it now  ⌘↵", strong: true) { manager.perform(.send, in: session) }
-                    TextButton(title: "Reschedule", help: "Pick a new time  ⇧⌘L") { manager.perform(.sendLater, in: session) }
+                    TextButton(title: "Send now", help: "Send it now", strong: true, shortcut: .send, tipTitle: "Send it now") {
+                        manager.perform(.send, in: session)
+                    }
+                    TextButton(title: "Reschedule", help: "Pick a new time", shortcut: .sendLater, tipTitle: "Pick a new time") {
+                        manager.perform(.sendLater, in: session)
+                    }
                 }
             } else if let sendAt = session.sendAt {
                 HStack(spacing: theme.space3) {
                     Label(String(localized: "Sends at \(manager.formatSendAt(sendAt))"), systemImage: "paperplane")
                         .font(theme.typeBody.swiftUIFont)
                         .foregroundStyle(theme.accentText.color)
-                    TextButton(title: "Cancel", help: "Cancel send later") { manager.perform(.cancelSendLater, in: session) }
-                    TextButton(title: "Reschedule", help: "Pick a new time  ⇧⌘L") { manager.perform(.sendLater, in: session) }
+                    TextButton(title: "Cancel", help: "Cancel send later", shortcut: .cancelSendLater) {
+                        manager.perform(.cancelSendLater, in: session)
+                    }
+                    TextButton(title: "Reschedule", help: "Pick a new time", shortcut: .sendLater, tipTitle: "Pick a new time") {
+                        manager.perform(.sendLater, in: session)
+                    }
                 }
             }
             if session.source != .user, session.review == .pending {
@@ -584,7 +592,8 @@ struct NoticeLine: View {
             Text(notice.text).font(theme.typeBody.swiftUIFont).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             if notice.offersSendAgain, let sendAgain {
-                TextButton(title: "Send again", help: "Send it again  ⌘↵", strong: true, compact: true, action: sendAgain)
+                TextButton(title: "Send again", help: "Send it again", strong: true, compact: true, shortcut: .send,
+                           tipTitle: "Send it again", action: sendAgain)
                     .accessibilityIdentifier("composer.notice.sendAgain")
             }
             Button(action: dismiss) { Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)) }
@@ -622,7 +631,7 @@ struct ComposerActionBar: View {
 
     var body: some View {
         HStack(spacing: theme.space2) {
-            SendButton(enabled: manager.canSendInThisProcess, help: sendHelp, marksDone: showsMarkDone) {
+            SendButton(enabled: manager.canSendInThisProcess, marksDone: showsMarkDone, tipHint: sendTipHint) {
                 manager.perform(.send, in: session)
             }
             .padding(.trailing, theme.space1)
@@ -633,12 +642,15 @@ struct ComposerActionBar: View {
                 marksDone = setting
             }
             if manager.offersSendLater {
-                TextButton(title: "Send later", help: "Send later  ⇧⌘L", enabled: manager.canSendInThisProcess) {
+                TextButton(title: "Send later", help: "Send later", enabled: manager.canSendInThisProcess,
+                           shortcut: .sendLater, tipTitle: "Send later") {
                     manager.perform(.sendLater, in: session)
                 }
             }
             if let remind = manager.remindButton(for: session) {
-                TextButton(title: manager.remindTitle(session), help: remind.help, enabled: remind.isEnabled) {
+                TextButton(title: manager.remindTitle(session), help: remind.help, enabled: remind.isEnabled,
+                           shortcut: .composeRemind, tipTitle: manager.remindTitle(session),
+                           tipHint: remind.isEnabled ? nil : remind.help) {
                     manager.remind(from: session)
                 }
                 .accessibilityIdentifier("composer.remindMe")
@@ -660,12 +672,14 @@ struct ComposerActionBar: View {
                 AIWordButton { manager.perform(.aiRewrite, in: session) }
             }
             if manager.calendarSidebar != nil {
-                IconButton(symbol: "calendar", help: "Insert free times  ⇧⌘A") {
+                IconButton(symbol: "calendar", help: "Insert free times", shortcut: .calendarInsertAvailability) {
                     manager.perform(.calendarInsertAvailability, in: session)
                 }
                 .accessibilityIdentifier("composer.calendar")
             }
-            IconButton(symbol: "curlybraces", help: "Snippets  ⌘;") { manager.perform(.insertSnippet, in: session) }
+            IconButton(symbol: "curlybraces", help: "Snippets", shortcut: .insertSnippet, tipTitle: "Snippets") {
+                manager.perform(.insertSnippet, in: session)
+            }
             IconButton(symbol: session.isPlainText ? "text.alignleft" : "textformat",
                        help: session.isPlainText ? "Plain text: sends without formatting. Click for rich text"
                                                  : "Rich text. Click to send as plain text") {
@@ -674,9 +688,14 @@ struct ComposerActionBar: View {
             .accessibilityIdentifier("composer.plainText")
             .accessibilityValue(session.isPlainText ? "Plain text" : "Rich text")
             if manager.chooseFiles != nil {
-                IconButton(symbol: "paperclip", help: "Attach  ⇧⌘U") { manager.perform(.attachFiles, in: session) }
+                IconButton(symbol: "paperclip", help: "Attach", shortcut: .attachFiles, tipTitle: "Attach",
+                           tipHint: String(localized: "(or drag ’n’ drop files)")) {
+                    manager.perform(.attachFiles, in: session)
+                }
             }
-            IconButton(symbol: "trash", help: "Discard  ⌘⌫") { manager.perform(.discardDraft, in: session) }
+            IconButton(symbol: "trash", help: "Discard", shortcut: .discardDraft, tipTitle: "Discard") {
+                manager.perform(.discardDraft, in: session)
+            }
         }
         .frame(height: theme.component.compose.barHeight)
         .padding(.top, theme.space2)
@@ -691,6 +710,12 @@ struct ComposerActionBar: View {
         let seconds = manager.undoSendSeconds
         return seconds > 0 ? String(localized: "Send  ⌘↵. Undo is there for \(seconds) s after sending.")
                            : String(localized: "Send  ⌘↵")
+    }
+
+    private var sendTipHint: String? {
+        guard manager.canSendInThisProcess else { return sendHelp }
+        let seconds = manager.undoSendSeconds
+        return seconds > 0 ? String(localized: "Undo is there for \(seconds) s after sending.") : nil
     }
 }
 
@@ -734,8 +759,8 @@ struct SaveStatusText: View {
 
 struct SendButton: View {
     let enabled: Bool
-    let help: String
     var marksDone = false
+    var tipHint: String?
     let action: () -> Void
     @Environment(\.theme) private var theme
 
@@ -756,9 +781,9 @@ struct SendButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(marksDone ? help + " " + String(localized: "Then marks the conversation done.") : help)
+        .shortcutTip(.send, title: marksDone ? String(localized: "Send and mark done") : String(localized: "Send"),
+                     hint: tipHint)
         .accessibilityLabel(marksDone ? String(localized: "Send and mark done") : String(localized: "Send"))
-        .accessibilityHint(help)
         .accessibilityIdentifier("composer.send")
     }
 }
@@ -783,7 +808,7 @@ struct AIWordButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("AI  ⌘J")
+        .shortcutTip(.aiRewrite, title: "AI")
         .accessibilityLabel("AI")
         .accessibilityIdentifier("composer.ai")
     }
