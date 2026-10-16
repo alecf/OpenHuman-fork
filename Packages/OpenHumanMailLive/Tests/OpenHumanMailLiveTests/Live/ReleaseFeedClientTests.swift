@@ -8,6 +8,7 @@ import Testing
 private let transportFailures: [(TransportError, UpdateFeedFailure)] = [
     (.notConnected, .offline), (.cannotConnect, .offline), (.timedOut, .timedOut), (.tls("x"), .unreachable),
     (.connectionLost(requestMayHaveBeenSent: false), .unreachable), (.cancelled, .unreachable),
+    (.refusedByGuard(ReleaseFeedTransport.redirectRefusal), .redirectRefused), (.refusedByGuard("other"), .unreachable),
 ]
 
 private let feedNow = Date(timeIntervalSince1970: 1_791_000_000)
@@ -76,6 +77,16 @@ private let feedLabel = BuildLabel(version: "0.1.0", build: "1001", channel: "ea
         } catch {
             Issue.record("unexpected \(type(of: error))")
         }
+    }
+
+    @Test func aRefusedRedirectReadsAsCouldNotCheck() async {
+        let transport = FakeHTTPTransport()
+        transport.failNext(.refusedByGuard(ReleaseFeedTransport.redirectRefusal))
+        let updates = center(transport)
+        await updates.check()
+        #expect(transport.requests.count == 1)
+        #expect(updates.result == .couldNotCheck(.unavailable))
+        #expect(updates.message?.headline == "Couldn't check for updates" && updates.message?.tone == .attention)
     }
 
     @Test func onlyHTTPSIsAsked() async {

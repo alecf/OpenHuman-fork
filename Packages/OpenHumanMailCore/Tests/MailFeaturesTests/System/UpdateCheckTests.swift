@@ -80,6 +80,57 @@ final class FakeUpdateFeed: Sendable {
         }
     }
 
+    @Test func aRedirectIsFollowedOnlyToGitHub() throws {
+        let api = UpdateFeed.openHuman.releasesURL
+        let allowed = [
+            "https://api.github.com/repositories/123456/releases?per_page=10",
+            "https://github.com/michaelmagan/OpenHuman/releases/download/v0.2.0/OpenHuman-Mail.zip",
+            "HTTPS://API.GitHub.com/repositories/123456/releases",
+        ]
+        for target in allowed {
+            let url = try #require(URL(string: target))
+            #expect(UpdateFeed.allowsRedirect(from: api, to: url, count: 1), "\(target)")
+        }
+        let moved = try #require(URL(string: "/repositories/123456/releases", relativeTo: api))
+        #expect(UpdateFeed.allowsRedirect(from: api, to: moved, count: 1), "a relative location stays on GitHub")
+        let refused = [
+            "http://api.github.com/repos/michaelmagan/OpenHuman/releases", "http://github.com/michaelmagan/OpenHuman/releases",
+            "https://evil.test/releases", "https://api.github.com.evil.test/releases", "https://github.com.evil.test/releases",
+            "https://evilgithub.com/releases", "https://github.co/releases", "https://gist.github.com/releases",
+            "https://objects.githubusercontent.com/releases", "https://github.com./releases", "https://github%2Ecom/releases",
+            "https://g\u{0456}thub.com/releases", "https://140.82.112.6/releases",
+            "https://github.com@evil.test/releases", "https://github.com%40evil.test/releases",
+            "https://github.com\\@evil.test/releases", "https://user:@github.com/releases", "https://:@api.github.com/releases",
+            "https://@github.com/releases", "https://github.com:443/releases", "https://api.github.com:8443/releases",
+            "//github.com/releases", "//evil.test/releases", "https:github.com/releases",
+            "ftp://github.com/releases", "wss://api.github.com/releases", "file:///etc/hosts", "javascript:alert(1)",
+            "data:text/plain,github.com",
+        ]
+        for target in refused {
+            let url = try #require(URL(string: target), "\(target)")
+            #expect(!UpdateFeed.allowsRedirect(from: api, to: url, count: 1), "\(target)")
+        }
+        let elsewhere = try #require(URL(string: "//evil.test/releases", relativeTo: api))
+        #expect(!UpdateFeed.allowsRedirect(from: api, to: elsewhere, count: 1), "a scheme-relative location keeps its host")
+    }
+
+    @Test func aRedirectChainEndsAfterThreeHopsAndOnlyContinuesFromGitHub() throws {
+        let api = UpdateFeed.openHuman.releasesURL
+        let assets = try #require(URL(string: "https://github.com/michaelmagan/OpenHuman/releases/download/v0.2.0/Mail.zip"))
+        #expect(UpdateFeed.maxRedirects == 3)
+        for count in 1...3 {
+            #expect(UpdateFeed.allowsRedirect(from: api, to: assets, count: count), "\(count)")
+        }
+        #expect(UpdateFeed.allowsRedirect(from: assets, to: api, count: 2))
+        for count in [4, 5, Int.max, 0, -1, Int.min] {
+            #expect(!UpdateFeed.allowsRedirect(from: api, to: assets, count: count), "\(count)")
+        }
+        for source in ["https://evil.test/releases", "http://api.github.com/releases", "https://user:@github.com/releases"] {
+            let url = try #require(URL(string: source))
+            #expect(!UpdateFeed.allowsRedirect(from: url, to: assets, count: 1), "\(source)")
+        }
+    }
+
     @Test func theNewestPublishedReleaseIsFoundInAnyOrder() throws {
         let data = try JSONSerialization.data(withJSONObject: [
             releaseJSON("v0.1.0"), releaseJSON("v0.3.0", draft: true),
@@ -132,6 +183,7 @@ final class FakeUpdateFeed: Sendable {
         #expect(evaluate(.failure(.offline)) == .couldNotCheck(.offline))
         #expect(evaluate(.failure(.timedOut)) == .couldNotCheck(.unavailable))
         #expect(evaluate(.failure(.unreachable)) == .couldNotCheck(.unavailable))
+        #expect(evaluate(.failure(.redirectRefused)) == .couldNotCheck(.unavailable))
         #expect(evaluate(.success(UpdateFeedReply(status: 500))) == .couldNotCheck(.unavailable))
         #expect(evaluate(.success(UpdateFeedReply(status: 401))) == .couldNotCheck(.unavailable))
         #expect(evaluate(.success(UpdateFeedReply(status: 403))) == .couldNotCheck(.unavailable), "a refusal that is not a limit")
