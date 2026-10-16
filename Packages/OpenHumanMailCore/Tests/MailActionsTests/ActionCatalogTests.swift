@@ -97,7 +97,7 @@ import Testing
     #expect(add.title == "Add account…" && add.effect == .view && !add.appearsInMenu && add.appearsInPalette)
     #expect(add.id.accountPosition == nil, "not an account switch")
     let pages = ActionCatalog.settingsPages
-    #expect(pages.count == 14 && Set(pages.map(\.id)).count == pages.count)
+    #expect(pages.count == 15 && Set(pages.map(\.id)).count == pages.count)
     for page in pages {
         #expect(ActionCatalog.descriptor(page.id) == page, "\(page.id) is in the catalog")
         #expect(page.title.hasPrefix("Settings: ") && page.paletteKeywords.contains("settings"))

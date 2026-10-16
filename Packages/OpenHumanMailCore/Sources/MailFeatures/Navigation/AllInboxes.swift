@@ -296,8 +296,12 @@ final class AllInboxesActionHandler: ActionHandler {
     }
 
     func availability(of id: ActionID, in context: ActionContext, host: (any ActionHost)?) -> ActionAvailability {
-        guard context.accountCount >= 2, router != nil else { return .hidden }
-        return .enabled
+        guard let router else { return .hidden }
+        return Self.availability(accountCount: context.accountCount, enabled: router.allInboxesEnabled)
+    }
+
+    nonisolated static func availability(accountCount: Int, enabled: Bool) -> ActionAvailability {
+        accountCount >= 2 && enabled ? .enabled : .hidden
     }
 
     func perform(_ request: ActionRequest) -> ActionPerformance {

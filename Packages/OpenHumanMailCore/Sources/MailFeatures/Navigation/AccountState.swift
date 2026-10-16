@@ -64,6 +64,7 @@ public final class AccountState: Identifiable {
     public private(set) var counts: MailboxCountsInfo?
     public private(set) var hiddenWhenEmpty: Set<String> = []
     public private(set) var tabCountMode: TabCountMode = AppSettings.tabCounts.defaultValue
+    public private(set) var sidebarHidden: Set<String> = []
     public private(set) var splitsLoaded = false
     public private(set) var lastTab: MailLocation?
     @ObservationIgnored private var lastRestorable: MailLocation?
@@ -159,6 +160,7 @@ public final class AccountState: Identifiable {
         followCounts()
         let hiddenStream = environment.settings?.observe(AppSettings.hideSplitWhenEmpty(account))
         let tabCountStream = environment.settings?.observe(AppSettings.tabCounts)
+        let sidebarStream = environment.settings?.observe(AppSettings.sidebarHidden)
         chromeTasks = [
             Task { [weak self] in
                 do {
@@ -192,7 +194,19 @@ public final class AccountState: Identifiable {
                     if self?.tabCountMode != mode { self?.tabCountMode = mode }
                 }
             },
+            Task { [weak self] in
+                guard let sidebarStream else { return }
+                for await stored in sidebarStream {
+                    guard !Task.isCancelled else { return }
+                    self?.applySidebarHidden(stored)
+                }
+            },
         ]
+    }
+
+    func applySidebarHidden(_ stored: [String]) {
+        let next = SidebarFolder.hiddenTokens(stored)
+        if next != sidebarHidden { sidebarHidden = next }
     }
 
     private func applySplits(_ value: [SplitInfo]) {
@@ -274,6 +288,10 @@ public final class AccountState: Identifiable {
 
     public var mutedLabel: LabelInfo? { labels.first { $0.name == OHGmailLabels.muted } }
 
+    public func sidebarFolder(for location: MailLocation) -> SidebarFolder? {
+        SidebarFolder.folder(for: location, mutedLabel: mutedLabel?.labelID)
+    }
+
     public var isOnTab: Bool { location.map { loc in tabs.contains { $0.location == loc } } ?? true }
 
     public var firstTabUnread: Int { tabs.first?.unread ?? 0 }
@@ -339,23 +357,28 @@ public final class AccountState: Identifiable {
                                            symbol: $0.location == .system(.inbox) ? "tray" : "line.3.horizontal") }
         func label(_ key: String) -> LabelInfo? { labels.first { $0.labelID.rawValue == key } }
         func nonZero(_ value: Int?) -> Int? { value.flatMap { $0 == 0 ? nil : $0 } }
-        let system: [(SystemFolder, String, Int?)] = [
-            (.starred, "star", nil),
-            (.snoozed, "clock", nonZero(label("oh:snoozed")?.totalThreads)),
-            (.reminders, "bell", nonZero(label("oh:reminders")?.totalThreads)),
-            (.waiting, "hourglass", nonZero(label("oh:waiting")?.totalThreads)),
-            (.scheduled, "calendar.badge.clock", nonZero(label("oh:scheduled")?.totalThreads)),
-            (.drafts, "doc", nonZero(counts?.draftsCount ?? label("DRAFT")?.totalThreads)),
-            (.sent, "paperplane", nil),
-            (.done, "checkmark.circle", nil),
-            (.allMail, "archivebox", nil),
-            (.spam, "xmark.octagon", nonZero(label("SPAM")?.unreadThreads)),
-            (.trash, "trash", nil),
-        ]
-        items += system.map { SidebarItem(location: .system($0.0), title: Self.title(of: $0.0), count: $0.2, symbol: $0.1) }
-        if let muted = mutedLabel, let after = items.firstIndex(where: { $0.location == .system(.scheduled) }) {
-            items.insert(SidebarItem(location: .label(muted.labelID), title: "Muted", count: nil, symbol: "speaker.slash"),
-                         at: after + 1)
+        func count(_ folder: SystemFolder) -> Int? {
+            switch folder {
+            case .snoozed: nonZero(label("oh:snoozed")?.totalThreads)
+            case .reminders: nonZero(label("oh:reminders")?.totalThreads)
+            case .waiting: nonZero(label("oh:waiting")?.totalThreads)
+            case .scheduled: nonZero(label("oh:scheduled")?.totalThreads)
+            case .drafts: nonZero(counts?.draftsCount ?? label("DRAFT")?.totalThreads)
+            case .spam: nonZero(label("SPAM")?.unreadThreads)
+            default: nil
+            }
+        }
+        let muted = mutedLabel?.labelID
+        for folder in SidebarFolder.visibleFolders(hidden: sidebarHidden, current: location, mutedLabel: muted) {
+            switch folder.place {
+            case .system(let system):
+                items.append(SidebarItem(location: .system(system), title: folder.title, count: count(system),
+                                         symbol: folder.symbol))
+            case .muted:
+                if let muted {
+                    items.append(SidebarItem(location: .label(muted), title: folder.title, count: nil, symbol: folder.symbol))
+                }
+            }
         }
         if let pending = counts?.pendingReviewCount, pending > 0 {
             items.append(SidebarItem(location: .reviewQueue(nil), title: "Review queue", count: pending, symbol: "doc.badge.ellipsis"))

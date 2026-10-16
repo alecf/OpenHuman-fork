@@ -18,7 +18,7 @@ import Testing
 struct RenderSweepSettingsTests {
     static let windowSize = NSSize(width: 760, height: 560)
     static let fullHeightSize = NSSize(width: 760, height: 2400)
-    static let fullHeightPages: Set<String> = ["ai", "advanced", "platform", "general"]
+    static let fullHeightPages: Set<String> = ["ai", "advanced", "platform", "general", "sidebar"]
 
     @Test func refusesAnOutputFolderInsideAGitWorkTree() throws {
         let here = (#filePath as NSString).deletingLastPathComponent
