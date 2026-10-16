@@ -6,13 +6,47 @@ public struct StartupProblem {
     public var message: String
     public var details: String?
     public var action: (title: String, run: @MainActor () -> Void)?
+    public var secondaryAction: (title: String, run: @MainActor () -> Void)?
+    public var actionHint: String?
+    public var secondaryHint: String?
+    public var offersQuit: Bool
 
     public init(title: String, message: String, details: String? = nil,
-                action: (title: String, run: @MainActor () -> Void)? = nil) {
+                action: (title: String, run: @MainActor () -> Void)? = nil,
+                secondaryAction: (title: String, run: @MainActor () -> Void)? = nil,
+                actionHint: String? = nil, secondaryHint: String? = nil, offersQuit: Bool = true) {
         self.title = title
         self.message = message
         self.details = details
         self.action = action
+        self.secondaryAction = secondaryAction
+        self.actionHint = actionHint
+        self.secondaryHint = secondaryHint
+        self.offersQuit = offersQuit
+    }
+}
+
+extension StartupProblem {
+    public static let keychainExplainerTitle = "Mail is about to open your saved sign-in"
+    public static let keychainExplainerMessage = "macOS may ask for your login password a few times. Choose Always "
+        + "Allow so it does not ask again."
+    public static let keychainRefusedTitle = "Mail couldn't open your saved sign-in"
+    public static let keychainRefusedMessage = "macOS didn't let Mail read it from your Keychain. Try again and choose "
+        + "Always Allow, or sign in again."
+
+    public static func keychainExplainer(continue run: @escaping @MainActor () -> Void) -> StartupProblem {
+        StartupProblem(title: keychainExplainerTitle, message: keychainExplainerMessage,
+                       action: (title: "Continue", run: run),
+                       actionHint: "Opens your saved sign-in. macOS may ask for your password.", offersQuit: false)
+    }
+
+    public static func keychainRefused(tryAgain: @escaping @MainActor () -> Void,
+                                       signInAgain: @escaping @MainActor () -> Void) -> StartupProblem {
+        StartupProblem(title: keychainRefusedTitle, message: keychainRefusedMessage,
+                       action: (title: "Try again", run: tryAgain),
+                       secondaryAction: (title: "Sign in again", run: signInAgain),
+                       actionHint: "Asks macOS for your saved sign-in again.",
+                       secondaryHint: "Opens sign-in. Nothing is deleted.", offersQuit: false)
     }
 }
 
@@ -63,11 +97,18 @@ public struct StartupProblemView: View {
                         .ohLinkButtonStyle()
                 }
                 Spacer(minLength: theme.space4)
-                Button("Quit Mail") { quit() }
-                    .keyboardShortcut(problem.action == nil ? KeyboardShortcut.defaultAction : KeyboardShortcut.cancelAction)
+                if problem.offersQuit || problem.action == nil {
+                    Button("Quit Mail") { quit() }
+                        .keyboardShortcut(problem.action == nil ? KeyboardShortcut.defaultAction : KeyboardShortcut.cancelAction)
+                }
+                if let secondary = problem.secondaryAction {
+                    Button(secondary.title) { secondary.run() }
+                        .modifier(StartupHint(text: problem.secondaryHint))
+                }
                 if let action = problem.action {
                     Button(action.title) { action.run() }
                         .keyboardShortcut(.defaultAction)
+                        .modifier(StartupHint(text: problem.actionHint))
                 }
             }
             .padding(.top, theme.space4)
@@ -119,6 +160,18 @@ private struct LaunchSpinner: View {
         }
         .frame(width: StartupMetrics.spinnerSize, height: StartupMetrics.spinnerSize)
         .accessibilityHidden(true)
+    }
+}
+
+private struct StartupHint: ViewModifier {
+    let text: String?
+
+    func body(content: Content) -> some View {
+        if let text {
+            content.accessibilityHint(Text(text))
+        } else {
+            content
+        }
     }
 }
 
