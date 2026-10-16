@@ -6,21 +6,27 @@ import Security
 public struct KeychainSharedGrantStore: SharedGrantStore {
     public static let label = "OpenHuman Mail (Gmail sign-in, shared through iCloud Keychain)"
     public let service: String
+    public let accessGroup: String?
     public let items: KeychainItems
     var backend: any KeychainBackend { items.backend }
     public var canHoldSharedCopies: Bool { items.canHoldSynchronizableItems }
     let isAppProcess: @Sendable () -> Bool
+    let log: CredentialChainLog
 
     static let maxItemBytes = 16 * 1024
 
-    public init(service: String = OHIdentifiers.keychainService) {
-        self.init(service: service, items: .shared, isAppProcess: { KeychainTokenStore.runningInAppBundle() })
+    public init(service: String = OHIdentifiers.keychainService, accessGroup: String? = nil) {
+        self.init(service: service, items: .shared, isAppProcess: { KeychainTokenStore.runningInAppBundle() },
+                  accessGroup: accessGroup)
     }
 
-    init(service: String, items: KeychainItems, isAppProcess: @escaping @Sendable () -> Bool) {
+    init(service: String, items: KeychainItems, isAppProcess: @escaping @Sendable () -> Bool,
+         accessGroup: String? = nil, log: CredentialChainLog = .shared) {
         self.service = service
         self.items = items
         self.isAppProcess = isAppProcess
+        self.accessGroup = accessGroup
+        self.log = log
     }
 
     static let cannotSync: Set<OSStatus> = [errSecMissingEntitlement, errSecNotAvailable, errSecParam,
@@ -29,61 +35,25 @@ public struct KeychainSharedGrantStore: SharedGrantStore {
     public func read(account email: String) throws -> SharedGrantRead {
         try requireAppProcess()
         let account = try KeychainTokenStore.account(email)
-        guard items.canHoldSynchronizableItems else { return .unavailable }
-        var query = baseQuery(account: account)
-        query[kSecReturnData as String] = true
-        query[kSecReturnAttributes as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        let (status, result) = backend.copyMatching(query)
-        items.synchronizableRefused(status)
-        KeychainDiagnostics.shared.record(.tokenSyncedRead, status == errSecItemNotFound ? errSecSuccess : status)
-        switch status {
-        case errSecSuccess: break
-        case errSecItemNotFound: return .missing
-        case errSecMissingEntitlement, errSecNotAvailable: return .unavailable
-        default: throw TokenStoreError.keychain(status)
-        }
-        guard let item = Self.single(result), isOurs(item, account: account),
-              let data = item[kSecValueData as String] as? Data, data.count <= Self.maxItemBytes,
-              let grant = try? JSONDecoder().decode(SharedGrant.self, from: data), grant.isUsable else {
-            throw TokenStoreError.corrupt
-        }
-        return .found(grant)
+        guard ready() else { return .unavailable }
+        return try fetch(account: account, group: accessGroup)
     }
 
     @discardableResult
     public func save(_ grant: SharedGrant, account email: String) throws -> SharedGrantWrite {
         try requireAppProcess()
         let account = try KeychainTokenStore.account(email)
-        guard items.canHoldSynchronizableItems else { return .unavailable }
+        guard ready() else { return .unavailable }
         guard grant.isUsable, let data = try? JSONEncoder().encode(grant), data.count <= Self.maxItemBytes else {
             throw TokenStoreError.corrupt
         }
-        let attributes = addAttributes(account: account, data: data)
-        let status = backend.add(attributes)
-        items.synchronizableRefused(status)
-        KeychainDiagnostics.shared.record(.tokenSyncedWrite, status == errSecDuplicateItem ? errSecSuccess : status)
-        if status == errSecSuccess { return .written }
-        if Self.cannotSync.contains(status) { return .unavailable }
-        guard status == errSecDuplicateItem else { throw TokenStoreError.keychain(status) }
-        let changes: [String: Any] = [kSecValueData as String: data, kSecAttrLabel as String: Self.label]
-        let updated = backend.update(baseQuery(account: account), changes)
-        items.synchronizableRefused(updated)
-        if updated == errSecSuccess { return .written }
-        guard updated == errSecUnimplemented else { throw TokenStoreError.keychain(updated) }
-        let deleted = backend.delete(baseQuery(account: account))
-        items.synchronizableRefused(deleted)
-        guard deleted == errSecSuccess || deleted == errSecItemNotFound else { throw TokenStoreError.keychain(deleted) }
-        let again = backend.add(attributes)
-        items.synchronizableRefused(again)
-        guard again == errSecSuccess else { throw TokenStoreError.keychain(again) }
-        return .written
+        return try write(data, account: account).written
     }
 
     public func delete(account email: String) throws {
         try requireAppProcess()
         let account = try KeychainTokenStore.account(email)
-        guard items.canHoldSynchronizableItems else { return }
+        guard ready() else { return }
         let status = backend.delete(baseQuery(account: account))
         items.synchronizableRefused(status)
         guard status == errSecSuccess || status == errSecItemNotFound || status == errSecMissingEntitlement
@@ -92,7 +62,7 @@ public struct KeychainSharedGrantStore: SharedGrantStore {
 
     public func allAccounts() throws -> [String] {
         try requireAppProcess()
-        guard items.canHoldSynchronizableItems else { return [] }
+        guard ready() else { return [] }
         var query = baseQuery(account: nil)
         query[kSecReturnAttributes as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitAll
@@ -103,22 +73,25 @@ public struct KeychainSharedGrantStore: SharedGrantStore {
         case errSecItemNotFound, errSecMissingEntitlement, errSecNotAvailable: return []
         default: throw TokenStoreError.keychain(status)
         }
-        let listed = (result as? [[String: Any]]) ?? Self.single(result).map { [$0] } ?? []
-        let accounts = listed.compactMap { item -> String? in
-            guard let account = item[kSecAttrAccount as String] as? String, isOurs(item, account: account),
+        let accounts = KeychainItems.listed(result).compactMap { item -> String? in
+            guard let account = item[kSecAttrAccount as String] as? String,
+                  isOurs(item, account: account, group: accessGroup),
                   (try? KeychainTokenStore.account(account)) == account else { return nil }
             return account
         }
         return Array(Set(accounts)).sorted()
     }
 
-    func baseQuery(account: String?) -> [String: Any] {
+    func baseQuery(account: String?) -> [String: Any] { baseQuery(account: account, group: accessGroup) }
+
+    func baseQuery(account: String?, group: String?) -> [String: Any] {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecUseDataProtectionKeychain as String: true,
             kSecAttrSynchronizable as String: true,
         ]
+        if let group { query[kSecAttrAccessGroup as String] = group }
         if let account { query[kSecAttrAccount as String] = account }
         return query
     }
@@ -131,9 +104,10 @@ public struct KeychainSharedGrantStore: SharedGrantStore {
         return attributes
     }
 
-    func isOurs(_ item: [String: Any], account: String) -> Bool {
+    func isOurs(_ item: [String: Any], account: String, group: String? = nil) -> Bool {
         if let value = item[kSecAttrService as String], (value as? String) != service { return false }
         if let value = item[kSecAttrAccount as String], (value as? String) != account { return false }
+        if let group, let value = item[kSecAttrAccessGroup as String], (value as? String) != group { return false }
         if let value = item[kSecAttrSynchronizable as String] {
             if let flag = value as? Bool { return flag }
             if let number = value as? NSNumber { return number.boolValue }
@@ -149,6 +123,128 @@ public struct KeychainSharedGrantStore: SharedGrantStore {
 
     private func requireAppProcess() throws {
         guard isAppProcess() else { throw TokenStoreError.notAppProcess }
+    }
+
+    private func ready() -> Bool {
+        guard items.canHoldSynchronizableItems else { return false }
+        if let accessGroup {
+            items.once("shared-grant|\(service)|\(accessGroup)") { _ = moveFromDefaultGroup(into: accessGroup) }
+        }
+        return items.canHoldSynchronizableItems
+    }
+
+    private func fetch(account: String, group: String?) throws -> SharedGrantRead {
+        var query = baseQuery(account: account, group: group)
+        query[kSecReturnData as String] = true
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        let (status, result) = backend.copyMatching(query)
+        items.synchronizableRefused(status)
+        KeychainDiagnostics.shared.record(.tokenSyncedRead, status == errSecItemNotFound ? errSecSuccess : status)
+        switch status {
+        case errSecSuccess: break
+        case errSecItemNotFound: return .missing
+        case errSecMissingEntitlement, errSecNotAvailable:
+            log.record(.entitlement, .noEntitlement)
+            return .unavailable
+        default:
+            log.record(.readSignIn, .keychain(status: status), subject: CredentialChainLog.subject(account: account))
+            throw TokenStoreError.keychain(status)
+        }
+        guard let item = Self.single(result), isOurs(item, account: account, group: group),
+              let data = item[kSecValueData as String] as? Data, data.count <= Self.maxItemBytes,
+              let grant = try? JSONDecoder().decode(SharedGrant.self, from: data), grant.isUsable else {
+            log.record(.readSignIn, .unreadable, subject: CredentialChainLog.subject(account: account))
+            throw TokenStoreError.corrupt
+        }
+        return .found(grant)
+    }
+
+    private func write(_ data: Data, account: String) throws -> (written: SharedGrantWrite, status: OSStatus) {
+        let subject = CredentialChainLog.subject(account: account)
+        func done(_ status: OSStatus) -> (written: SharedGrantWrite, status: OSStatus) {
+            log.record(.shareSignIn, status == errSecSuccess ? .ok : KeychainItems.outcome(status), subject: subject)
+            return (status == errSecSuccess ? .written : .unavailable, status)
+        }
+        func failed(_ status: OSStatus) -> TokenStoreError {
+            log.record(.shareSignIn, KeychainItems.outcome(status), subject: subject)
+            return TokenStoreError.keychain(status)
+        }
+        let attributes = addAttributes(account: account, data: data)
+        let status = backend.add(attributes)
+        items.synchronizableRefused(status)
+        KeychainDiagnostics.shared.record(.tokenSyncedWrite, status == errSecDuplicateItem ? errSecSuccess : status)
+        if status == errSecSuccess || Self.cannotSync.contains(status) { return done(status) }
+        guard status == errSecDuplicateItem else { throw failed(status) }
+        let changes: [String: Any] = [kSecValueData as String: data, kSecAttrLabel as String: Self.label]
+        let updated = backend.update(baseQuery(account: account), changes)
+        items.synchronizableRefused(updated)
+        if updated == errSecSuccess { return done(updated) }
+        guard updated == errSecUnimplemented else { throw failed(updated) }
+        let deleted = backend.delete(baseQuery(account: account))
+        items.synchronizableRefused(deleted)
+        guard deleted == errSecSuccess || deleted == errSecItemNotFound else { throw failed(deleted) }
+        let again = backend.add(attributes)
+        items.synchronizableRefused(again)
+        guard again == errSecSuccess else { throw failed(again) }
+        return done(again)
+    }
+
+    // Why: copies written before the shared group existed are invisible to the other app until they move into it
+    @discardableResult
+    func moveFromDefaultGroup(into group: String) -> Int {
+        var list = baseQuery(account: nil, group: nil)
+        list[kSecReturnAttributes as String] = true
+        list[kSecMatchLimit as String] = kSecMatchLimitAll
+        let (status, result) = backend.copyMatching(list)
+        items.synchronizableRefused(status)
+        guard status == errSecSuccess else {
+            if status != errSecItemNotFound { log.record(.groupMove, KeychainItems.outcome(status)) }
+            return 0
+        }
+        var moved = 0
+        var seen = Set<String>()
+        for item in KeychainItems.listed(result) {
+            guard let account = item[kSecAttrAccount as String] as? String,
+                  let from = item[kSecAttrAccessGroup as String] as? String, from != group,
+                  seen.insert(from + "\n" + account).inserted,
+                  (try? KeychainTokenStore.account(account)) == account,
+                  isOurs(item, account: account) else { continue }
+            let outcome = move(account: account, from: from, into: group)
+            log.record(.groupMove, outcome, subject: CredentialChainLog.subject(account: account))
+            if outcome == .ok { moved += 1 }
+        }
+        return moved
+    }
+
+    // Why: the old copy is deleted only after the shared group holds this grant or a newer one
+    private func move(account: String, from old: String, into group: String) -> CredentialOutcome {
+        do {
+            guard case .found(let grant) = try fetch(account: account, group: old) else { return .noItem }
+            switch try fetch(account: account, group: group) {
+            case .found(let kept) where kept.version >= grant.version:
+                break
+            case .unavailable:
+                return .noEntitlement
+            case .found, .missing:
+                guard let data = try? JSONEncoder().encode(grant), data.count <= Self.maxItemBytes else {
+                    return .unreadable
+                }
+                let written = try write(data, account: account)
+                guard written.written == .written else { return KeychainItems.outcome(written.status) }
+            }
+            guard case .found(let now) = try fetch(account: account, group: group), now.version >= grant.version else {
+                return .unreadable
+            }
+        } catch TokenStoreError.keychain(let status) {
+            return KeychainItems.outcome(status)
+        } catch {
+            return .unreadable
+        }
+        let deleted = backend.delete(baseQuery(account: account, group: old))
+        items.synchronizableRefused(deleted)
+        guard deleted == errSecSuccess || deleted == errSecItemNotFound else { return KeychainItems.outcome(deleted) }
+        return .ok
     }
 }
 

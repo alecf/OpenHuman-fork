@@ -56,9 +56,11 @@ public struct TokenDeviceRecord: Codable, Sendable, Equatable {
     public var accessFor: String?
     public var wrote: String?
     public var refused: String?
+    public var source: CredentialSource?
 
     public init(choice: Choice? = nil, cannotSync: Bool? = nil, accessToken: String? = nil, accessTokenExpiry: Date? = nil,
-                accessFor: String? = nil, wrote: String? = nil, refused: String? = nil) {
+                accessFor: String? = nil, wrote: String? = nil, refused: String? = nil,
+                source: CredentialSource? = nil) {
         self.choice = choice
         self.cannotSync = cannotSync
         self.accessToken = accessToken
@@ -66,6 +68,7 @@ public struct TokenDeviceRecord: Codable, Sendable, Equatable {
         self.accessFor = accessFor
         self.wrote = wrote
         self.refused = refused
+        self.source = source
     }
 }
 
