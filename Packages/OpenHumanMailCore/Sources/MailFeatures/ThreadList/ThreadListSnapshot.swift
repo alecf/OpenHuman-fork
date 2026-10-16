@@ -160,6 +160,7 @@ struct ThreadListAssembler: Sendable {
     var overlay = ThreadListOverlay()
     var previous = ThreadListSnapshot.empty
     var dirtyKeys = Set<ThreadKey>()
+    var ordersByRelevance = false
 
     init(sortsAscending: Bool) {
         self.sortsAscending = sortsAscending
@@ -172,7 +173,7 @@ struct ThreadListAssembler: Sendable {
         for row in live { seen.insert(row.id) }
         for page in pages {
             for row in page.rows where !seen.contains(row.id) {
-                guard sorts(row, after: boundary) else { continue }
+                guard ordersByRelevance || sorts(row, after: boundary) else { continue }
                 seen.insert(row.id)
                 rows.append(row)
             }

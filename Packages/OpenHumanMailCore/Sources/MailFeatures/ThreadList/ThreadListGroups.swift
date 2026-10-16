@@ -72,6 +72,10 @@ public struct ThreadListGroups: Sendable, Equatable {
 
     public static let none = ThreadListGroups()
 
+    public static func applies(groupsByDate: Bool, sortsAscending: Bool, searchOrdering: SearchResultsOrdering?) -> Bool {
+        groupsByDate && !sortsAscending && searchOrdering != .relevance
+    }
+
     public var count: Int { headers.count }
     public var isEmpty: Bool { headers.isEmpty }
 

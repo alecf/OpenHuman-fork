@@ -121,6 +121,18 @@ public final class AppEnvironment {
         LearnedBehaviourCenter(environment: self, store: learnedBehaviourStore ?? InMemoryLearnedBehaviourStore())
     }()
 
+    public var searchRanking: SearchRankingModel {
+        if let searchRankingStorage { return searchRankingStorage }
+        let made = SearchRankingModel(port: InMemorySearchRankingPort(), notices: notices)
+        searchRankingStorage = made
+        return made
+    }
+    private var searchRankingStorage: SearchRankingModel?
+
+    public func installSearchRanking(_ port: any SearchRankingPort) {
+        searchRankingStorage = SearchRankingModel(port: port, notices: notices)
+    }
+
     public var archiveSuggestion: ArchiveSuggestionModel? {
         if let archiveSuggestionStorage { return archiveSuggestionStorage }
         guard modules.modules.contains(.hygiene) else { return nil }

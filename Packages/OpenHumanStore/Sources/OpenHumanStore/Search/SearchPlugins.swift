@@ -33,6 +33,9 @@ public struct SearchCandidate: Hashable, Sendable {
     public var newestAt: Date
     public var bm25: Double?
     public var externalScore: Double?
+    public var headerMatch: SearchHeaderMatch?
+    public var sentToCorrespondent: Int?
+    public var wordsTogether: Bool?
 
     public init(
         threadID: ThreadRowID,
@@ -41,7 +44,10 @@ public struct SearchCandidate: Hashable, Sendable {
         bestAt: Date,
         newestAt: Date,
         bm25: Double? = nil,
-        externalScore: Double? = nil
+        externalScore: Double? = nil,
+        headerMatch: SearchHeaderMatch? = nil,
+        sentToCorrespondent: Int? = nil,
+        wordsTogether: Bool? = nil
     ) {
         self.threadID = threadID
         self.bestMessageID = bestMessageID
@@ -50,11 +56,36 @@ public struct SearchCandidate: Hashable, Sendable {
         self.newestAt = newestAt
         self.bm25 = bm25
         self.externalScore = externalScore
+        self.headerMatch = headerMatch
+        self.sentToCorrespondent = sentToCorrespondent
+        self.wordsTogether = wordsTogether
     }
+}
+
+public struct SearchRankingInputs: OptionSet, Hashable, Sendable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+
+    public static let fields = SearchRankingInputs(rawValue: 1 << 0)
+    public static let contacts = SearchRankingInputs(rawValue: 1 << 1)
+    public static let phrase = SearchRankingInputs(rawValue: 1 << 2)
 }
 
 public protocol SearchRanking: Sendable {
     func scores(for candidates: [SearchCandidate], query: SearchQuery, now: Date) -> [Double]
+    var inputs: SearchRankingInputs { get }
+    var ordersByDate: Bool { get }
+    func rankedScores(for candidates: [SearchCandidate], query: SearchQuery, now: Date)
+        -> (scores: [Double], breakdowns: [SearchScoreBreakdown]?)
+}
+
+extension SearchRanking {
+    public var inputs: SearchRankingInputs { [] }
+    public var ordersByDate: Bool { false }
+    public func rankedScores(for candidates: [SearchCandidate], query: SearchQuery, now: Date)
+        -> (scores: [Double], breakdowns: [SearchScoreBreakdown]?) {
+        (scores(for: candidates, query: query, now: now), nil)
+    }
 }
 
 public struct BM25RecencyRanking: SearchRanking {

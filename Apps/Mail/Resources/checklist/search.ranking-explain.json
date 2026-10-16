@@ -1,0 +1,14 @@
+{
+  "id": "search.ranking-explain",
+  "area": "Overlays",
+  "title": "Copy why a search result ranks where it does",
+  "steps": [
+    "Press /, type two words, press Return",
+    "Move to a result, open the palette (⌘K)",
+    "Run Copy why this search result ranks here, paste into a note"
+  ],
+  "deepLink": null,
+  "expected": "The pasted text lists the total and each signal (Sender and subject, Words in the text, Related by meaning, Recency, Opened from search, People you write to) as numbers with the match kind, such as sender name match. It holds no subject, sender, address or message text.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

@@ -41,6 +41,7 @@ public struct SearchHit: Hashable, Sendable {
     public var highlight: String?
     public var sources: Set<SearchMatchSource> = [.lexical]
     public var bestMessageID: MessageRowID?
+    public var scoreBreakdown: SearchScoreBreakdown?
 
     // generated-init: Tools/ci/gen-public-inits.py
     public init(
@@ -48,29 +49,34 @@ public struct SearchHit: Hashable, Sendable {
         matchedMessageIDs: [MessageRowID],
         highlight: String? = nil,
         sources: Set<SearchMatchSource> = [.lexical],
-        bestMessageID: MessageRowID? = nil
+        bestMessageID: MessageRowID? = nil,
+        scoreBreakdown: SearchScoreBreakdown? = nil
     ) {
         self.thread = thread
         self.matchedMessageIDs = matchedMessageIDs
         self.highlight = highlight
         self.sources = sources
         self.bestMessageID = bestMessageID
+        self.scoreBreakdown = scoreBreakdown
     }
     // end generated-init
 }
 public struct SearchPage: Hashable, Sendable {
     public var hits: [SearchHit]; public var nextCursor: ThreadCursor?
     public var completeness: SearchCompleteness = SearchCompleteness()
+    public var ordering: SearchOrdering = .date
 
     // generated-init: Tools/ci/gen-public-inits.py
     public init(
         hits: [SearchHit],
         nextCursor: ThreadCursor? = nil,
-        completeness: SearchCompleteness = SearchCompleteness()
+        completeness: SearchCompleteness = SearchCompleteness(),
+        ordering: SearchOrdering = .date
     ) {
         self.hits = hits
         self.nextCursor = nextCursor
         self.completeness = completeness
+        self.ordering = ordering
     }
     // end generated-init
 }
@@ -85,9 +91,25 @@ public protocol MailSearching: Sendable {
                        external: ExternalSearchCandidates?) -> StoreObservation<SearchPage>
     func structuredMessageIDs(_ query: SearchQuery, accounts: [AccountID]?, limit: Int) throws
         -> (ids: [MessageRowID], capped: Bool)
+    func search(_ query: SearchQuery, accounts: [AccountID]?, after: ThreadCursor?, limit: Int,
+                external: ExternalSearchCandidates?, ranking: any SearchRanking, now: Date) throws -> SearchPage
+    func observeSearch(_ query: SearchQuery, accounts: [AccountID]?, limit: Int,
+                       external: ExternalSearchCandidates?, ranking: any SearchRanking) -> StoreObservation<SearchPage>
 }
 
+public enum SearchOrdering: String, Hashable, Sendable, Codable { case date, relevance }
+
 extension MailSearching {
+    public func search(_ query: SearchQuery, accounts: [AccountID]?, after: ThreadCursor?, limit: Int,
+                       external: ExternalSearchCandidates?, ranking: any SearchRanking, now: Date) throws -> SearchPage {
+        try search(query, accounts: accounts, after: after, limit: limit, external: external)
+    }
+
+    public func observeSearch(_ query: SearchQuery, accounts: [AccountID]?, limit: Int,
+                              external: ExternalSearchCandidates?, ranking: any SearchRanking) -> StoreObservation<SearchPage> {
+        observeSearch(query, accounts: accounts, limit: limit, external: external)
+    }
+
     public func search(_ query: SearchQuery, accounts: [AccountID]?, after: ThreadCursor?, limit: Int,
                        external: ExternalSearchCandidates?) throws -> SearchPage {
         try search(query, accounts: accounts, after: after, limit: limit)

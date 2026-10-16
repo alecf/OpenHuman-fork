@@ -71,6 +71,7 @@ extension ActionRegistry {
         let hints = ShortcutLearning(settings: environment.settings, notices: environment.notices)
         shortcutHints = hints
         register(ShortcutHintActionHandler(learning: hints, notices: environment.notices), for: ShortcutHintActionHandler.ids)
+        register(SearchRankingActionHandler(environment: environment), for: SearchRankingActionHandler.ids)
         let built = ModuleRegistry.build(modules, flags: flags, env: environment)
         for module in built.modules { noteEnabled(module) }
         for registration in built.actions {

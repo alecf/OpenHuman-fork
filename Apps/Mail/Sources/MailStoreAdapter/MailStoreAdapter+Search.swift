@@ -11,14 +11,19 @@ extension MailStoreAdapter {
         do { parsed = try Self.parsedSearch(query, store) } catch {
             return AsyncThrowingStream { $0.finish(throwing: error) }
         }
-        return Self.map(parsed.searching.observeSearch(parsed.query, accounts: accounts, limit: limit).values()) { page in
+        let observation = searchRanking.map {
+            parsed.searching.observeSearch(parsed.query, accounts: accounts, limit: limit, external: nil,
+                                           ranking: $0.ranking(for: query, hybrid: false))
+        } ?? parsed.searching.observeSearch(parsed.query, accounts: accounts, limit: limit)
+        return Self.map(observation.values()) { page in
             var primary: [AccountID: LabelRowID] = [:]
             var looked: Set<AccountID> = []
             let hits = page.hits.map { hit -> SearchHitInfo in
                 let account = hit.thread.ref.accountID
                 if looked.insert(account).inserted { primary[account] = Self.primaryCategory(store, account: account) }
                 return SearchHitInfo(row: Self.row(hit.thread, hiddenCategory: primary[account]),
-                                     matchedMessageRowIDs: hit.matchedMessageIDs.map(\.rawValue), highlight: hit.highlight)
+                                     matchedMessageRowIDs: hit.matchedMessageIDs.map(\.rawValue), highlight: hit.highlight,
+                                     explanation: hit.scoreBreakdown.map(SearchRankingService.explanation))
             }
             return SearchResultsInfo(hits: hits, hasMore: page.nextCursor != nil,
                                      completeness: Self.completeness(page.completeness))
@@ -40,12 +45,46 @@ extension MailStoreAdapter {
     }
 
     func searchWindow(_ text: String, account: AccountID, limit: Int) -> AsyncThrowingStream<ThreadListWindow, Error> {
+        guard let ranking = searchRanking else { return searchWindowOnce(text, account: account, limit: limit) }
+        return AsyncThrowingStream { continuation in
+            let changes = ranking.changes()
+            let task = Task {
+                var inner: Task<Void, Never>?
+                func start() {
+                    inner?.cancel()
+                    let windows = self.searchWindowOnce(text, account: account, limit: limit)
+                    inner = Task {
+                        do {
+                            for try await window in windows { continuation.yield(window) }
+                        } catch is CancellationError {
+                        } catch {
+                            continuation.finish(throwing: error)
+                        }
+                    }
+                }
+                start()
+                for await _ in changes {
+                    guard !Task.isCancelled else { break }
+                    start()
+                }
+                inner?.cancel()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private func searchWindowOnce(_ text: String, account: AccountID, limit: Int) -> AsyncThrowingStream<ThreadListWindow, Error> {
         let store = self.store
         let parsed: (searching: any MailSearching, query: SearchQuery)
         do { parsed = try Self.parsedSearch(text, store) } catch {
             return AsyncThrowingStream { $0.finish(throwing: error) }
         }
-        let source = parsed.searching.observeSearch(parsed.query, accounts: [account], limit: limit).values()
+        let lexicalRanking = searchRanking?.ranking(for: text, hybrid: false)
+        let hybridRanking = searchRanking?.ranking(for: text, hybrid: true)
+        let source = lexicalRanking.map {
+            parsed.searching.observeSearch(parsed.query, accounts: [account], limit: limit, external: nil, ranking: $0)
+        }?.values() ?? parsed.searching.observeSearch(parsed.query, accounts: [account], limit: limit).values()
+        let sortable = parsed.query.isRankedByText
         let fallback = searchFallback
         let arm = semanticArm.flatMap { SemanticSearchArm.plan(parsed.query) == nil ? nil : $0 }
         let searching = parsed.searching
@@ -58,7 +97,7 @@ extension MailStoreAdapter {
                 do {
                     continuation.yield(try Self.searchWindow(snapshot.page, related: snapshot.related, remote: snapshot.remote,
                                                              gmail: snapshot.gmail, canAskGmail: canAskGmail, store: store,
-                                                             account: account))
+                                                             account: account, canSortByRelevance: sortable))
                 } catch {
                     continuation.finish(throwing: error)
                 }
@@ -89,8 +128,10 @@ extension MailStoreAdapter {
                     }
                     if early { inputs.useFused() } else { inputs.release(publish: publish) }
                     do {
-                        for try await fused in searching.observeSearch(query, accounts: [account], limit: limit,
-                                                                       external: external).values() {
+                        let fusedPages = hybridRanking.map {
+                            searching.observeSearch(query, accounts: [account], limit: limit, external: external, ranking: $0)
+                        } ?? searching.observeSearch(query, accounts: [account], limit: limit, external: external)
+                        for try await fused in fusedPages.values() {
                             if early {
                                 inputs.setPage(fused, fused: true, publish: publish)
                             } else {
@@ -142,7 +183,10 @@ extension MailStoreAdapter {
         let parsed = try Self.parsedSearch(text, store)
         let cursor = try after.map(Self.threadCursor)
         let external = semanticArm?.cached(parsed.query, [account])
-        let page = try parsed.searching.search(parsed.query, accounts: [account], after: cursor, limit: limit, external: external)
+        let page = try searchRanking.map {
+            try parsed.searching.search(parsed.query, accounts: [account], after: cursor, limit: limit, external: external,
+                                        ranking: $0.ranking(for: text, hybrid: external != nil), now: Date())
+        } ?? parsed.searching.search(parsed.query, accounts: [account], after: cursor, limit: limit, external: external)
         let primary = Self.primaryCategory(store, account: account)
         let hybrid = page.hits.contains { $0.sources.contains(.semantic) }
         return (page.hits.map { Self.row($0.thread, hiddenCategory: primary).with(searchMatch: Self.searchMatch($0, hybrid: hybrid)) },
@@ -155,7 +199,8 @@ extension MailStoreAdapter {
     }
 
     static func searchWindow(_ page: SearchPage, related: [SearchHit] = [], remote: [ThreadRef], gmail: GmailSearchPhase,
-                             canAskGmail: Bool, store: any Store, account: AccountID) throws -> ThreadListWindow {
+                             canAskGmail: Bool, store: any Store, account: AccountID,
+                             canSortByRelevance: Bool = false) throws -> ThreadListWindow {
         let primary = primaryCategory(store, account: account)
         let hybrid = !related.isEmpty || page.hits.contains { $0.sources.contains(.semantic) }
         var rows = page.hits.map { row($0.thread, hiddenCategory: primary).with(searchMatch: searchMatch($0, hybrid: hybrid)) }
@@ -175,8 +220,13 @@ extension MailStoreAdapter {
         case .answered: state = .done(added: rows.count - local)
         case .failed: state = .failed
         }
+        var explanations: [Int64: SearchScoreExplanation] = [:]
+        for hit in page.hits + related {
+            if let breakdown = hit.scoreBreakdown { explanations[hit.thread.id.rawValue] = SearchRankingService.explanation(breakdown) }
+        }
         let status = SearchWindowStatus(completeness: completeness(page.completeness), gmail: state,
-                                        gmailAvailable: canAskGmail)
+                                        gmailAvailable: canAskGmail, ordering: SearchRankingService.ordering(page.ordering),
+                                        explanations: explanations, canSortByRelevance: canSortByRelevance)
         return ThreadListWindow(rows: rows, hasMore: page.nextCursor != nil, totalCount: rows.count, search: status)
     }
 

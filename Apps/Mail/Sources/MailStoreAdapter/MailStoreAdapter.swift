@@ -10,7 +10,6 @@ public final class MailStoreAdapter: MailDataSource, Sendable {
     public struct OnDemand: Sendable {
         public var remoteSearch: (@Sendable (_ gmailQuery: String, _ account: AccountID) async throws -> [ThreadRef])?
         public var loadView: (@Sendable (MailboxView) async throws -> Void)?
-        // Delay before asking Gmail, so a query the user types past never reaches it
         public var remoteSearchDelay: Duration
         public var remoteSearchCapped: (@Sendable (_ gmailQuery: String, _ account: AccountID, _ maxResults: Int) async throws
             -> [ThreadRef])?
@@ -37,14 +36,16 @@ public final class MailStoreAdapter: MailDataSource, Sendable {
     let askRemoteSearch: (@Sendable (_ gmailQuery: String, _ account: AccountID, _ maxResults: Int) async throws
         -> [ThreadRef])?
     let semanticArm: SemanticSearchArm?
+    let searchRanking: (any SearchRankingSource)?
 
     public init(store: any Store, ensureBody: (@Sendable (MessageKey) async throws -> Void)? = nil,
                 attachmentFile: (@Sendable (MessageKey, AttachmentInfo) async throws -> URL)? = nil,
                 connectivity: (@Sendable () -> AsyncStream<[AccountID: ConnectivityState]>)? = nil,
                 syncProgress: (@Sendable () -> AsyncStream<[AccountID: String]>)? = nil,
-                onDemand: OnDemand? = nil, semantic: SemanticSearchArm? = nil) {
+                onDemand: OnDemand? = nil, semantic: SemanticSearchArm? = nil, ranking: (any SearchRankingSource)? = nil) {
         self.store = store
         self.semanticArm = semantic
+        self.searchRanking = ranking
         self.ensureBody = ensureBody
         self.attachmentFile = attachmentFile
         self.connectivitySource = connectivity
@@ -285,7 +286,6 @@ public final class MailStoreAdapter: MailDataSource, Sendable {
                        sendAs: sendAs)
     }
 
-    // Only "accepted" counts as verified; a missing status is not flagged so the primary address stays choosable
     static func needsVerification(_ status: String?) -> Bool {
         guard let status else { return false }
         return status.lowercased() != "accepted"

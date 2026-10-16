@@ -1,0 +1,15 @@
+{
+  "id": "search.ranking-sort-switch",
+  "area": "Overlays",
+  "title": "Most relevant / Most recent switch over search results",
+  "steps": [
+    "Press /, type a word, press Return",
+    "Click Most recent at the right of the results line",
+    "Click Most relevant again",
+    "Start a new search with another word"
+  ],
+  "deepLink": null,
+  "expected": "Most recent lists the newest matching mail first, with date headers. Most relevant brings back the ranked order without date headers. The new search starts in the order set in Settings › Search (Most relevant unless changed). The palette's \"Sort search results\" does the same.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

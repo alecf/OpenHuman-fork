@@ -1,0 +1,14 @@
+{
+  "id": "search.header-not-over-calendar",
+  "area": "Calendar",
+  "title": "Search lines stay with the search results",
+  "steps": [
+    "Press /, type a word, press Return",
+    "Press 2 to show the Calendar",
+    "Press 1 to go back to the mail"
+  ],
+  "deepLink": null,
+  "expected": "The Calendar shows no search lines above it (no \"results in\", \"Results may be incomplete\" or \"Smart search\" line). Back in the mail, the search results show them again as before.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}
