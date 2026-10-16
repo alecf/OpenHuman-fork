@@ -322,7 +322,7 @@ private enum RepoSources {
     let live = try #require(AppSources.body(of: "static func live(", in: try text("CompositionRoot.swift")))
     let testHost = try #require(live.range(of: "environment[\"XCTestConfigurationFilePath\"] != nil"))
     #expect(live.contains("|| ProcessInfo.processInfo.environment[\"XCTestConfigurationFilePath\"] != nil {"))
-    for later in ["StoreLocation.resolve(", "MailStore.open(", "Keychain", "URLSessionTransport(", "LiveBackend("] {
+    for later in ["StoreLocation.resolve(", "MailStore.open(", "keychainStores(", "URLSessionTransport(", "LiveBackend("] {
         let at = try #require(live.range(of: later), "\(later)")
         #expect(testHost.upperBound < at.lowerBound, "a test run is refused before \(later)")
     }
