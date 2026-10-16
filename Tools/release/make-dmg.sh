@@ -13,6 +13,12 @@ it in Terminal.app on the Mac that holds your Developer ID certificate (a shell 
 to the login keychain, such as an SSH session, cannot sign). A signed build sends two files to
 Apple's notary service (the app, then the dmg). Nothing else is sent anywhere: no push, no tag.
 
+A signed build carries the iCloud entitlements in
+Apps/Mail/Entitlements/Mail-iCloud.entitlements (CloudKit, push and the shared keychain group).
+It embeds your Developer ID provisioning profile in the app, after checking that the profile
+grants each of them for this App ID, team and certificate; a profile that does not stops the
+build before anything is built.
+
   --dry-run            print each command instead of running it: builds, signs and sends
                        nothing; needs no certificate
   --build-number <n>   CFBundleVersion (default: the number of commits in HEAD)
@@ -20,7 +26,8 @@ Apple's notary service (the app, then the dmg). Nothing else is sent anywhere: n
                        only)
   --unsigned           no Developer ID and no notarization: the app is ad-hoc signed and the
                        dmg is not signed. macOS blocks it at first open until the person allows
-                       it in System Settings
+                       it in System Settings. No iCloud entitlements
+  --no-icloud          sign without the iCloud entitlements and without a provisioning profile
   --sign-only          sign and package, skip notarization and stapling (rehearsals only; never
                        hand it out)
   --from-archive       skip "xcodebuild -exportArchive" and use the app as signed in the
@@ -34,6 +41,9 @@ release.env.example):
   OH_SIGN_IDENTITY     your "Developer ID Application" identity, by full name or SHA-1 hash
                        (default: the only one in your keychain)
   OH_BUNDLE_ID_PREFIX  default dev.openhuman, giving the bundle id dev.openhuman.mail
+  OH_PROVISIONING_PROFILE
+                       path to the Developer ID provisioning profile you downloaded for the
+                       app's App ID; not needed with --unsigned or --no-icloud
 
 Output (ignored by git): build/release/OpenHuman-Mail-<version>-<build>/ (with -unsigned or
 -signed-only appended for those builds) with the .dmg, its .sha256, release-info.txt, a
@@ -43,7 +53,7 @@ EOF
 }
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 HERE="$ROOT/Tools/release"
-DRY=0; BUILD_NUMBER=""; ALLOW_DIRTY=0; SIGN_ONLY=0; FROM_ARCHIVE=0; UNSIGNED=0
+DRY=0; BUILD_NUMBER=""; ALLOW_DIRTY=0; SIGN_ONLY=0; FROM_ARCHIVE=0; UNSIGNED=0; NO_ICLOUD=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run) DRY=1; shift ;;
@@ -51,6 +61,7 @@ while [[ $# -gt 0 ]]; do
                         BUILD_NUMBER="$2"; shift 2 ;;
         --allow-dirty) ALLOW_DIRTY=1; shift ;;
         --unsigned) UNSIGNED=1; shift ;;
+        --no-icloud) NO_ICLOUD=1; shift ;;
         --sign-only) SIGN_ONLY=1; shift ;;
         --from-archive) FROM_ARCHIVE=1; shift ;;
         -h|--help) usage; exit 0 ;;
@@ -58,6 +69,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 [[ "$UNSIGNED" == 0 || "$SIGN_ONLY" == 0 ]] || { echo "make-dmg: --unsigned and --sign-only do not go together" >&2; exit 2; }
+ICLOUD=1; [[ "$UNSIGNED" == 0 && "$NO_ICLOUD" == 0 ]] || ICLOUD=0
 
 say()  { printf 'make-dmg: %s\n' "$*"; }
 die()  { printf 'make-dmg: %s\n' "$*" >&2; exit 1; }
@@ -93,7 +105,7 @@ fi
 
 step "Checks before building"
 [[ "$(uname -s)" == Darwin ]] || die "run this on a Mac."
-for tool in xcodebuild xcrun codesign hdiutil ditto shasum security plutil git; do
+for tool in xcodebuild xcrun codesign hdiutil ditto shasum security plutil git python3; do
     command -v "$tool" >/dev/null 2>&1 || die "'$tool' is missing. Install Xcode 27 and open it once."
 done
 [[ "$DRY" == 0 ]] || say "dry run: commands are printed, not run."
@@ -131,7 +143,7 @@ say "version $LABEL, build $BUILD_NUMBER"
 
 PREFIX="${OH_BUNDLE_ID_PREFIX:-dev.openhuman}"
 if [[ -f "$ROOT/Apps/Mail/Config/Local.xcconfig" ]]; then
-    say "note: Apps/Mail/Config/Local.xcconfig exists. Its signing settings are overridden here; the bundle id is $PREFIX.mail."
+    say "note: Apps/Mail/Config/Local.xcconfig exists. Its signing settings and OH_ENTITLEMENTS are overridden here; the bundle id is $PREFIX.mail."
 fi
 
 if [[ "$UNSIGNED" == 1 ]]; then
@@ -183,6 +195,32 @@ elif [[ "$UNSIGNED" == 0 ]]; then
     fi
 fi
 
+ICLOUD_ENTITLEMENTS="$ROOT/Apps/Mail/Entitlements/Mail-iCloud.entitlements"
+if [[ "$ICLOUD" == 1 ]]; then
+    step "Provisioning profile (iCloud)"
+    PROFILE="${OH_PROVISIONING_PROFILE:-}"
+    if [[ -z "$PROFILE" ]]; then
+        [[ "$DRY" == 1 ]] || die "set OH_PROVISIONING_PROFILE (in Tools/release/release.env) to the Developer ID provisioning profile you downloaded for $PREFIX.mail (RELEASE-HOWTO, 'iCloud entitlements'), or pass --no-icloud to sign without iCloud."
+        PROFILE="<your-Developer-ID.provisionprofile>"; say "OH_PROVISIONING_PROFILE is not set; the dry run uses a placeholder. A real run stops here."
+    fi
+    CHECK_PROFILE=(python3 -B "$HERE/provisioning.py" --profile "$PROFILE" --entitlements "$ICLOUD_ENTITLEMENTS"
+                   --team "$TEAM" --bundle-id "$PREFIX.mail" --certificate-sha1 "$SIGN_HASH")
+    if [[ "$PROFILE" == "<"* ]]; then
+        :
+    elif [[ ! -f "$PROFILE" ]]; then
+        [[ "$DRY" == 1 ]] || die "OH_PROVISIONING_PROFILE is '$PROFILE', which is not a file. Download the Developer ID profile for $PREFIX.mail and set its path (RELEASE-HOWTO, 'iCloud entitlements')."
+        say "warning: OH_PROVISIONING_PROFILE is '$PROFILE', which is not a file. A real run stops here."
+    elif [[ "$SIGN_HASH" == "<"* ]]; then
+        say "no Developer ID identity, so the dry run does not compare the profile with it. A real run does."
+    elif PROFILE_SAYS="$("${CHECK_PROFILE[@]}" 2>&1)"; then
+        say "$PROFILE_SAYS"
+    else
+        printf '%s\n' "$PROFILE_SAYS" | sed 's/^/  /' >&2
+        [[ "$DRY" == 1 ]] || die "the provisioning profile does not fit this app (above). Nothing was built. Correct the App ID in the developer portal and download its Developer ID profile again (RELEASE-HOWTO, 'iCloud entitlements'), or pass --no-icloud."
+        say "warning: the provisioning profile does not fit this app (above). A real run stops here."
+    fi
+fi
+
 NAME="OpenHuman-Mail-$VERSION"
 OUT="$ROOT/build/release/$NAME-$BUILD_NUMBER"
 [[ "$SIGN_ONLY" == 0 ]] || OUT="$OUT-signed-only"
@@ -200,6 +238,7 @@ if [[ "$UNSIGNED" == 1 ]]; then
 else
     CHECK=("$HERE/check-release.sh" --team "$TEAM" --expect-commit "$STAMP")
 fi
+[[ "$ICLOUD" == 0 ]] || CHECK+=(--icloud)
 [[ "$ALLOW_DIRTY" == 0 ]] || CHECK+=(--allow-dirty)
 
 FREE_GB="$(df -g "$ROOT" | awk 'NR == 2 { print $4 }')"
@@ -243,7 +282,7 @@ fi
 run_logged "$LOGS/archive.log" xcodebuild archive \
     -project "$ROOT/Apps/Mail/Mail.xcodeproj" -scheme Mail -configuration Release \
     -destination 'generic/platform=macOS' -derivedDataPath "$DD" -archivePath "$ARCHIVE" \
-    "${SIGNING[@]}" "OH_BUNDLE_ID_PREFIX=$PREFIX" \
+    "${SIGNING[@]}" "OH_BUNDLE_ID_PREFIX=$PREFIX" OH_ENTITLEMENTS=Entitlements/Mail.entitlements \
     "OH_GIT_COMMIT=$STAMP" "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" "OH_RELEASE_CHANNEL=$CHANNEL"
 need_dir "$ARCHIVE/Products/Applications/OpenHumanMail.app"
 
@@ -260,6 +299,15 @@ else
     run rm -rf "$WORK/export"
 fi
 run rm -rf "$DD"
+
+if [[ "$ICLOUD" == 1 ]]; then
+    step "Embed the provisioning profile and sign the app with the iCloud entitlements"
+    run "${CHECK_PROFILE[@]}" --write "$WORK/Mail-iCloud.entitlements" \
+        || die "the provisioning profile does not fit this app (above). Nothing was sent to Apple."
+    run cp "$PROFILE" "$APP/Contents/embedded.provisionprofile"
+    run codesign --force --sign "$SIGN_HASH" --options runtime --timestamp \
+        --entitlements "$WORK/Mail-iCloud.entitlements" "$APP"
+fi
 
 step "Check the app before anything goes out"
 run "${CHECK[@]}" --pre-notarization "$APP" || die "the app failed the checks above. Nothing was sent to Apple."
@@ -304,6 +352,7 @@ if [[ "$DRY" == 1 ]]; then
     run "$HERE/check-release.sh" "$OUT/release-info.txt"
     step "Dry run finished"
     say "nothing was built, signed or sent. Not tested by a dry run: whether the Release archive builds and signs (that needs Xcode 27, at least 6 GB of disk and, for a signed build, your Developer ID certificate)."
+    [[ "$ICLOUD" == 0 ]] || say "Not tested by any run here: whether macOS accepts the embedded provisioning profile when the app launches. Open the first such build on another Mac."
     exit 0
 fi
 (cd "$OUT" && shasum -a 256 "$NAME.dmg" >"$NAME.dmg.sha256")
@@ -318,6 +367,7 @@ DR="$({ codesign -d -r- "$APP" 2>&1 || true; } | sed -n 's/^designated => //p')"
     echo "commit=$STAMP"
     echo "bundle_id=$PREFIX.mail"
     if [[ "$UNSIGNED" == 1 ]]; then echo "signing=ad-hoc"; else echo "signing=developer-id"; fi
+    if [[ "$ICLOUD" == 1 ]]; then echo "icloud=yes"; else echo "icloud=no"; fi
     echo "team=${TEAM:-none}"
     if [[ "$SIGN_ONLY" == 0 && "$UNSIGNED" == 0 ]]; then echo "notarized=yes"; else echo "notarized=no"; fi
     echo "notary_app=$APP_SUBMISSION"

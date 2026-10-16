@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-ENTITLEMENTS_SOURCE="$ROOT/Apps/Mail/Entitlements/Mail.entitlements"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
+DEFAULT_ENTITLEMENTS="$ROOT/Apps/Mail/Entitlements/Mail.entitlements"
+ICLOUD_SOURCE="$ROOT/Apps/Mail/Entitlements/Mail-iCloud.entitlements"
 
 usage() {
     cat <<'EOF'
@@ -10,6 +12,8 @@ Usage: Tools/release/check-release.sh [options] <path.app | path.dmg | path/rele
 Checks a release build of OpenHuman Mail: the early development marker, signature, hardened
 runtime, entitlements, no baked-in OAuth client, no developer switches or sample-data launch
 arguments anywhere in the app, notarization ticket and Gatekeeper (docs/release/RELEASE-HOWTO.md).
+An entitlement that needs a provisioning profile (iCloud, push, keychain groups) must be granted
+by the profile embedded in the app, for the app's team, App ID and signing certificate.
 Read-only: it never signs, submits or changes what it checks.
 A .dmg is attached read-only and hidden from Finder, checked (with the app inside it), then
 detached. A release-info.txt (written by make-dmg.sh) is checked for the marker, and so are the
@@ -20,6 +24,10 @@ release-notes.md beside it.
   --unsigned             an unsigned build (make-dmg.sh --unsigned): the app is ad-hoc signed
                          and nothing is notarized, so skip the Developer ID, timestamp,
                          hardened runtime and notarization checks. Everything else still runs
+  --icloud               the app must be signed with the iCloud entitlements
+                         (Apps/Mail/Entitlements/Mail-iCloud.entitlements) and embed the
+                         provisioning profile that grants them. make-dmg.sh passes it unless it
+                         builds with --unsigned or --no-icloud
   --team <TEAMID>        the signatures must carry this team id (default: any Developer ID
                          team, the same everywhere)
   --expect-commit <sha>  Info.plist OHGitCommit must equal this (make-dmg.sh passes the commit
@@ -38,8 +46,11 @@ EOF
 RELEASE_CHANNEL="early-development"
 NOTES_MARKER="Early development build"
 
-# Empty on purpose: add a key here only together with the same key in Mail.entitlements
-ALLOWED_ENTITLEMENTS=""
+# Only Mail-iCloud.entitlements may ask for these, and only with an embedded profile that grants them
+ICLOUD_ENTITLEMENTS="com.apple.developer.aps-environment com.apple.developer.icloud-container-environment"
+ICLOUD_ENTITLEMENTS+=" com.apple.developer.icloud-container-identifiers com.apple.developer.icloud-services"
+ICLOUD_ENTITLEMENTS+=" keychain-access-groups"
+ALLOWED_ENTITLEMENTS="$ICLOUD_ENTITLEMENTS"
 IDENTITY_ENTITLEMENTS="com.apple.application-identifier com.apple.developer.team-identifier"
 
 # Only Debug and DevTools builds may carry these; a Release build compiles them out
@@ -48,11 +59,12 @@ OPENHUMAN_SAFE_MODE write-allowlist OPENHUMAN_DEV_FEEDBACK OPENHUMAN_DEVELOPER O
 OPENHUMAN_OAUTH_CLIENT_JSON OPENHUMAN_INSECURE_FILE_TOKENS OPENHUMAN_STORE_POLL_ONLY OPENHUMAN_FEEDBACK_DIR
 fake-gmail-access-token OpenHumanMail-FakeGmail-"
 
-PRE=0; UNSIGNED=0; TEAM=""; EXPECT_COMMIT=""; ALLOW_DIRTY=0; TARGETS=(); RELEASES=()
+PRE=0; UNSIGNED=0; EXPECT_ICLOUD=0; TEAM=""; EXPECT_COMMIT=""; ALLOW_DIRTY=0; TARGETS=(); RELEASES=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --pre-notarization) PRE=1; shift ;;
         --unsigned) UNSIGNED=1; PRE=1; shift ;;
+        --icloud) EXPECT_ICLOUD=1; shift ;;
         --team) TEAM="${2:-}"; shift 2 ;;
         --expect-commit) EXPECT_COMMIT="${2:-}"; shift 2 ;;
         --allow-dirty) ALLOW_DIRTY=1; shift ;;
@@ -66,6 +78,8 @@ done
 [[ ${#TARGETS[@]} -gt 0 || ${#RELEASES[@]} -gt 0 ]] \
     || { echo "check-release: give a .app, .dmg or release-info.txt to check, or --github-release (see --help)" >&2; exit 2; }
 [[ "$UNSIGNED" == 0 || -z "$TEAM" ]] || { echo "check-release: --unsigned builds carry no team, so --team does not apply" >&2; exit 2; }
+[[ "$UNSIGNED" == 0 || "$EXPECT_ICLOUD" == 0 ]] \
+    || { echo "check-release: --unsigned builds carry no iCloud entitlements, so --icloud does not apply" >&2; exit 2; }
 
 FAILS=0; WARNS=0; MOUNTS=""
 ok()   { printf '  ok    %s\n' "$*"; }
@@ -92,32 +106,90 @@ signed_entitlement_keys() {
     return 0
 }
 
+needs_profile() { [[ "$1" != com.apple.security.* ]]; }
+
 check_entitlements_source() {
-    [[ -f "$ENTITLEMENTS_SOURCE" ]] || return 0
-    local keys key
-    keys="$(plist_keys "$ENTITLEMENTS_SOURCE")"
-    if [[ -z "$keys" ]]; then
-        ok "entitlements file Apps/Mail/Entitlements/Mail.entitlements: no keys"
-        return 0
+    local keys key before
+    if [[ -f "$DEFAULT_ENTITLEMENTS" ]]; then
+        keys="$(plist_keys "$DEFAULT_ENTITLEMENTS")"
+        for key in $keys; do
+            bad "entitlements file Apps/Mail/Entitlements/Mail.entitlements asks for $key. It must stay empty: ad-hoc, CI and contributor builds sign with it and have no provisioning profile"
+        done
+        [[ -n "$keys" ]] || ok "entitlements file Apps/Mail/Entitlements/Mail.entitlements: no keys"
     fi
-    note "entitlements file Apps/Mail/Entitlements/Mail.entitlements lists:"
-    for key in $keys; do
-        if has_word "$ALLOWED_ENTITLEMENTS" "$key"; then note "  $key (allowed)"
-        else bad "entitlements file asks for $key, which ALLOWED_ENTITLEMENTS in $0 does not allow"; fi
+    [[ -f "$ICLOUD_SOURCE" ]] || return 0
+    before="$FAILS"
+    for key in $(plist_keys "$ICLOUD_SOURCE"); do
+        has_word "$ALLOWED_ENTITLEMENTS $IDENTITY_ENTITLEMENTS" "$key" \
+            || bad "entitlements file Apps/Mail/Entitlements/Mail-iCloud.entitlements asks for $key, which ALLOWED_ENTITLEMENTS in $0 does not allow"
     done
+    [[ "$FAILS" != "$before" ]] || ok "entitlements file Apps/Mail/Entitlements/Mail-iCloud.entitlements: only allowed keys"
 }
 
+APP_KEYS=""
 check_signed_entitlements() {
-    local code="$1" label="$2" keys key
+    local code="$1" label="$2" main="$3" keys key
     keys="$(signed_entitlement_keys "$code")"
+    [[ "$main" == 0 ]] || APP_KEYS=" $(printf '%s ' $keys)"
     if [[ -z "$keys" ]]; then ok "$label: no entitlements in the signature"; return 0; fi
     for key in $keys; do
         if [[ "$key" == com.apple.security.get-task-allow ]]; then
             bad "$label: signed with com.apple.security.get-task-allow (debugger attach). Never in a release. Apple's notary service refuses it"
-        elif has_word "$ALLOWED_ENTITLEMENTS" "$key"; then ok "$label: entitlement $key (allowed)"
-        elif has_word "$IDENTITY_ENTITLEMENTS" "$key"; then note "$label: identity entry $key (names the signer, grants nothing)"
+        elif has_word "$ALLOWED_ENTITLEMENTS" "$key"; then
+            if [[ "$main" == 1 ]]; then ok "$label: entitlement $key (allowed)"
+            else bad "$label: entitlement $key needs a provisioning profile; only the app itself may carry it"; fi
+        elif has_word "$IDENTITY_ENTITLEMENTS" "$key"; then note "$label: identity entry $key (ties the signature to its provisioning profile)"
         else bad "$label: entitlement $key is broader than this app needs (ALLOWED_ENTITLEMENTS in $0)"; fi
     done
+}
+
+check_profile() {
+    local app="$1" plist="$1/Contents/Info.plist" profile="$1/Contents/embedded.provisionprofile" needs="" key
+    local team tmp out rc=0 line group granted cert=()
+    for key in $APP_KEYS; do
+        if needs_profile "$key"; then needs="$needs $key"; fi
+    done
+    if [[ "$EXPECT_ICLOUD" == 1 ]]; then
+        for key in $ICLOUD_ENTITLEMENTS $IDENTITY_ENTITLEMENTS; do
+            has_word "$APP_KEYS" "$key" || bad "app: built for iCloud, but the signature lacks $key"
+        done
+        [[ -f "$profile" ]] || bad "app: built for iCloud, but Contents/embedded.provisionprofile is missing"
+    fi
+    if [[ -z "$needs" ]]; then
+        if [[ -f "$profile" ]]; then warn "app: embeds a provisioning profile that no entitlement needs (macOS still checks it at every launch)"
+        else ok "app: no entitlement needs a provisioning profile"; fi
+        return 0
+    fi
+    if [[ "$UNSIGNED" == 1 ]]; then
+        bad "app: signed with${needs}, which need a provisioning profile. An ad-hoc signed app cannot have one: leave them out (make-dmg.sh --unsigned does)"
+        return 0
+    fi
+    if [[ ! -f "$profile" ]]; then
+        [[ "$EXPECT_ICLOUD" == 1 ]] || bad "app: signed with${needs}, which need a provisioning profile, but Contents/embedded.provisionprofile is missing. macOS would refuse to launch it"
+        return 0
+    fi
+    team="$TEAM"
+    [[ -n "$team" ]] || team="$({ codesign -dvvv "$app" 2>&1 || true; } | sed -n 's/^TeamIdentifier=//p' | head -1)"
+    if [[ -z "$team" || "$team" == "not set" ]]; then bad "app: the provisioning profile cannot be compared: the signature names no team"; return 0; fi
+    command -v python3 >/dev/null 2>&1 || { bad "app: python3 is needed to compare the provisioning profile"; return 0; }
+    tmp="$(mktemp -d)"
+    codesign -d --entitlements - --xml "$app" >"$tmp/entitlements.plist" 2>/dev/null || true
+    codesign -d --extract-certificates="$tmp/certificate" "$app" >/dev/null 2>&1 || true
+    if [[ -f "$tmp/certificate0" ]]; then cert=(--certificate "$tmp/certificate0")
+    else note "app: signing certificate not compared with the profile (the signature has none)"; fi
+    out="$(python3 -B "$HERE/provisioning.py" --profile "$profile" --entitlements "$tmp/entitlements.plist" --team "$team" \
+        --bundle-id "$(plist_value "$plist" CFBundleIdentifier)" ${cert[@]+"${cert[@]}"} 2>&1)" || rc=$?
+    if [[ "$rc" == 0 ]]; then ok "app: embedded $out"
+    else
+        while IFS= read -r line; do [[ -z "$line" ]] || bad "app: provisioning profile: $line"; done <<<"$out"
+    fi
+    if has_word "$APP_KEYS" keychain-access-groups; then
+        group="$(plist_value "$plist" OHKeychainAccessGroup)"
+        granted="$(plutil -extract keychain-access-groups json -o - "$tmp/entitlements.plist" 2>/dev/null || true)"
+        if [[ -n "$group" && "$granted" == *"\"$group\""* ]]; then ok "app: Info.plist OHKeychainAccessGroup $group is granted by the signature"
+        else bad "app: Info.plist OHKeychainAccessGroup is '${group:-missing}', which keychain-access-groups ($granted) does not grant. The app would keep its Keychain items unshared"; fi
+    fi
+    rm -rf "$tmp"
 }
 
 check_developer_names() {
@@ -206,7 +278,8 @@ check_app() {
 
     check_signature "$app" "app" 1
     check_entitlements_source
-    check_signed_entitlements "$app" "app"
+    check_signed_entitlements "$app" "app" 1
+    check_profile "$app"
 
     nested="$(mktemp)"
     find "$app/Contents" -type f \( -perm -u+x -o -name '*.dylib' -o -name '*.so' \) ! -path "$exe" >"$nested" 2>/dev/null || true
@@ -216,7 +289,7 @@ check_app() {
         case "$desc" in *Mach-O*) ;; *) continue ;; esac
         count=$((count + 1)); rel="${f#"$app"/}"
         case "$desc" in *executable*) check_signature "$f" "$rel" 1 ;; *) check_signature "$f" "$rel" 0 ;; esac
-        check_signed_entitlements "$f" "$rel"
+        check_signed_entitlements "$f" "$rel" 0
     done <"$nested"
     rm -f "$nested"
     if [[ "$count" == 0 ]]; then ok "no nested code besides the main executable (the packages link statically)"
