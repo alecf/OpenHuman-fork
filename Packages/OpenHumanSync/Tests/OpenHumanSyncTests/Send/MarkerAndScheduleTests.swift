@@ -7,6 +7,8 @@ import Testing
 @testable import OpenHumanSync
 
 @Suite struct MarkerAndScheduleTests {
+    static let agentHeaders = ["X-OpenHuman-Origin": "cli"]
+
     static func content(_ text: String) -> DraftContent {
         DraftContent(to: [EmailAddress(email: "bob@example.com")], cc: [], bcc: [], subject: "Synthetic draft",
                      bodyHTML: "<p>\(text)</p>", attachments: [])
@@ -25,7 +27,54 @@ import Testing
         return (id, message)
     }
 
+    static func agentDraft(_ h: WriteHarness, drainer: OperationDrainer, imported: Bool,
+                           origin: DraftOrigin = .cli) async throws -> DraftID {
+        if imported { return try await agentDraftOnGmail(h, origin: origin.rawValue).id }
+        let id = try h.newDraft(origin: origin, review: .pending, headers: ["X-OpenHuman-Origin": origin.rawValue])
+        try await h.upload(id, drainer: drainer)
+        return id
+    }
+
     @Test func anAgentDraftKeepsItsMarkersUntilTheUserSendsItAndNoRecipientSeesThem() async throws {
+        let h = try await WriteHarness(clock: sendClock())
+        let drainer = h.drainer(api: try h.client)
+        let id = try h.newDraft(origin: .cli, review: .pending, headers: Self.agentHeaders)
+        var draft = try await h.upload(id, drainer: drainer)
+        let first = try #require(draft.gmailMessageID)
+        #expect(lines(h.uploads()[0].raw, startingWith: "x-openhuman-origin:") == ["X-OpenHuman-Origin: cli"])
+        #expect(await h.labelNames(ofMessage: first.rawValue).contains(OHGmailLabels.agent))
+
+        _ = try h.store.updateAgentDraft(id, content: Self.content("Second take"), agentNote: "again")
+        draft = try await h.upload(id, drainer: drainer)
+        let second = try #require(draft.gmailMessageID)
+        #expect(second != first && draft.reviewState == .pending)
+        #expect(await h.labelNames(ofMessage: second.rawValue).contains(OHGmailLabels.agent))
+        #expect(lines(try await h.rawOnGmail(second.rawValue), startingWith: "x-openhuman-origin:") == ["X-OpenHuman-Origin: cli"])
+        #expect(await h.gmail.labelIDs(ofMessage: first.rawValue) == nil)
+        #expect(await h.gmail.callCount(.sendDraft) == 0)
+
+        let receipt = try h.store.send(id, undoWindow: .zero, origin: .app)
+        h.advancePast(receipt)
+        await drainer.drainOnce()
+        let requests = h.wire.requests
+        let sendAt = try #require(requests.firstIndex { $0.url.path() == "/gmail/v1/users/me/drafts/send" })
+        let finalUpload = try #require(requests[..<sendAt].last { $0.url.path().hasPrefix("/upload/gmail/v1/users/me/drafts") })
+        #expect(finalUpload.method == "PUT")
+        #expect(lines(String(decoding: finalUpload.body ?? Data(), as: UTF8.self), startingWith: "x-openhuman-").isEmpty)
+        let deliveries = await h.gmail.deliveries()
+        #expect(!deliveries.isEmpty)
+        for delivery in deliveries {
+            #expect(lines(String(decoding: delivery.raw, as: UTF8.self), startingWith: "x-openhuman-").isEmpty)
+        }
+        let sent = try #require(try await h.sentOnGmail().first)
+        #expect(!(await h.labelNames(ofMessage: sent)).contains(OHGmailLabels.agent))
+        #expect(lines(try await h.rawOnGmail(sent), startingWith: "x-openhuman-").isEmpty)
+        draft = try h.draft(id)
+        #expect(draft.state == .sent && draft.origin == .cli)
+        #expect(draft.extraHeaders["X-OpenHuman-Origin"] == "cli")
+    }
+
+    @Test func aMarkedDraftFromAnotherInstallKeepsItsMarkersUntilTheUserSendsIt() async throws {
         let h = try await WriteHarness(clock: sendClock())
         let drainer = h.drainer(api: try h.client)
         let (id, first) = try await Self.agentDraftOnGmail(h)
@@ -56,11 +105,54 @@ import Testing
         #expect(draft.extraHeaders["X-OpenHuman-Origin"] == "cli")
     }
 
-    @Test func anAmbiguousStripStillSendsOnceAndCleanly() async throws {
+    @Test func anAgentRewriteAfterApprovalGoesBackToReviewMarkedAndOnlyTheAppSendsIt() async throws {
+        let h = try await WriteHarness(clock: sendClock())
+        let drainer = h.drainer(api: try h.client)
+        let id = try h.newDraft(origin: .cli, review: .pending, headers: Self.agentHeaders)
+        let first = try #require(try await h.upload(id, drainer: drainer).gmailMessageID).rawValue
+
+        try h.store.setReviewState(id, .approved)
+        let approved = try #require(try h.ops([.pending]).first { $0.kind == .upsertDraft })
+        #expect(approved.origin == .app)
+        _ = try h.store.updateAgentDraft(id, content: Self.content("Rewritten after approval"), agentNote: "again")
+        #expect(try h.store.saveDraftRemotely(id) == approved.id)
+        #expect(try h.store.operation(approved.id)?.origin == .app)
+        await drainer.drainOnce()
+        #expect(try h.ops([.pending, .inFlight, .failed]).isEmpty)
+
+        let draft = try h.draft(id)
+        #expect(draft.reviewState == .pending && !draft.isDirty)
+        #expect(draft.content.bodyHTML.contains("Rewritten after approval"))
+        let second = try #require(draft.gmailMessageID).rawValue
+        #expect(second != first)
+        #expect(lines(try await h.rawOnGmail(second), startingWith: "x-openhuman-origin:") == ["X-OpenHuman-Origin: cli"])
+        #expect(await h.labelNames(ofMessage: second).contains(OHGmailLabels.agent))
+        #expect(try h.store.reviewQueue(account: h.account).map(\.id) == [id])
+
+        #expect(throws: StoreError.self) { _ = try h.store.send(id, undoWindow: .zero, origin: .cli) }
+        #expect(throws: StoreError.self) { _ = try h.store.send(id, undoWindow: .zero, origin: .agent) }
+        #expect(throws: StoreError.self) { try h.store.scheduleSend(id, at: Date().addingTimeInterval(86_400)) }
+        #expect(try h.ops([.pending]).isEmpty)
+        #expect(await h.gmail.callCount(.sendDraft) == 0)
+        #expect(try await h.sentOnGmail().isEmpty)
+
+        let receipt = try h.store.send(id, undoWindow: .zero, origin: .app)
+        #expect(try h.draft(id).reviewState == .approved)
+        h.advancePast(receipt)
+        await drainer.drainOnce()
+        #expect(try h.store.operation(receipt.sendOperationID)?.status == .succeeded)
+        #expect(await h.gmail.callCount(.sendDraft) == 1)
+        let sent = try #require(try await h.sentOnGmail().first)
+        #expect(lines(try await h.rawOnGmail(sent), startingWith: "x-openhuman-").isEmpty)
+        #expect(!(await h.labelNames(ofMessage: sent)).contains(OHGmailLabels.agent))
+    }
+
+    @Test(arguments: [false, true])
+    func anAmbiguousStripStillSendsOnceAndCleanly(imported: Bool) async throws {
         let h = try await WriteHarness(clock: sendClock())
         let probe = ProbeGmail(h.gmail)
         let drainer = h.drainer(api: probe)
-        let (id, _) = try await Self.agentDraftOnGmail(h)
+        let id = try await Self.agentDraft(h, drainer: drainer, imported: imported)
         let receipt = try h.store.send(id, undoWindow: .zero, origin: .app)
         await h.gmail.ambiguousFailureAfterCommit(.updateDraft)
         h.advancePast(receipt)
@@ -80,12 +172,15 @@ import Testing
         #expect(try h.draft(id).origin == .cli && h.draft(id).state == .sent)
     }
 
-    @Test func approvingAnAgentDraftDropsBothMarkersOnTheNextUpload() async throws {
+    @Test(arguments: [false, true])
+    func approvingAnAgentDraftDropsBothMarkersOnTheNextUpload(imported: Bool) async throws {
         let h = try await WriteHarness(clock: sendClock())
         let drainer = h.drainer(api: h.gmail)
-        let (id, first) = try await Self.agentDraftOnGmail(h, origin: "agent")
+        let id = try await Self.agentDraft(h, drainer: drainer, imported: imported, origin: .agent)
+        let first = try #require(try h.draft(id).gmailMessageID).rawValue
         #expect(try h.draft(id).origin == .agent && h.draft(id).reviewState == .pending)
         #expect(await h.labelNames(ofMessage: first).contains(OHGmailLabels.agent))
+        #expect(lines(try await h.rawOnGmail(first), startingWith: "x-openhuman-origin:") == ["X-OpenHuman-Origin: agent"])
         try h.store.setReviewState(id, .approved)
         await drainer.drainOnce()
         let draft = try h.draft(id)

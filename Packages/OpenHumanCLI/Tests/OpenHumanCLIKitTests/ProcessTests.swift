@@ -106,7 +106,7 @@ enum ChildProcess {
         let draft = try ChildProcess.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "x",
                                           "--wait", "--timeout", "3600s"], environment: write)
         #expect(draft.code == 6)
-        #expect(draft.err.contains("Saved locally. OpenHuman Mail uploads an agent draft to Gmail only after you approve it there."))
+        #expect(draft.err.contains("Saved locally. OpenHuman Mail adds it to your Gmail Drafts for review when it runs."))
         #expect(!draft.err.contains("within the timeout"))
         #expect(try h.operations().count == 1)
     }

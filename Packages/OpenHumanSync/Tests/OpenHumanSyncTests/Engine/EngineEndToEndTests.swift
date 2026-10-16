@@ -70,7 +70,7 @@ import Testing
         #expect(try store.lease(account: account.id) == nil)
     }
 
-    @Test func aLocalClientsAgentDraftReachesGmailOnlyAfterTheUserReviewsIt() async throws {
+    @Test func aLocalClientsAgentDraftReachesGmailDraftsMarkedAndOnlyTheAppSendsIt() async throws {
         let h = try await EngineHarness(onDisk: true)
         defer { h.cleanup() }
         let directory = try #require(h.directory)
@@ -78,28 +78,47 @@ import Testing
                                                        appVersion: "0.0.0-test",
                                                        changeNotificationName: "dev.openhuman.test.\(UUID().uuidString)"))
         let cli = h.engine(role: .localClient, factory: .some(nil), store: cliStore)
-        let content = DraftContent(to: [EmailAddress(email: "bob@example.invalid")], cc: [], bcc: [], subject: "From an agent",
-                                   bodyHTML: "<p>Synthetic agent text.</p>", attachments: [])
+        let probe = ProbeGmail(h.gmail)
+        let drainer = OperationDrainer(account: h.account, store: h.store, api: probe, clock: h.clock, ownerID: "test-app")
+        var content = DraftContent(to: [EmailAddress(email: "bob@example.invalid")], cc: [], bcc: [], subject: "From an agent",
+                                   bodyHTML: "<p>Synthetic first pass.</p>", attachments: [])
         let draft = try await cli.createAgentDraft(account: h.account, mode: .new, replyTo: nil, content: content,
                                                    note: "please review", origin: .cli)
         let upload = try #require(try h.store.operations(account: h.account, statuses: [.pending], limit: 10).first)
         #expect(upload.kind == .upsertDraft && upload.origin == .cli)
         #expect(try h.store.lease(account: h.account) == nil)
 
-        let app = h.engine()
-        await app.start()
-        try await eventually("the app's drainer refused it") { try h.store.operation(upload.id)?.status == .failed }
-        #expect(try h.store.operation(upload.id)?.lastErrorCode == "not_applied_outside_app")
-        #expect(await h.gmail.callCount(.createDraft) == 0)
-        #expect(await h.gmail.callCount(.updateDraft) == 0)
-        #expect(try h.store.reviewQueue(account: h.account).map(\.id) == [draft])
-        #expect(try h.store.draft(draft)?.gmailDraftID == nil)
+        await drainer.drainOnce()
+        #expect(try h.store.operation(upload.id)?.status == .succeeded)
+        let first = try #require(try h.store.draft(draft)?.gmailMessageID).rawValue
+        #expect(await h.labelNames(ofMessage: first).contains(OHGmailLabels.agent))
+        #expect(lines(try await h.rawOnGmail(first), startingWith: "x-openhuman-origin:") == ["X-OpenHuman-Origin: cli"])
 
-        try await app.setReviewState(draft, .approved)
-        try await app.flushDraft(draft)
-        try await eventually("uploaded after review") { try h.store.draft(draft)?.gmailDraftID != nil }
+        content.bodyHTML = "<p>Synthetic second pass.</p>"
+        try await cli.updateAgentDraft(draft, content: content, note: nil)
+        await drainer.drainOnce()
+        let second = try #require(try h.store.draft(draft)?.gmailMessageID).rawValue
+        #expect(second != first)
+        #expect(await h.labelNames(ofMessage: second).contains(OHGmailLabels.agent))
+        #expect(lines(try await h.rawOnGmail(second), startingWith: "x-openhuman-origin:") == ["X-OpenHuman-Origin: cli"])
+        #expect(await h.gmail.labelIDs(ofMessage: first) == nil)
+        #expect(try h.store.reviewQueue(account: h.account).map(\.id) == [draft])
+        #expect(try h.store.operations(account: h.account, statuses: [.pending, .inFlight, .failed], limit: 10).isEmpty)
+        await #expect(throws: EngineError.sendNotAllowed) {
+            _ = try await cli.send(draft, authorization: .userConfirmed, undoWindow: nil)
+        }
         #expect(await h.gmail.callCount(.sendDraft) == 0)
-        await app.stop()
+
+        let app = h.engine(factory: FixedGmailFactory(api: probe))
+        let receipt = try await app.send(draft, authorization: .userConfirmed, undoWindow: .zero)
+        h.advancePast(receipt)
+        await drainer.drainOnce()
+        #expect(try h.store.operation(receipt.sendOperationID)?.status == .succeeded)
+        #expect(await h.gmail.callCount(.sendDraft) == 1)
+        try await h.expectOneCleanSentMessage("an agent draft the user sent")
+        #expect(lines(try #require(probe.lastUploadBeforeSend), startingWith: "x-openhuman-").isEmpty)
+        let sent = try #require(try h.store.draft(draft))
+        #expect(sent.state == .sent && sent.origin == .cli && sent.extraHeaders["X-OpenHuman-Origin"] == "cli")
         try cliStore.close()
     }
 }

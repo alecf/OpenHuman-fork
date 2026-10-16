@@ -119,7 +119,7 @@ enum DraftSupport {
         return account
     }
 
-    static let queuedNote = "Saved locally. OpenHuman Mail uploads an agent draft to Gmail only after you approve it there."
+    static let queuedNote = "Saved locally. OpenHuman Mail adds it to your Gmail Drafts for review when it runs."
 
     static func settle(_ ctx: CLIContext, engine: MailEngine, accounts: [AccountItem], ids: [OperationID], wait: Bool,
                        note: String) async -> (status: String, exit: CLIStatus, notes: [String]) {
@@ -374,7 +374,7 @@ struct DraftsDelete: CLICommand {
     @Argument(help: "Draft id (local UUID or Gmail draft id).") var draftId: String
     @Flag(name: .long, help: "Confirm under --no-input.") var yes = false
 
-    static let queuedNote = "Deleted here. Mail by OpenHuman removes the Gmail copy only after you reviewed the draft there."
+    static let queuedNote = "Deleted here. Mail by OpenHuman removes it from your Gmail Drafts when it runs."
 
     func handle(_ ctx: CLIContext) async throws -> CommandResult {
         let draft = try DraftSupport.find(draftId, ctx)
