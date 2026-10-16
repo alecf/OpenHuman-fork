@@ -185,12 +185,34 @@ public struct AISettings: Sendable, Hashable, Codable {
         autoDraftReplies = (try? c.decodeIfPresent(Bool.self, forKey: .autoDraftReplies)) ?? d.autoDraftReplies
         smartSearch = (try? c.decodeIfPresent(SmartSearchSettings.self, forKey: .smartSearch)) ?? d.smartSearch
         classifier = (try? c.decodeIfPresent(ClassifierPreference.self, forKey: .classifier)) ?? d.classifier
+        if classifier == .localModel, selectedLocalModel == nil {
+            selectedLocalModel = AIModelDefaults.localModelBeforeChoicesWereRecorded
+        }
         localClassifierInLowPowerMode = (try? c.decodeIfPresent(Bool.self, forKey: .localClassifierInLowPowerMode))
             ?? d.localClassifierInLowPowerMode
         modelsDirectory = (try? c.decodeIfPresent(String.self, forKey: .modelsDirectory)) ?? d.modelsDirectory
         aboutMe = (try? c.decodeIfPresent(String.self, forKey: .aboutMe)) ?? d.aboutMe
         writingInstructions = (try? c.decodeIfPresent(String.self, forKey: .writingInstructions)) ?? d.writingInstructions
         traces = (try? c.decodeIfPresent(AITraceSettings.self, forKey: .traces)) ?? d.traces
+    }
+
+    public mutating func useClassifier(_ id: AIProviderID) {
+        featurePins[.classify] = nil
+        selectedLocalModel = id.localModelID
+        classifier = selectedLocalModel == nil ? .appleModel : .localModel
+    }
+
+    public func retiringLocalModels(_ retired: Set<String> = AIModelDefaults.retiredLocalModels) -> AISettings {
+        func isRetired(_ id: AIProviderID) -> Bool { id.localModelID.map { retired.contains($0) } ?? false }
+        var next = self
+        if let model = selectedLocalModel, retired.contains(model) {
+            next.selectedLocalModel = nil
+            next.classifier = .appleModel
+        }
+        next.featurePins = featurePins.filter { !isRetired($0.value) }
+        next.providerOrder = providerOrder.filter { !isRetired($0) }
+        next.consents = consents.filter { !isRetired($0.key) }
+        return next
     }
 }
 

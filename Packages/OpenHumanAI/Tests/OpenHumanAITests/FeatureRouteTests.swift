@@ -91,6 +91,45 @@ import Testing
         #expect(missing.selection.candidate == nil, "never the language model instead")
     }
 
+    @Test func triageAndAutoLabelsDefaultToApplesModelWithMailsRules() {
+        #expect(AISettings().classifier == .appleModel && AISettings().selectedLocalModel == nil)
+        #expect(AIModelDefaults.pins[.classify] == .appleSystemClassifier)
+        let rules = ClassificationConfig.shipped.defaultRules
+        #expect(!rules.isEmpty && rules.allSatisfy(\.enabled), "the rules layer is on by default")
+    }
+
+    @Test func choosingAClassifierRecordsWhichModel() {
+        var settings = AISettings()
+        settings.featurePins[.classify] = .appleSystemClassifier
+        settings.useClassifier("local.tiny.classifier")
+        #expect(settings.classifier == .localModel && settings.selectedLocalModel == "tiny")
+        #expect(settings.featurePins[.classify] == nil)
+        let chosen = route(.classify, [Self.downloadedClassifier, Self.appleClassifier], settings, workload: .background)
+        #expect(chosen.origin == .yourChoice && chosen.selection.candidate?.id == "local.tiny.classifier")
+        settings.useClassifier(.appleSystemClassifier)
+        #expect(settings.classifier == .appleModel && settings.selectedLocalModel == nil)
+    }
+
+    @Test func localModelIDsReadBackFromProviderIDs() {
+        #expect(AIProviderID("local.qwen3.5-9b-optiq-4bit.classifier").localModelID == "qwen3.5-9b-optiq-4bit")
+        #expect(AIProviderID.local("small").localModelID == "small")
+        #expect(AIProviderID.appleSystemClassifier.localModelID == nil)
+        #expect(AIProviderID("local.").localModelID == nil)
+    }
+
+    @Test func retiringRemovesOnlyRetiredLocalModels() {
+        var settings = AISettings()
+        settings.useClassifier("local.old.classifier")
+        settings.featurePins[.summarize] = .local("old")
+        settings.featurePins[.rewrite] = .local("small")
+        settings.providerOrder = [.local("old"), .local("small"), .appleSystem]
+        let retired = settings.retiringLocalModels(["old"])
+        #expect(retired.classifier == .appleModel && retired.selectedLocalModel == nil)
+        #expect(retired.featurePins == [.rewrite: .local("small")])
+        #expect(retired.providerOrder == [.local("small"), .appleSystem])
+        #expect(settings.retiringLocalModels(["other"]) == settings)
+    }
+
     @Test func theFeatureSwitchComesBeforeTheModel() {
         let chosen = route(.summarize, [Self.system], AISettings(enabled: false))
         #expect(chosen.selection == .unavailable(.disabledBySettings, providerID: nil) && chosen.choice == .appleSystem)

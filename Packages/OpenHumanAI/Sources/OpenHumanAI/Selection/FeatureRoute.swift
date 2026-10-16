@@ -12,6 +12,11 @@ public enum AIModelDefaults {
         .scheduling: .appleSystem,
     ]
 
+    public static let retiredLocalModels: Set<String> = ["qwen3-1.7b-4bit"]
+
+    // Settings saved before the chosen local model was recorded could only mean this one.
+    public static let localModelBeforeChoicesWereRecorded = "qwen3-1.7b-4bit"
+
     public static func model(for feature: AIFeature, among candidates: [ProviderCandidate]) -> AIProviderID? {
         guard let pinned = pins[feature] else { return nil }
         let kind: ProviderCandidate.Kind = feature == .classify ? .classifier : .languageModel

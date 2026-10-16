@@ -18,20 +18,32 @@ public struct LocalClassifierGate: Sendable {
     public static let minimumMemoryBytes: UInt64 = 8 * 1_073_741_824
 
     public let conditions: any MachineConditions
+    public let requiredMemoryBytes: UInt64
     public let allowsLowPowerMode: @Sendable () -> Bool
 
     public init(conditions: any MachineConditions = SystemMachineConditions(),
+                requiredMemoryBytes: UInt64 = LocalClassifierGate.minimumMemoryBytes,
                 allowsLowPowerMode: @escaping @Sendable () -> Bool = { false }) {
         self.conditions = conditions
+        self.requiredMemoryBytes = requiredMemoryBytes
         self.allowsLowPowerMode = allowsLowPowerMode
     }
 
-    public static let lowPowerReason = "Paused in Low Power Mode. You can allow it in Settings › AI › Classifier."
+    public static let lowPowerReason =
+        "Paused in Low Power Mode. You can allow it in Settings › AI › High-accuracy model."
     public static let heatReason = "Paused while this Mac is hot."
-    public static let memoryReason = "Needs a Mac with at least 8 GB of memory."
+    public static let memoryReason = needsMemoryText(minimumMemoryBytes)
+
+    public static func needsMemoryText(_ bytes: UInt64) -> String {
+        "Needs a Mac with at least \(bytes / 1_073_741_824) GB of memory."
+    }
+
+    public var memoryShortfall: String? {
+        conditions.physicalMemoryBytes < requiredMemoryBytes ? Self.needsMemoryText(requiredMemoryBytes) : nil
+    }
 
     public func blockingReason() -> String? {
-        if conditions.physicalMemoryBytes < Self.minimumMemoryBytes { return Self.memoryReason }
+        if let memoryShortfall { return memoryShortfall }
         switch conditions.thermalState {
         case .serious, .critical: return Self.heatReason
         default: break

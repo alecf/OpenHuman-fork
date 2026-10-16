@@ -189,11 +189,30 @@ import Testing
         #expect(choice.chosen == .appleSystemClassifier && choice.why == "Mail's default · on this Mac")
         await choice.choose("local.tiny.classifier")
         #expect(center.settings.classifier == .localModel && center.settings.featurePins[.classify] == nil)
+        #expect(center.settings.selectedLocalModel == "tiny")
         #expect(choice.chosen == "local.tiny.classifier" && choice.why == "Your choice · on this Mac")
         #expect(changed.withLock { $0 } == 1)
         #expect(await center.whyLine(for: .classify, accountKeys: [nil]) == choice.why, "traces explain triage the same way")
         await choice.choose(.appleSystemClassifier)
-        #expect(center.settings.classifier == .appleModel)
+        #expect(center.settings.classifier == .appleModel && center.settings.selectedLocalModel == nil)
+    }
+
+    @Test func triageListsApplesModelAndTheOptionalLargeModelWhetherOrNotItIsDownloaded() async {
+        let apple = FakeClassifier(id: .appleSystemClassifier, displayName: "Apple")
+        let large: AIProviderID = "local.qwen3.5-9b-optiq-4bit.classifier"
+        let states: [AIAvailability] = [.unavailable(reason: .modelNotDownloaded(sizeBytes: 7_120_910_361)), .available]
+        for availability in states {
+            let qwen = FakeClassifier(id: large, displayName: "Qwen3.5 9B OptiQ (4-bit)", availability: availability)
+            let choice = AIModelChoiceModel(center: Self.center(classifiers: [qwen, apple]), feature: .classify,
+                                            accountKey: nil)
+            await choice.refresh()
+            #expect(choice.options.map(\.id) == [.appleSystemClassifier, large])
+            #expect(choice.options.map(\.name) == ["Apple on-device model", "Qwen3.5 9B OptiQ (4-bit)"])
+            #expect(choice.options.map(\.isDefault) == [true, false])
+            #expect(choice.chosen == .appleSystemClassifier && choice.why == "Mail's default · on this Mac")
+            #expect(choice.options.last?.isEnabled == availability.isAvailable)
+            #expect(choice.options.last?.status == (availability.isAvailable ? nil : "not downloaded"))
+        }
     }
 
     @Test func aDownloadedModelThatIsNotDownloadedIsGreyedOut() async {

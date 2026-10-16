@@ -57,7 +57,7 @@ struct RenderSweepSettingsTests {
                 generalExtras: { AnyView(SystemGeneralSettingsView(environment: environment)) },
                 aiProviders: {
                     AISettingsPageContent.view(center: center, environment: environment, showsDeveloperItems: false,
-                                               classifier: nil, semantic: semantic, initialTab: tab)
+                                               classifier: SweepClassifierPort(), semantic: semantic, initialTab: tab)
                 })
         }
         let pages = SettingsShellModel(environment: environment).pages
@@ -92,8 +92,8 @@ struct RenderSweepSettingsTests {
         let claude = FakeAIProvider(id: .agentClaude, displayName: "Claude Code",
                                     capabilities: .fake(dataLocation: .thirdParty(vendor: "Anthropic")))
         let apple = FakeClassifier(id: .appleSystemClassifier, displayName: "Apple on-device model")
-        let downloaded = FakeClassifier(id: "local.sweep.classifier", displayName: "Downloaded model (Sweep 1B)",
-                                        availability: .unavailable(reason: .modelNotDownloaded(sizeBytes: 980_000_000)))
+        let downloaded = FakeClassifier(id: "local.qwen3.5-9b-optiq-4bit.classifier", displayName: "Qwen3.5 9B OptiQ (4-bit)",
+                                        availability: .unavailable(reason: .modelNotDownloaded(sizeBytes: 7_120_910_361)))
         let registry = ProviderRegistry(providers: [FakeAIProvider(id: .appleSystem, displayName: "Apple on-device model")],
                                         classifiers: [apple, downloaded])
         return AICenter.make(registry: registry, settings: AISettingsBox(store: InMemoryAISettingsStore()),
@@ -130,6 +130,26 @@ struct RenderSweepSettingsTests {
         try png.write(to: directory.appendingPathComponent(file))
         try RenderSweepIndex.record(screen: screen, theme: theme.name, file: file, in: directory)
     }
+}
+
+final class SweepClassifierPort: LocalClassifierModelPort, Sendable {
+    let modelName = "Qwen3.5 9B OptiQ (4-bit)"
+    let classifierID: AIProviderID = "local.qwen3.5-9b-optiq-4bit.classifier"
+    let sizeBytes: Int64 = 7_120_910_361
+    let memoryBytes: Int64 = 7_973_397_524
+    let licence = "Apache-2.0"
+    let unsupportedReason: String? = nil
+
+    func directoryPath() async -> String { "~/Library/Application Support/OpenHuman/Models" }
+    func status() async -> LocalModelStatus { .notDownloaded(partialBytes: 0) }
+    func download(confirmedSizeBytes: Int64) async -> AsyncStream<LocalModelStatus> { AsyncStream { $0.finish() } }
+    func cancel() async {}
+    func delete() async throws {}
+    func useDirectory(_ path: String?) async throws {}
+    func leftoverModels() async -> [LeftoverLocalModel] {
+        [LeftoverLocalModel(id: "qwen3-1.7b-4bit", name: "Qwen3 1.7B (4-bit)", bytes: 979_503_801)]
+    }
+    func deleteLeftover(id: String) async throws {}
 }
 
 struct RenderSweepTheme: Sendable, CustomTestStringConvertible {

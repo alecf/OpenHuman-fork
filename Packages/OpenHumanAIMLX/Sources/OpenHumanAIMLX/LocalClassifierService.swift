@@ -8,6 +8,7 @@ public final class LocalClassifierService: Sendable {
     public let store: ModelStore
     public let provider: LocalModelProvider
     public let classifier: PromptedClassifier
+    public let gate: LocalClassifierGate
 
     public enum State: Sendable, Hashable {
         case notDownloaded(partialBytes: Int64)
@@ -17,21 +18,41 @@ public final class LocalClassifierService: Sendable {
         case failed(String)
     }
 
-    public init(manifest: ModelManifest = LocalClassifierModels.defaultModel, rootDirectory: URL = ModelStore.defaultRoot,
+    public struct Leftover: Sendable, Hashable {
+        public let manifest: ModelManifest
+        public let bytesOnDisk: Int64
+    }
+
+    public init(manifest: ModelManifest = LocalClassifierModels.offered, rootDirectory: URL = ModelStore.defaultRoot,
                 runtime: any LocalModelRuntime, transport: any DownloadTransport = URLSessionDownloadTransport(),
                 freeSpace: @escaping @Sendable (URL) throws -> Int64 = ModelStore.systemFreeSpace,
                 allowsLoading: @escaping @Sendable () -> Bool, gate: LocalClassifierGate) {
         self.manifest = manifest
         self.rootDirectory = rootDirectory
+        self.gate = gate
         self.store = ModelStore(rootDirectory: rootDirectory, transport: transport, freeSpace: freeSpace)
         self.provider = LocalModelProvider(manifest: manifest, store: store, runtime: runtime,
                                            allowsModelLoading: allowsLoading)
         self.classifier = PromptedClassifier(
             wrapping: provider, id: AIProviderID(LocalClassifierModels.classifierID(for: manifest)),
-            displayName: "Downloaded model (\(manifest.displayName))", gate: gate)!
+            displayName: manifest.displayName, gate: gate)!
     }
 
     public var sizeBytes: Int64 { manifest.totalBytes }
+
+    public func leftovers(of retired: [ModelManifest] = LocalClassifierModels.retired) async -> [Leftover] {
+        var found: [Leftover] = []
+        for old in retired where old.id != manifest.id {
+            let stored = old.totalBytes - (await store.remainingBytes(for: old))
+            if stored > 0 { found.append(Leftover(manifest: old, bytesOnDisk: stored)) }
+        }
+        return found
+    }
+
+    public func deleteLeftover(_ old: ModelManifest) async throws {
+        guard old.id != manifest.id else { return }
+        try await store.delete(old)
+    }
 
     public func state() async -> State {
         Self.state(await store.state(for: manifest), partial: await partialBytes())
