@@ -51,7 +51,7 @@ public struct KeychainTokenStore: TokenStore {
             throw TokenStoreError.corrupt
         }
         try tokenErrors {
-            try items.exclusively {
+            try items.withItem(key) {
                 let entry = try? items.read(key)
                 let previous = entry.flatMap { try? JSONDecoder().decode(TokenItemPayload.self, from: $0.data) }
                 var payload = TokenItemPayload(token, device: previous?.device)
@@ -118,21 +118,32 @@ extension KeychainBackend {
 
 struct SecItemBackend: KeychainBackend {
     func update(_ query: [String: Any], _ attributes: [String: Any]) -> OSStatus {
-        SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        Self.noteThread()
+        return SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
     }
 
     func add(_ attributes: [String: Any]) -> OSStatus {
-        SecItemAdd(attributes as CFDictionary, nil)
+        Self.noteThread()
+        return SecItemAdd(attributes as CFDictionary, nil)
     }
 
     func copyMatching(_ query: [String: Any]) -> (OSStatus, CFTypeRef?) {
+        Self.noteThread()
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         return (status, result)
     }
 
     func delete(_ query: [String: Any]) -> OSStatus {
-        SecItemDelete(query as CFDictionary)
+        Self.noteThread()
+        return SecItemDelete(query as CFDictionary)
+    }
+
+    // Why: a dialog raised from the main thread freezes every window until it is answered
+    private static func noteThread() {
+        #if DEBUG
+        if Thread.isMainThread { Log(.keychain).error("a Keychain call ran on the main thread") }
+        #endif
     }
 }
 
