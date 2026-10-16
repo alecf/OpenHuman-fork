@@ -17,9 +17,20 @@ extension AccountSyncer {
 
     public var isBackfillRunning: Bool { backfillTask != nil }
 
+    public var isBackfillPaused: Bool { backfillPaused }
+
     public func startBackfill() {
-        guard backfillTask == nil, !backfillFinished else { return }
+        guard backfillTask == nil, !backfillFinished, !backfillPaused else { return }
         spawnBackfill()
+    }
+
+    public func pauseBackfill() {
+        backfillPaused = true
+        cancelBackfill()
+    }
+
+    public func resumeBackfill() {
+        backfillPaused = false
     }
 
     @discardableResult

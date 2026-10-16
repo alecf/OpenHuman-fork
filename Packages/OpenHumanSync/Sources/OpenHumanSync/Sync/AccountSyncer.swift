@@ -73,6 +73,7 @@ public actor AccountSyncer {
     var backfillTask: Task<BackfillOutcome, Never>?
     var backfillTaskID: UInt64 = 0
     var backfillFinished = false
+    var backfillPaused = false
     var backfillWaitsForRun = false
     var pacer: BackfillPacer
     let gate: BackfillGate?
@@ -101,9 +102,9 @@ public actor AccountSyncer {
     }
 
     @discardableResult
-    public func sync(reason: String) async throws -> SyncReport {
+    public func sync(reason: String, rerunIfRunning: Bool = true) async throws -> SyncReport {
         if let running = current {
-            rerunRequested = true
+            if rerunIfRunning { rerunRequested = true }
             return try await running.value
         }
         let task = Task { try await self.runUntilSettled(reason: reason) }
@@ -114,6 +115,10 @@ public actor AccountSyncer {
     public func cancel() {
         current?.cancel()
         cancelBackfill()
+    }
+
+    public func cancelRun() {
+        current?.cancel()
     }
 
     public nonisolated var progress: SyncProgress { broadcaster.current }

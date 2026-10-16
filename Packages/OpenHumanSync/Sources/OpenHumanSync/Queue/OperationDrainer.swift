@@ -101,19 +101,22 @@ public actor OperationDrainer {
     }
 
     @discardableResult
-    public func drainOnce() async -> PassReport {
+    public func drainOnce(limit: Int? = nil, deadline: Date? = nil) async -> PassReport {
         gate?.beginDraining()
         defer { gate?.endDraining() }
-        return await drainPass()
+        return await drainPass(limit: limit, deadline: deadline)
     }
 
-    private func drainPass() async -> PassReport {
+    private func drainPass(limit: Int?, deadline: Date?) async -> PassReport {
         var report = PassReport()
         passes += 1
-        pass: while !Task.isCancelled, state != .pausedNeedsReauth {
+        func pastDeadline() -> Bool { deadline.map { clock.now >= $0 } ?? false }
+        pass: while !Task.isCancelled, state != .pausedNeedsReauth, !pastDeadline() {
+            let room = limit.map { $0 - report.claimed } ?? Self.claimLimit
+            if room <= 0 { break }
             let ops: [OperationItem]
             do {
-                ops = try store.claimReadyOperations(account: account, now: clock.now, limit: Self.claimLimit,
+                ops = try store.claimReadyOperations(account: account, now: clock.now, limit: min(room, Self.claimLimit),
                                                      ownerID: ownerID)
             } catch {
                 log.error("claim failed for account \(account.rawValue): \(AccountSyncer.code(error))")
@@ -123,6 +126,10 @@ public actor OperationDrainer {
             report.claimed += ops.count
             let groups = Self.groups(ops)
             for (index, group) in groups.enumerated() {
+                if index > 0, pastDeadline() {
+                    for op in groups[index...].flatMap({ $0 }) { release(op, at: clock.now, report: &report) }
+                    break pass
+                }
                 let stop = await execute(group, report: &report)
                 if stop {
                     let rest = groups[(index + 1)...].flatMap { $0 }
