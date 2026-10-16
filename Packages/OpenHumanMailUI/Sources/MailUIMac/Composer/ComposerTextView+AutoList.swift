@@ -31,7 +31,7 @@ extension ComposerTextView {
 
     static func isParagraphBreak(_ c: unichar) -> Bool { c == 0x0A || c == 0x0D || c == 0x2029 }
 
-    func autoListAfterSpace(openGroupsBeforeTyping: Int) {
+    func autoListAfterSpace() {
         guard autoListsOn, !isPlainTextMode, let storage = textStorage else { return }
         let selection = selectedRange()
         guard selection.length == 0, let info = listLine(at: selection.location), info.lists.isEmpty, !info.quoted else {
@@ -40,7 +40,8 @@ extension ComposerTextView {
         let text = (storage.string as NSString).substring(with: info.line)
         guard let trigger = AutoList.trigger(line: text, caret: selection.location - info.line.location, isQuoted: info.quoted,
                                              isSignature: false) else { return }
-        let list = NSTextList(markerFormat: trigger.isOrdered ? .decimal : .disc, options: 0)
+        let format = AttributedBridge.markerFormat(ordered: trigger.isOrdered, depth: 0)
+        let list = NSTextList(markerFormat: format, options: 0)
         list.startingItemNumber = trigger.start
         let style = bridge.paragraphStyle(lists: [list]) ?? NSMutableParagraphStyle()
         let marker = AttributedBridge.marker(list, number: trigger.start)
@@ -48,16 +49,16 @@ extension ComposerTextView {
         replacement.replaceCharacters(in: NSRange(location: 0, length: trigger.length),
                                       with: NSAttributedString(string: marker, attributes: bridge.typingAttributes))
         replacement.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: replacement.length))
-        closeTypingUndoGroup(openGroupsBeforeTyping: openGroupsBeforeTyping)
+        startUndoStep()
         guard applyListEdit(info.paragraph, replacement, caret: info.line.location + (marker as NSString).length) else { return }
         typingAttributes = listTypingAttributes(style, quoted: false)
     }
 
-    // A space that started new typing opened this event's undo group; closing it makes the conversion its own Undo step
-    func closeTypingUndoGroup(openGroupsBeforeTyping: Int) {
-        guard let manager = undoManager, manager.groupsByEvent, openGroupsBeforeTyping == 0, manager.groupingLevel == 1,
-              !manager.isUndoing, !manager.isRedoing else { return }
+    // Ends the open undo group and opens the next for its owner to close, so the conversion is its own Undo step
+    func startUndoStep() {
+        guard let manager = undoManager, manager.groupingLevel == 1, !manager.isUndoing, !manager.isRedoing else { return }
         manager.endUndoGrouping()
+        manager.beginUndoGrouping()
     }
 
     func autoListReturn() -> Bool {
@@ -256,5 +257,29 @@ extension ComposerTextView {
         setSelectedRange(NSRange(location: min(max(caret, 0), storage.length), length: 0))
         didChangeText()
         return true
+    }
+}
+
+extension ComposerTextView: @MainActor NSTextContentStorageDelegate {
+    // TextKit 2 would draw its own marker for a list paragraph; showing the typed one keeps the list's tab stops
+    public func textContentStorage(_ textContentStorage: NSTextContentStorage,
+                                   textParagraphWith range: NSRange) -> NSTextParagraph? {
+        guard range.length > 0, let source = textContentStorage.attributedString, NSMaxRange(range) <= source.length,
+              let style = source.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle,
+              let list = style.textLists.last else { return nil }
+        let shown = NSMutableAttributedString(attributedString: source.attributedSubstring(from: range))
+        let whole = NSRange(location: 0, length: shown.length)
+        shown.enumerateAttribute(.paragraphStyle, in: whole) { value, part, _ in
+            guard let own = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle else { return }
+            own.textLists = []
+            shown.addAttribute(.paragraphStyle, value: own, range: part)
+        }
+        let content = AttributedBridge.droppingMarker(whole, in: shown.string as NSString)
+        if !AttributedBridge.isOrdered(list), content.location > 2,
+           let font = shown.attribute(.font, at: 1, effectiveRange: nil) as? NSFont {
+            shown.addAttribute(.font, value: AttributedBridge.bulletFont(size: font.pointSize),
+                               range: NSRange(location: 1, length: content.location - 2))
+        }
+        return NSTextParagraph(attributedString: shown)
     }
 }

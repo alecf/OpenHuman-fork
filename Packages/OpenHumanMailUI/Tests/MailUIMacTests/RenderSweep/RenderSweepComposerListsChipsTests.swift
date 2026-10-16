@@ -14,21 +14,23 @@ extension RenderSweepTests {
         defer { w.close() }
         let compose = w.environment.compose
         #expect(w.router.perform(.compose))
-        try await until { compose.windowSession?.placement == .modal }
         let session = try #require(compose.windowSession)
+        #expect(session.placement == .modal)
         await session.settle()
         let robin = EmailAddress(name: "Robin Park", email: "robin@example.test")
         let sam = EmailAddress(email: "sam@example.test")
         session.to.setTokens([robin, sam])
         session.subject = "Plan for the offsite"
+        w.window.contentView?.layoutSubtreeIfNeeded()
         let editor = try #require(w.editors.first)
+        #expect(w.window.makeFirstResponder(editor))
         for key in "Agenda:\n1. Arrive by nine\nWalk-through\n\n- Bring a laptop\nNotes\n\nThanks" {
-            if key == "\n" {
-                editor.insertNewline(nil)
-            } else {
-                editor.insertText(String(key), replacementRange: editor.selectedRange())
-            }
+            let event = try #require(keyDownEvent(key, in: w.window))
+            if w.content.keyRouter.route(event) != nil { w.window.sendEvent(event) }
+            await runLoopGoesIdle()
         }
+        #expect(shownParagraphs(editor).map(\.string) == ["Agenda:\n", "\t1.\tArrive by nine\n", "\t2.\tWalk-through\n",
+                                                          "\t•\tBring a laptop\n", "\t•\tNotes\n", "Thanks"])
         try await sweepShoot(w.window, screen: "composer-auto-lists", theme: theme)
 
         session.beginRecipientDrag(sam, from: .to)

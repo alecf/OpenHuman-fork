@@ -94,7 +94,7 @@ import Testing
         #expect(AttributedBridge.markerFormat(ordered: false, depth: 0) == .disc)
         #expect(AttributedBridge.markerFormat(ordered: false, depth: 1) == .circle)
         #expect(AttributedBridge.markerFormat(ordered: false, depth: 2) == .square)
-        #expect(AttributedBridge.markerFormat(ordered: true, depth: 3) == .decimal)
+        #expect(AttributedBridge.markerFormat(ordered: true, depth: 3) == NSTextList.MarkerFormat("{decimal}."))
     }
 }
 

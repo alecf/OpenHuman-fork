@@ -65,6 +65,7 @@ public final class ComposerTextView: NSTextView {
     func configure() {
         // List markers are part of the text; otherwise TextKit 2 draws its own and pushes the item text out of view
         textContentStorage?.includesTextListMarkers = true
+        textContentStorage?.delegate = self
         isRichText = true
         allowsUndo = true
         isEditable = true
@@ -272,6 +273,7 @@ public final class ComposerTextView: NSTextView {
         }
         let content = NSTextContentStorage()
         content.includesTextListMarkers = true
+        content.delegate = self
         let manager = NSTextLayoutManager()
         content.addTextLayoutManager(manager)
         let container = NSTextContainer(size: NSSize(width: containerWidth, height: .greatestFiniteMagnitude))
@@ -308,10 +310,9 @@ public final class ComposerTextView: NSTextView {
     }
 
     public override func insertText(_ string: Any, replacementRange: NSRange) {
-        let openGroups = undoManager?.groupingLevel ?? 0
         super.insertText(string, replacementRange: replacementRange)
         guard !hasMarkedText() else { return }
-        if Self.typed(string) == " " { autoListAfterSpace(openGroupsBeforeTyping: openGroups) }
+        if Self.typed(string) == " " { autoListAfterSpace() }
         onTyped?(self.string, selectedRange().location)
     }
 
@@ -509,7 +510,7 @@ public final class ComposerTextView: NSTextView {
         let first = ranges[0].location < storage.length
             ? storage.attribute(.paragraphStyle, at: ranges[0].location, effectiveRange: nil) as? NSParagraphStyle : nil
         let removing = first?.textLists.first.map { AttributedBridge.isOrdered($0) == ordered } ?? false
-        let list = NSTextList(markerFormat: ordered ? .decimal : .disc, options: 0)
+        let list = NSTextList(markerFormat: AttributedBridge.markerFormat(ordered: ordered, depth: 0), options: 0)
         guard shouldChangeText(in: paragraphs, replacementString: nil) else { return }
         storage.beginEditing()
         for (index, range) in ranges.enumerated().reversed() {

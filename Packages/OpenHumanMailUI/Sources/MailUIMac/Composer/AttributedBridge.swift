@@ -434,14 +434,20 @@ public struct AttributedBridge {
         return "\t" + (numbered ? text + "." : text) + "\t"
     }
 
+    // The period is part of the format so every marker TextKit makes for the list carries it too
+    static let numberedFormat = NSTextList.MarkerFormat("{decimal}.")
+
     static func markerFormat(ordered: Bool, depth: Int) -> NSTextList.MarkerFormat {
-        if ordered { return .decimal }
+        if ordered { return numberedFormat }
         switch depth % 3 {
         case 0: return .disc
         case 1: return .circle
         default: return .square
         }
     }
+
+    // The regular bullet is a faint speck next to body text
+    static func bulletFont(size: CGFloat) -> NSFont { .systemFont(ofSize: size, weight: .black) }
 
     static func isOrdered(_ list: NSTextList) -> Bool {
         list.markerFormat != .disc && list.markerFormat != .circle && list.markerFormat != .square

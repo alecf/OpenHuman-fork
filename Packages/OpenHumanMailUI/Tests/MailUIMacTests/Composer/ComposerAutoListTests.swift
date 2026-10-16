@@ -5,18 +5,40 @@ import MailTheme
 import Testing
 @testable import MailUIMac
 
-// Grouped by event as in the app, so a keystroke opens a group only when it registers something and typing coalesces;
-// no run loop pass ends the event here, so the open group is closed by hand
+// AppKit closes an event's undo group when the run loop next goes idle; this waits for that point
 @MainActor
-final class EventUndoHost: NSObject, NSTextViewDelegate {
-    let manager = UndoManager()
-
-    func undoManager(for view: NSTextView) -> UndoManager? { manager }
-
-    func event(_ body: () -> Void) {
-        body()
-        if manager.groupingLevel > 0 { manager.endUndoGrouping() }
+func runLoopGoesIdle() async {
+    await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+        let idle = CFRunLoopActivity.beforeWaiting.rawValue
+        let observer = CFRunLoopObserverCreateWithHandler(nil, idle, false, .max) { _, _ in done.resume() }
+        CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .defaultMode)
     }
+}
+
+func keyDownEvent(_ key: Character, in window: NSWindow) -> NSEvent? {
+    let (characters, code, flags): (String, UInt16, NSEvent.ModifierFlags) = switch key {
+    case "\n": ("\r", 36, [])
+    case "\t": ("\t", 48, [])
+    case "\u{19}": ("\u{19}", 48, .shift)
+    case "\u{7f}": ("\u{7f}", 51, [])
+    case " ": (" ", 49, [])
+    default: (String(key), 0, [])
+    }
+    return NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 100,
+                            windowNumber: window.windowNumber, context: nil, characters: characters,
+                            charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)
+}
+
+// What TextKit lays out, paragraph by paragraph, after any display substitutions
+@MainActor
+func shownParagraphs(_ text: NSTextView) -> [NSAttributedString] {
+    guard let layout = text.textLayoutManager else { return [] }
+    var shown: [NSAttributedString] = []
+    layout.enumerateTextLayoutFragments(from: layout.documentRange.location, options: [.ensuresLayout]) { fragment in
+        if let paragraph = fragment.textElement as? NSTextParagraph { shown.append(paragraph.attributedString) }
+        return true
+    }
+    return shown
 }
 
 @MainActor
@@ -25,9 +47,10 @@ final class EventUndoHost: NSObject, NSTextViewDelegate {
 
     let window = NSWindow(contentRect: NSRect(x: -4000, y: -4000, width: 700, height: 600), styleMask: [.titled],
                           backing: .buffered, defer: false)
-    let host = EventUndoHost()
 
     init() { window.isReleasedWhenClosed = false }
+
+    var undo: UndoManager? { window.undoManager }
 
     func editor(plain: Bool = false, autoLists: Bool = true) -> ComposerTextView {
         let text = ComposerTextView.make()
@@ -37,54 +60,68 @@ final class EventUndoHost: NSObject, NSTextViewDelegate {
         text.bridge = AttributedBridge(font: .systemFont(ofSize: 14))
         text.isPlainTextMode = plain
         text.frame = NSRect(x: 0, y: 0, width: 400, height: 200)
-        text.delegate = host
         window.contentView?.addSubview(text)
         return text
     }
 
-    func typeKeys(_ text: ComposerTextView, _ keys: String) {
+    func endOfEvent(sourceLocation: SourceLocation = #_sourceLocation) async {
+        await runLoopGoesIdle()
+        #expect(undo?.groupingLevel == 0, "the event's undo group is closed", sourceLocation: sourceLocation)
+    }
+
+    func event(_ body: () -> Void) async {
+        body()
+        await endOfEvent()
+    }
+
+    func typeKeys(_ text: ComposerTextView, _ keys: String, sourceLocation: SourceLocation = #_sourceLocation) async {
+        #expect(window.makeFirstResponder(text), sourceLocation: sourceLocation)
         for key in keys {
-            host.event {
-                if key == "\n" {
-                    text.insertNewline(nil)
-                } else {
-                    text.insertText(String(key), replacementRange: text.selectedRange())
-                }
+            guard let event = keyDownEvent(key, in: window) else {
+                Issue.record("no key event for \(key)", sourceLocation: sourceLocation)
+                return
             }
+            window.sendEvent(event)
+            await endOfEvent(sourceLocation: sourceLocation)
         }
     }
 
-    func backspace(_ text: ComposerTextView) { host.event { text.deleteBackward(nil) } }
+    func backspace(_ text: ComposerTextView) async { await typeKeys(text, "\u{7f}") }
+
+    func undoOnce() async { await event { undo?.undo() } }
+
+    func redoOnce() async { await event { undo?.redo() } }
 
     func item(_ words: String) -> [Doc.Block] { [.paragraph([.text(words, [])])] }
 
     func marker(ordered: Bool, _ number: Int) -> String {
-        AttributedBridge.marker(NSTextList(markerFormat: ordered ? .decimal : .disc, options: 0), number: number)
+        let format = AttributedBridge.markerFormat(ordered: ordered, depth: 0)
+        return AttributedBridge.marker(NSTextList(markerFormat: format, options: 0), number: number)
     }
 
-    @Test func oneDotSpaceStartsANumberedListAndReturnContinuesIt() {
+    @Test func oneDotSpaceStartsANumberedListAndReturnContinuesIt() async {
         let text = editor()
-        typeKeys(text, "1. ")
+        await typeKeys(text, "1. ")
         #expect(text.document == Doc(blocks: [.list(ordered: true, items: [[]])]))
         #expect(text.string == marker(ordered: true, 1), "the typed 1. became the list's own marker")
-        typeKeys(text, "one\ntwo")
+        await typeKeys(text, "one\ntwo")
         #expect(text.document == Doc(blocks: [.list(ordered: true, items: [item("one"), item("two")])]))
         #expect(text.string == marker(ordered: true, 1) + "one\n" + marker(ordered: true, 2) + "two")
         #expect(text.formatState.list == .numbered)
     }
 
-    @Test func dashAndStarStartBulletedLists() {
+    @Test func dashAndStarStartBulletedLists() async {
         for typed in ["- ", "* "] {
             let text = editor()
-            typeKeys(text, typed + "milk\neggs")
+            await typeKeys(text, typed + "milk\neggs")
             #expect(text.document == Doc(blocks: [.list(ordered: false, items: [item("milk"), item("eggs")])]), "\(typed)")
             #expect(text.formatState.list == .bullet)
         }
     }
 
-    @Test func numberingStartsAtTheTypedNumberAndIsSentThatWay() {
+    @Test func numberingStartsAtTheTypedNumberAndIsSentThatWay() async {
         let text = editor()
-        typeKeys(text, "3. three\nfour")
+        await typeKeys(text, "3. three\nfour")
         let document = text.document
         #expect(document == Doc(blocks: [.list(ordered: true, items: [item("three"), item("four")], start: 3)]))
         #expect(text.string.contains(marker(ordered: true, 4) + "four"))
@@ -92,9 +129,9 @@ final class EventUndoHost: NSObject, NSTextViewDelegate {
         #expect(ComposeSerializer.plainText(document, signature: nil) == "3. three\n4. four")
     }
 
-    @Test func returnOnAnEmptyItemEndsTheList() {
+    @Test func returnOnAnEmptyItemEndsTheList() async {
         let text = editor()
-        typeKeys(text, "- one\ntwo\n\nafter")
+        await typeKeys(text, "- one\ntwo\n\nafter")
         #expect(text.document == Doc(blocks: [.list(ordered: false, items: [item("one"), item("two")]),
                                               .paragraph([.text("after", [])])]))
         #expect(text.formatState.list == nil)
@@ -102,39 +139,39 @@ final class EventUndoHost: NSObject, NSTextViewDelegate {
         #expect(html.contains("<ul><li>one</li><li>two</li></ul><p style=\"margin:0\">after</p>"), "\(html)")
     }
 
-    @Test func backspaceAtTheStartOfAnItemRemovesItsMarker() {
+    @Test func backspaceAtTheStartOfAnItemRemovesItsMarker() async {
         let text = editor()
-        typeKeys(text, "1. ")
-        backspace(text)
+        await typeKeys(text, "1. ")
+        await backspace(text)
         #expect(text.string.isEmpty && text.document == Doc(), "an empty item goes entirely")
 
-        typeKeys(text, "- one")
+        await typeKeys(text, "- one")
         text.setSelectedRange(NSRange(location: (text.string as NSString).range(of: "one").location, length: 0))
-        backspace(text)
+        await backspace(text)
         #expect(text.document == Doc(blocks: [.paragraph([.text("one", [])])]), "the text stays")
         #expect(text.selectedRange() == NSRange(location: 0, length: 0))
     }
 
-    @Test func oneUndoPutsTheTypedMarkerBackAsText() {
+    @Test func oneUndoPutsTheTypedMarkerBackAsText() async {
         let text = editor()
-        typeKeys(text, "Intro\n- ")
+        await typeKeys(text, "Intro\n- ")
         #expect(text.document == Doc(blocks: [.paragraph([.text("Intro", [])]), .list(ordered: false, items: [[]])]))
-        host.manager.undo()
+        await undoOnce()
         #expect(text.string == "Intro\n- ", "the conversion alone is undone")
         #expect(text.document == Doc(blocks: [.paragraph([.text("Intro", [])]), .paragraph([.text("- ", [])])]))
-        host.manager.redo()
+        await redoOnce()
         #expect(text.document == Doc(blocks: [.paragraph([.text("Intro", [])]), .list(ordered: false, items: [[]])]))
     }
 
-    @Test func oneUndoKeepsTheSpaceWhenItStartedNewTyping() {
+    @Test func oneUndoKeepsTheSpaceWhenItStartedNewTyping() async {
         let text = editor()
-        typeKeys(text, "-")
+        await typeKeys(text, "-")
         text.breakUndoCoalescing()
-        typeKeys(text, " ")
+        await typeKeys(text, " ")
         #expect(text.document == Doc(blocks: [.list(ordered: false, items: [[]])]))
-        host.manager.undo()
+        await undoOnce()
         #expect(text.string == "- ", "the conversion alone is undone")
-        host.manager.undo()
+        await undoOnce()
         #expect(text.string == "-", "then the space")
     }
 
@@ -153,11 +190,11 @@ final class EventUndoHost: NSObject, NSTextViewDelegate {
     }
 
     @Test(arguments: [false, true])
-    func typedListItemsShowTheirTextAfterANumberWithItsPeriod(dark: Bool) throws {
+    func typedListItemsShowTheirTextAfterANumberWithItsPeriod(dark: Bool) async throws {
         let theme = dark ? ThemeTokens.dark : ThemeTokens.light
         let text = editor()
         text.bridge = AttributedBridge(theme: theme)
-        typeKeys(text, "Agenda:\n1. Arrive by nine\nWalk-through\n\n- Bring a laptop\nNotes\n\nThanks")
+        await typeKeys(text, "Agenda:\n1. Arrive by nine\nWalk-through\n\n- Bring a laptop\nNotes\n\nThanks")
         #expect(text.document == Doc(blocks: [
             .paragraph([.text("Agenda:", [])]),
             .list(ordered: true, items: [item("Arrive by nine"), item("Walk-through")]),
@@ -165,6 +202,16 @@ final class EventUndoHost: NSObject, NSTextViewDelegate {
             .paragraph([.text("Thanks", [])]),
         ]))
         #expect(text.textContentStorage?.includesTextListMarkers == true, "TextKit 2 shows the marker text and adds none")
+        let shown = shownParagraphs(text)
+        #expect(shown.map(\.string) == ["Agenda:\n", "\t1.\tArrive by nine\n", "\t2.\tWalk-through\n",
+                                        "\t•\tBring a laptop\n", "\t•\tNotes\n", "Thanks"],
+                "each number is drawn with its period and each item with its text")
+        for paragraph in shown where paragraph.string.hasPrefix("\t•\t") {
+            let bullet = try #require(paragraph.attribute(.font, at: 1, effectiveRange: nil) as? NSFont)
+            let words = try #require(paragraph.attribute(.font, at: 3, effectiveRange: nil) as? NSFont)
+            #expect(NSFontManager.shared.weight(of: bullet) > NSFontManager.shared.weight(of: words),
+                    "the bullet is drawn heavier than the text so it reads at text size")
+        }
         let storage = try #require(text.textStorage)
         let ns = storage.string as NSString
         let background = theme.component.compose.bg
@@ -203,12 +250,12 @@ final class EventUndoHost: NSObject, NSTextViewDelegate {
         }
     }
 
-    @Test func theFormatBarAndADraftNumberItemsLikeTyping() throws {
+    @Test func theFormatBarAndADraftNumberItemsLikeTyping() async throws {
         let typed = editor()
-        typeKeys(typed, "1. one")
+        await typeKeys(typed, "1. one")
         let bar = editor()
-        typeKeys(bar, "one")
-        host.event { bar.toggleList(ordered: true) }
+        await typeKeys(bar, "one")
+        await event { bar.toggleList(ordered: true) }
         let loaded = editor()
         loaded.load(Doc(blocks: [.list(ordered: true, items: [item("one")])]))
         func style(_ text: ComposerTextView) -> NSParagraphStyle? {
@@ -217,6 +264,7 @@ final class EventUndoHost: NSObject, NSTextViewDelegate {
         let reference = try #require(style(typed))
         for text in [typed, bar, loaded] {
             #expect(text.string == "\t1.\tone")
+            #expect(shownParagraphs(text).map(\.string) == ["\t1.\tone"], "drawn with the period")
             let own = try #require(style(text))
             #expect(own.tabStops.map(\.location) == reference.tabStops.map(\.location))
             #expect(own.tabStops.map(\.alignment) == reference.tabStops.map(\.alignment))
@@ -224,96 +272,96 @@ final class EventUndoHost: NSObject, NSTextViewDelegate {
         }
     }
 
-    @Test func returnInTheMiddleRenumbersTheRestAndUndoesInOneStep() {
+    @Test func returnInTheMiddleRenumbersTheRestAndUndoesInOneStep() async {
         let text = editor()
-        typeKeys(text, "1. a\nb\nc")
+        await typeKeys(text, "1. a\nb\nc")
         let before = text.string
         text.setSelectedRange(NSRange(location: NSMaxRange((text.string as NSString).range(of: "a")), length: 0))
-        typeKeys(text, "\n")
+        await typeKeys(text, "\n")
         #expect(text.string == marker(ordered: true, 1) + "a\n" + marker(ordered: true, 2) + "\n"
                 + marker(ordered: true, 3) + "b\n" + marker(ordered: true, 4) + "c")
         #expect(text.document == Doc(blocks: [.list(ordered: true, items: [item("a"), [], item("b"), item("c")])]))
-        host.manager.undo()
+        await undoOnce()
         #expect(text.string == before)
     }
 
-    @Test func tabNestsAnItemWithItsOwnNumberingAndShiftTabBringsItBack() {
+    @Test func tabNestsAnItemWithItsOwnNumberingAndShiftTabBringsItBack() async {
         let text = editor()
-        typeKeys(text, "1. one\n")
-        host.event { text.insertTab(nil) }
-        typeKeys(text, "a")
+        await typeKeys(text, "1. one\n")
+        await typeKeys(text, "\t")
+        await typeKeys(text, "a")
         #expect(text.document == Doc(blocks: [.list(ordered: true, items: [
             item("one") + [.list(ordered: true, items: [item("a")])],
         ])]), "numbering restarts in the nested list")
-        host.event { text.insertBacktab(nil) }
+        await typeKeys(text, "\u{19}")
         #expect(text.document == Doc(blocks: [.list(ordered: true, items: [item("one"), item("a")])]))
         #expect(text.string.hasSuffix(marker(ordered: true, 2) + "a"))
     }
 
-    @Test func tabInsideTheTextOfAnItemIsATab() {
+    @Test func tabInsideTheTextOfAnItemIsATab() async {
         let text = editor()
-        typeKeys(text, "- one")
-        host.event { text.insertTab(nil) }
+        await typeKeys(text, "- one")
+        await typeKeys(text, "\t")
         #expect(text.string.hasSuffix("one\t"))
     }
 
-    @Test func neverMidLineOrInAQuote() {
+    @Test func neverMidLineOrInAQuote() async {
         let text = editor()
-        typeKeys(text, "see 1. this")
+        await typeKeys(text, "see 1. this")
         #expect(text.document == Doc(blocks: [.paragraph([.text("see 1. this", [])])]))
 
         let quoted = editor()
-        host.event { quoted.toggleQuote() }
-        typeKeys(quoted, "1. ")
+        await event { quoted.toggleQuote() }
+        await typeKeys(quoted, "1. ")
         #expect(quoted.document == Doc(blocks: [.quote([.paragraph([.text("1. ", [])])])]))
     }
 
-    @Test func plainTextKeepsLiteralMarkersAndContinuesThem() {
+    @Test func plainTextKeepsLiteralMarkersAndContinuesThem() async {
         let text = editor(plain: true)
-        typeKeys(text, "1. one\ntwo\n\nafter")
+        await typeKeys(text, "1. one\ntwo\n\nafter")
         #expect(text.string == "1. one\n2. two\nafter")
-        typeKeys(text, "\n- x\n")
+        await typeKeys(text, "\n- x\n")
         #expect(text.string == "1. one\n2. two\nafter\n- x\n- ")
-        backspace(text)
+        await backspace(text)
         #expect(text.string == "1. one\n2. two\nafter\n- x\n", "backspace after a marker takes the marker")
         #expect(text.document.blocks.allSatisfy { if case .paragraph = $0 { true } else { false } }, "no real list")
         #expect(ComposeSerializer.plainText(text.document, signature: nil).hasPrefix("1. one\n2. two\nafter\n- x"))
     }
 
-    @Test func plainTextTabNestsAndRestartsTheNumbering() {
+    @Test func plainTextTabNestsAndRestartsTheNumbering() async {
         let text = editor(plain: true)
-        typeKeys(text, "1. one\n")
-        host.event { text.insertTab(nil) }
-        typeKeys(text, "a\nb")
+        await typeKeys(text, "1. one\n")
+        await typeKeys(text, "\t")
+        await typeKeys(text, "a\nb")
         #expect(text.string == "1. one\n   1. a\n   2. b")
-        host.event { text.insertBacktab(nil) }
+        await typeKeys(text, "\u{19}")
         #expect(text.string == "1. one\n   1. a\n2. b")
     }
 
-    @Test func plainTextLeavesQuotesAndTheSignatureAlone() {
+    @Test func plainTextLeavesQuotesAndTheSignatureAlone() async {
         let text = editor(plain: true)
-        typeKeys(text, "> - quoted\n")
+        await typeKeys(text, "> - quoted\n")
         #expect(text.string == "> - quoted\n")
-        typeKeys(text, "-- \n- sig\n")
+        await typeKeys(text, "-- \n- sig\n")
         #expect(text.string == "> - quoted\n-- \n- sig\n", "below the signature delimiter")
     }
 
-    @Test func turningTheSettingOffLeavesTypingAlone() {
+    @Test func turningTheSettingOffLeavesTypingAlone() async {
         let text = editor(autoLists: false)
-        typeKeys(text, "1. one\n- two")
+        await typeKeys(text, "1. one\n- two")
         #expect(text.document == Doc(blocks: [.paragraph([.text("1. one", [])]), .paragraph([.text("- two", [])])]))
         let plain = editor(plain: true, autoLists: false)
-        typeKeys(plain, "1. one\n")
+        await typeKeys(plain, "1. one\n")
         #expect(plain.string == "1. one\n")
     }
 
-    @Test func theFormatBarListsAreUnchanged() {
+    @Test func theFormatBarListsAreUnchanged() async {
         let text = editor()
-        typeKeys(text, "word")
+        await typeKeys(text, "word")
         text.setSelectedRange(NSRange(location: 0, length: 4))
-        host.event { text.toggleList(ordered: false) }
+        await event { text.toggleList(ordered: false) }
         #expect(text.document == Doc(blocks: [.list(ordered: false, items: [item("word")])]))
-        host.event { text.toggleList(ordered: false) }
+        await event { text.toggleList(ordered: false) }
         #expect(text.document == Doc(blocks: [.paragraph([.text("word", [])])]))
     }
 }
