@@ -1,0 +1,15 @@
+{
+  "id": "calendar.sidebar-event-details",
+  "area": "Calendar",
+  "title": "Clicking an event in the calendar sidebar shows its details",
+  "steps": [
+    "With -UseFakeData -UseFakeCalendar show the calendar sidebar (Control-Command-C) and click today's 1:00 PM meeting with Sam Rivera",
+    "Press Escape, then use the Down and Up arrows and Return; press Escape twice",
+    "Click today's 9:30 AM event (your own) and press Edit in Calendar",
+    "With VoiceOver on, move to an event in the day view and press VO-Space"
+  ],
+  "deepLink": null,
+  "expected": "A card shows the title, day, time, time zone, guests and the calendar's name, with no edit or delete control for Sam's meeting. Escape closes it, the arrows choose events, Return opens one, the second Escape leaves the sidebar. Edit in Calendar opens that day's event in the usual editor. VoiceOver reads each event as a button with a hint, and each guest in the card.",
+  "requires": "fake",
+  "addedIn": "2026-10-15"
+}

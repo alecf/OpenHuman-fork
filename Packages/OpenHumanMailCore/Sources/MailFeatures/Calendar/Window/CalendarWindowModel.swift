@@ -87,7 +87,7 @@ public final class CalendarWindowModel {
 
     var calendar: Calendar { CalendarDateMentions.calendar(timeZone) }
 
-    public func open(_ requested: CalendarViewKind? = nil, source: ActionSource? = nil) async {
+    public func open(_ requested: CalendarViewKind? = nil, source: ActionSource? = nil, around day: Date? = nil) async {
         let wasOpen = isOpen
         isOpen = true
         if !wasOpen {
@@ -96,12 +96,21 @@ public final class CalendarWindowModel {
         }
         let stored = wasOpen ? kind : await read(AppSettings.calendarWindowView)
         let chosen = requested ?? stored
-        let anchor = sidebar.draft?.start ?? (wasOpen ? focusDay : now())
+        let anchor = day ?? sidebar.draft?.start ?? (wasOpen ? focusDay : now())
         show(chosen, around: anchor)
         paint()
         if requested != nil, requested != stored { await write(AppSettings.calendarWindowView, chosen) }
         if !wasOpen, let source { await tip(.open, source: source) }
         await load(force: false)
+    }
+
+    public func openEditor(for event: CalendarEvent, calendarKey: String) async {
+        await open(around: event.start)
+        let key = calendarKey.lowercased()
+        let shown = shownEvents.first { $0.id == event.id && ($0.account ?? "").lowercased() == key }
+        var target = shown ?? event
+        if shown == nil, target.account == nil, !key.isEmpty { target.account = key }
+        openEvent(target)
     }
 
     public func close(source: ActionSource? = nil) async {

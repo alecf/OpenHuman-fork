@@ -8,7 +8,7 @@ public struct CalendarDayTimeline: Sendable, Hashable {
 
     public struct Block: Identifiable, Sendable, Hashable {
         public let event: CalendarEvent
-        public var id: String { "\(event.account ?? "")|\(event.id)" }
+        public var id: String { CalendarDayTimeline.key(for: event) }
         public let top: Double
         public let height: Double
         public let column: Int
@@ -83,6 +83,10 @@ public struct CalendarDayTimeline: Sendable, Hashable {
     public var conflicts: [CalendarEvent] {
         blocks.filter(\.isConflict).map(\.event).sorted { $0.start < $1.start }
     }
+
+    public var shownEvents: [CalendarEvent] { allDay + blocks.map(\.event) }
+
+    public static func key(for event: CalendarEvent) -> String { "\(event.account ?? "")|\(event.id)" }
 
     static func columns(_ events: [CalendarEvent]) -> [(event: CalendarEvent, column: Int, columns: Int)] {
         let sorted = events.sorted { ($0.start, $1.end, $0.id) < ($1.start, $0.end, $1.id) }
