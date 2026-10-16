@@ -59,7 +59,7 @@ func classifierManifest(body: Data, sha: String? = nil, id: String = "tiny-class
 
 func makeService(body: Data, transport: any DownloadTransport, answer: @escaping @Sendable (String, String) -> String = { _, _ in "" },
                  conditions: StubConditions = StubConditions(), allowsLowPower: Bool = false,
-                 manifest: ModelManifest? = nil, root: URL = makeRoot()) -> (LocalClassifierService, FakeRuntime) {
+                 manifest: ModelManifest? = nil, root: URL) -> (LocalClassifierService, FakeRuntime) {
     let runtime = FakeRuntime(answer: answer)
     let service = LocalClassifierService(
         manifest: manifest ?? classifierManifest(body: body), rootDirectory: root, runtime: runtime,
@@ -83,9 +83,11 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
 
 @Suite struct LocalClassifierDownloadTests {
     @Test func nothingDownloadsWithoutTheClickAndTheShownSize() async throws {
+        let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
         let body = Data(repeating: 7, count: 4_096)
         let transport = ResumableTransport(body: body)
-        let (service, _) = makeService(body: body, transport: transport)
+        let (service, _) = makeService(body: body, transport: transport, root: root)
         #expect(await service.state() == .notDownloaded(partialBytes: 0))
         #expect(await service.provider.availability() == .unavailable(reason: .modelNotDownloaded(sizeBytes: 4_096)))
         let refused = await finalState(await service.download(confirmedSizeBytes: 1))
@@ -98,7 +100,9 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
     @Test func aDroppedDownloadResumesFromThePartialFileAndVerifies() async throws {
         let body = Data((0..<10_000).map { UInt8($0 % 251) })
         let transport = ResumableTransport(body: body, dropAfter: 3_000)
-        let (service, _) = makeService(body: body, transport: transport)
+        let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (service, _) = makeService(body: body, transport: transport, root: root)
         let first = await finalState(await service.download(confirmedSizeBytes: service.sizeBytes))
         #expect(first == .failed(.transport("dropped")))
         #expect(await service.state() == .failed(LocalClassifierService.failureText(.transport("dropped"))))
@@ -114,7 +118,10 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
         let body = Data(repeating: 1, count: 2_048)
         let wrong = String(repeating: "0", count: 64)
         let transport = ResumableTransport(body: body)
-        let (service, _) = makeService(body: body, transport: transport, manifest: classifierManifest(body: body, sha: wrong))
+        let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let (service, _) = makeService(body: body, transport: transport, manifest: classifierManifest(body: body, sha: wrong),
+                                       root: root)
         let outcome = await finalState(await service.download(confirmedSizeBytes: service.sizeBytes))
         #expect(outcome == .failed(.checksumMismatch(file: "model.safetensors")))
         #expect(await service.state() == .failed(LocalClassifierService.failureText(.checksumMismatch(file: "x"))))
@@ -124,8 +131,10 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
 
     @Test func deleteUnloadsAndRemovesTheModel() async throws {
         let body = Data(repeating: 3, count: 1_024)
+        let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
         let (service, runtime) = makeService(body: body, transport: ResumableTransport(body: body),
-                                             answer: { _, _ in #"{"category":"news"}"# })
+                                             answer: { _, _ in #"{"category":"news"}"# }, root: root)
         _ = await finalState(await service.download(confirmedSizeBytes: service.sizeBytes))
         #expect(try await service.classifier.autoLabel(sampleClassificationInput()) == .news)
         #expect(await service.provider.isLoaded)
@@ -170,8 +179,10 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
 
     @Test func theServiceNamesTheOfferedModelAndNeedsNoDownloadToBeListed() async {
         let transport = ResumableTransport(body: Data())
+        let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
         let service = LocalClassifierService(
-            rootDirectory: makeRoot(), runtime: FakeRuntime(), transport: transport, freeSpace: { _ in 100 << 30 },
+            rootDirectory: root, runtime: FakeRuntime(), transport: transport, freeSpace: { _ in 100 << 30 },
             allowsLoading: { true }, gate: LocalClassifierGate(conditions: StubConditions()))
         #expect(service.manifest == LocalClassifierModels.offered)
         #expect(service.classifier.id == "local.qwen3.5-9b-optiq-4bit.classifier")
@@ -184,6 +195,7 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
 
     @Test func anOldDownloadIsFoundWithItsSizeAndOnlyDeletedWhenAsked() async throws {
         let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
         let oldBody = Data(repeating: 5, count: 2_000)
         let old = classifierManifest(body: oldBody, id: "old-classifier")
         _ = await installed(old, oldBody, root: root)
@@ -202,6 +214,7 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
 
     @Test func aStoppedOldDownloadIsAlsoFound() async throws {
         let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
         let oldBody = Data((0..<3_000).map { UInt8($0 % 199) })
         let old = classifierManifest(body: oldBody, id: "old-classifier")
         let store = ModelStore(rootDirectory: root, transport: ResumableTransport(body: oldBody, dropAfter: 700),
@@ -228,17 +241,21 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
 }
 
 @Suite struct LocalClassifierBehaviourTests {
+    private let roots = makeRoot()
+
     private func readyService(answer: @escaping @Sendable (String, String) -> String,
                               conditions: StubConditions = StubConditions(),
                               allowsLowPower: Bool = false) async -> LocalClassifierService {
         let body = Data(repeating: 9, count: 512)
         let (service, _) = makeService(body: body, transport: ResumableTransport(body: body), answer: answer,
-                                       conditions: conditions, allowsLowPower: allowsLowPower)
+                                       conditions: conditions, allowsLowPower: allowsLowPower,
+                                       root: roots.appendingPathComponent(UUID().uuidString))
         _ = await finalState(await service.download(confirmedSizeBytes: service.sizeBytes))
         return service
     }
 
     @Test func theAutoLabelRequestUsesThePinnedPromptAndKeepsTheEmailInsideTheDelimiters() async throws {
+        defer { try? FileManager.default.removeItem(at: roots) }
         let seen = Mutex<(system: String, input: String)>(("", ""))
         let service = await readyService(answer: { system, input in
             seen.withLock { $0 = (system, input) }
@@ -253,6 +270,7 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
     }
 
     @Test func otherMeansNoLabelAndMalformedAnswersAreRejected() async throws {
+        defer { try? FileManager.default.removeItem(at: roots) }
         let other = await readyService(answer: { _, _ in #"{"category":"other"}"# })
         #expect(try await other.classifier.autoLabel(sampleClassificationInput()) == nil)
         for bad in ["marketing", #"{"category":"waiting"}"#, #"{"category":"Marketing"}"#,
@@ -273,6 +291,7 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
     }
 
     @Test func lowPowerModePausesItUnlessTheUserAllowedIt() async throws {
+        defer { try? FileManager.default.removeItem(at: roots) }
         let lowPower = StubConditions(isLowPowerModeEnabled: true)
         let paused = await readyService(answer: { _, _ in #"{"category":"news"}"# }, conditions: lowPower)
         #expect(await paused.classifier.availability() == .unavailable(reason: .other(LocalClassifierGate.lowPowerReason)))
@@ -293,12 +312,14 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
     }
 
     @Test func theCacheKeyCarriesTheModelRevisionAndTheClassifierID() async throws {
+        defer { try? FileManager.default.removeItem(at: roots) }
         let service = await readyService(answer: { _, _ in #"{"category":"news"}"# })
         #expect(service.classifier.id.rawValue == "local.tiny-classifier.classifier")
         #expect(await service.classifier.modelVersion() == "tiny-classifier@rev1|classifier@1")
     }
 
     @Test func cancellingTheCallerCancelsTheClassification() async throws {
+        defer { try? FileManager.default.removeItem(at: roots) }
         let service = await readyService(answer: { _, _ in #"{"category":"news"}"# })
         let task = Task { try await service.classifier.autoLabel(sampleClassificationInput()) }
         task.cancel()

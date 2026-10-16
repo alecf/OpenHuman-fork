@@ -59,6 +59,7 @@ private final class WriteFixture {
     let gmail: FakeGmail
     let running: FakeGmailLaunch.Running
     let store: MailStore
+    private let temp = TemporaryDirectory("oh-write-port")
     let directory: URL
     let held = HeldGate()
     var session: SyncSession { running.session }
@@ -70,7 +71,7 @@ private final class WriteFixture {
         gmail = FakeGmail(accountEmail: corpus.account.email)
         if let sendAs { await gmail.setSendAs(sendAs) }
         await FakeGmailLaunch.seed(gmail, corpus: corpus)
-        directory = FileManager.default.temporaryDirectory.appendingPathComponent("oh-write-port-\(UUID().uuidString)")
+        directory = temp.url
         store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: .test,
                                                 appVersion: "0.0.0-test",
                                                 changeNotificationName: "dev.openhuman.tests.writeport.\(UUID().uuidString)"))
@@ -122,7 +123,7 @@ private final class WriteFixture {
         window.stop()
         await running.session.stop()
         try? store.close()
-        try? FileManager.default.removeItem(at: directory)
+        temp.cleanup()
     }
     private var stopped = false
 }

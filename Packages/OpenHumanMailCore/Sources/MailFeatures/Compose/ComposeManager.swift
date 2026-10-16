@@ -44,13 +44,15 @@ public final class ComposeManager: ActionPresenting {
     @ObservationIgnored private var restored = false
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
 
+    // Why: without a store, staged files go to one folder per process that a later process removes once this one exits
+    private static let defaultStagingDirectory = TemporaryDirectory.processScoped("OpenHumanMailDrafts-")
+
     public init(environment: AppEnvironment, timing: ComposeTiming = ComposeTiming(),
                 recovery: (any DraftRecoveryStoring)? = nil, staging: (any AttachmentStaging)? = nil) {
         self.environment = environment
         self.timing = timing
         self.recovery = recovery ?? InMemoryDraftRecovery()
-        self.staging = staging ?? DirectoryAttachmentStaging(
-            directory: FileManager.default.temporaryDirectory.appendingPathComponent("OpenHumanMailDrafts", isDirectory: true))
+        self.staging = staging ?? DirectoryAttachmentStaging(directory: Self.defaultStagingDirectory)
         self.handler = ComposeActionHandler(environment: environment)
         environment.actions.register(handler, for: ComposeActionHandler.coreIDs)
         environment.actions.register(DraftRowActionHandler(environment: environment), for: DraftRowActionHandler.coreIDs)

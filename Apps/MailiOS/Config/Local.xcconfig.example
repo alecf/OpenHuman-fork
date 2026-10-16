@@ -1,0 +1,4 @@
+// Copy to Local.xcconfig (gitignored) and fill in.
+DEVELOPMENT_TEAM = ABCDE12345           // your personal team ID (Xcode > Settings > Accounts)
+CODE_SIGN_IDENTITY = Apple Development
+OH_BUNDLE_ID_PREFIX = dev.openhuman.yourname   // must be unique to your team

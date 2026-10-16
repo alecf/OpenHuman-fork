@@ -41,8 +41,11 @@ For a focused loop, run `swift test` inside the package you changed.
 `Tools/ThemeCodegen/run.sh --check` verifies generated theme sources.
 `Tools/render-sweep.sh --help` describes rendering the UI against fake data.
 Tests must use fixtures rather than real mail accounts.
+Tests make temporary folders with `TemporaryDirectory` from OpenHumanCore and remove
+them when the test ends; `check-test-patterns.py` rejects other new temporary paths.
 `Tools/ci/build-packages.sh --platform ios` checks that the packages still compile
-for iOS; see [Compile the packages for iOS](IOS-BUILD.md).
+for iOS, and `Tools/ci/build-ios-app.sh` builds the iPhone app; see
+[Build for iOS](IOS-BUILD.md).
 
 CI runs these same build and test scripts on GitHub's `xcode-27` Apple silicon
 runner with a released Xcode (27.0), never the newest installed beta, and installs

@@ -16,15 +16,19 @@ struct WriteHarness {
     let clock: any OHClock
     let syncer: AccountSyncer
     let threads: [String]
+    let temporary: TemporaryDirectory?
 
     init(scopes: [String] = [GmailScope.modify], clock: any OHClock = InstantClock(now: testNow),
          threads count: Int = 3, onDisk: Bool = false) async throws {
         if onDisk {
-            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("oh-write-\(UUID().uuidString)")
+            let temporary = TemporaryDirectory("oh-write")
+            self.temporary = temporary
+            let directory = temporary.url
             store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: .test,
                                                     appVersion: "0.0.0-test",
                                                     changeNotificationName: "dev.openhuman.test.\(UUID().uuidString)"))
         } else {
+            temporary = nil
             store = try MailStore.openInMemoryForTesting()
         }
         account = try store.addAccount(email: "me@example.com", displayName: "Me", scopes: scopes)
