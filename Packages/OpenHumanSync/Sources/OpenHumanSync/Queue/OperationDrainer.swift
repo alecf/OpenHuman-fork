@@ -168,20 +168,20 @@ public actor OperationDrainer {
         return label.name == OHGmailLabels.muted
     }
 
-    // Why: no user action or undo entry stands behind a mail change queued by the CLI or an agent
+    // Why: an agent draft in Gmail Drafts can be undone; a send or a mail change from the CLI or an agent cannot
     func externalRefusal(_ op: OperationItem) -> Decision? {
-        guard op.origin == .cli || op.origin == .agent, !reviewedByUser(op) else { return nil }
+        guard op.origin == .cli || op.origin == .agent, !isAgentDraftChange(op) else { return nil }
         return Decision(.fail(code: "not_applied_outside_app", message: "queued outside the app: not sent to Gmail"))
     }
 
-    private func reviewedByUser(_ op: OperationItem) -> Bool {
+    private func isAgentDraftChange(_ op: OperationItem) -> Bool {
         let id: DraftID
         switch op.payload {
         case let .upsertDraft(draft, _), let .deleteDraft(draft, _): id = draft
-        default: return false
+        case .sendDraft, .modifyLabels, .trash, .untrash, .createLabel: return false
         }
         guard let draft = (try? store.draft(id)) ?? nil else { return false }
-        return draft.reviewState == .approved || draft.reviewState == .rejected
+        return draft.origin != .user
     }
 
     private func execute(_ group: [OperationItem], report: inout PassReport) async -> Bool {

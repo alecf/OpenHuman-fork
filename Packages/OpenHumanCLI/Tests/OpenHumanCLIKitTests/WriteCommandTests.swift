@@ -1,6 +1,7 @@
 import Foundation
 import OpenHumanCore
 import OpenHumanGmail
+import OpenHumanGmailTesting
 import OpenHumanLinks
 import OpenHumanStore
 import OpenHumanSync
@@ -92,6 +93,33 @@ import Testing
         #expect(noApp.status == "queued" && noApp.exit == .queued && noApp.notes == [DraftSupport.queuedNote])
     }
 
+    @Test func aDraftTheAppPutInGmailDraftsExits0SavedForReview() async throws {
+        let h = try Harness()
+        _ = try h.store.acquireLease(account: h.account, ownerID: "test-app", kind: "app", pid: ProcessInfo.processInfo.processIdentifier,
+                                     host: ProcessIdentity.localHostName, now: Date(), ttl: .seconds(3600))
+        let created = await h.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "x", "--no-wait", "--json"])
+        #expect(created.code == 6, "\(created.code) \(created.err)")
+        let gmail = FakeGmail(accountEmail: h.email, clock: h.clock)
+        let drainer = OperationDrainer(account: h.account, store: h.store, api: gmail, clock: h.clock, ownerID: "test-app")
+        #expect(await drainer.drainOnce().succeeded == 1)
+        let draft = try #require(try h.store.drafts(account: h.account, states: [], limit: 10).first)
+        #expect(draft.origin == .cli && draft.reviewState == .pending && draft.gmailDraftID != nil)
+
+        let env = CLIEnvironment(variables: h.allowedEnvironment, stdout: BufferSink(), stderr: BufferSink(), stdoutIsTTY: false,
+                                 stdinIsTTY: false, clock: h.clock)
+        let ctx = try CLIContext(env: env, global: try GlobalOptions.parse(["--timeout", "0s"]), path: "gmail.drafts.create",
+                                 meta: try #require(CommandCatalog.meta(for: "gmail.drafts.create")))
+        defer { ctx.close() }
+        let account = try #require(try h.store.accounts().first)
+        let result = try await DraftSupport.result(ctx, engine: try ctx.engine(), mapper: try Mapper(store: try ctx.store()), draft: draft,
+                                                   accounts: [account], wait: true)
+        #expect(result.status == .ok)
+        #expect(result.notes.count == 1 && result.notes[0].hasPrefix("Draft saved for review: "))
+        #expect(await gmail.callCount(.createDraft) == 1)
+        #expect(await gmail.callCount(.sendDraft) == 0)
+        #expect(await gmail.callCount(.sendMessage) == 0)
+    }
+
     @Test func aFailedOperationIsAFailureNotQueued() async throws {
         let h = try Harness()
         let r = try await settle(h) { try h.store.fail($0.id, code: "boom", message: "boom", retryAt: nil) }
@@ -132,7 +160,7 @@ import Testing
         let kinds = try h.operations().map(\.kind)
         #expect(kinds == [.upsertDraft])
         #expect(!kinds.contains(.sendDraft))
-        #expect(r.err.contains("Saved locally. OpenHuman Mail uploads an agent draft to Gmail only after you approve it there."))
+        #expect(r.err.contains("Saved locally. OpenHuman Mail adds it to your Gmail Drafts for review when it runs."))
         let review = await h.run(["gmail", "review", "list", "--json"])
         #expect(review.list("drafts").count == 1 && review.data["reviewLink"] as? String == expectedLink)
         let pending = await h.run(["gmail", "drafts", "list", "--review", "pending", "--origin", "cli", "--json"])
