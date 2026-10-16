@@ -14,8 +14,10 @@ import OpenHumanSync
         #expect(config.schedulers == Set(ScheduleKind.allCases))
         let roles: [EngineRole] = [.app, .localClient, .readOnly, .cliOneShot, .cliDaemon]
         #expect(roles.count == 5)
-        let events: [SystemEvent] = [.didWake, .networkReachable(false), .willTerminate]
-        #expect(events.count == 3)
+        let events: [SystemEvent] = [.didWake, .didEnterBackground, .networkReachable(false), .willTerminate]
+        #expect(events.count == 4)
+        #expect(config.window == .platformDefault)
+        #expect(RefreshReport().syncs.isEmpty && !RefreshReport().deadlineReached)
         #expect(EngineError.requiresApp("sync") != .sendNotAllowed)
         #expect(EngineError.writeAccessMissing("send") != .sendNotAllowed)
         let ref = ThreadRef(accountID: AccountID(1), rowID: ThreadRowID(rawValue: 1), gmailThreadID: GmailThreadID("t"))

@@ -136,6 +136,10 @@ public final class SyncSession: Sendable {
         await stop()
     }
 
+    public func refreshInBackground(until deadline: Date) async -> RefreshReport {
+        await engine.refreshOnce(deadline: deadline)
+    }
+
     var backfillProgress: SyncProgress? { engine.syncProgress(account) }
 
     @MainActor

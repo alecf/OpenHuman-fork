@@ -22,7 +22,9 @@ public actor MailEngine {
     var runtimes: [AccountID: AccountRuntime] = [:]
     var ownership: OwnershipManager?
     var started = false
+    var refreshing: Task<RefreshReport, Never>?
     var isActive = true
+    var inBackground = false
     static let maintenanceEvery: TimeInterval = 600
     var lastMaintenanceAt: Date?
     var threadBodyFetches: [ThreadRowID: Task<Int, Error>] = [:]
@@ -49,9 +51,9 @@ public actor MailEngine {
     public func start() async {
         guard configuration.role == .app, !started else { return }
         started = true
-        let identity = ProcessIdentity(writerID: store.writerID, pid: ProcessInfo.processInfo.processIdentifier,
-                                       host: ProcessIdentity.localHostName)
-        let ownership = OwnershipManager(store: store, identity: identity, kind: "app", clock: configuration.clock)
+        await settleRefresh()
+        guard started else { return }
+        let ownership = OwnershipManager(store: store, identity: processIdentity, kind: "app", clock: configuration.clock)
         self.ownership = ownership
         let accounts: [AccountItem]
         do { accounts = try store.accounts() } catch {
@@ -69,6 +71,7 @@ public actor MailEngine {
     }
 
     public func stop() async {
+        await settleRefresh()
         await draftDebouncer?.flushAll()
         for task in background { task.cancel() }
         background = []
@@ -113,6 +116,11 @@ public actor MailEngine {
         account.status == .active || account.status == .needsReauth
     }
 
+    var processIdentity: ProcessIdentity {
+        ProcessIdentity(writerID: store.writerID, pid: ProcessInfo.processInfo.processIdentifier,
+                        host: ProcessIdentity.localHostName)
+    }
+
     func startAccount(_ account: AccountItem) async {
         guard runtimes[account.id] == nil, let ownership else { return }
         guard await ownership.acquire(account.id) else {
@@ -126,21 +134,32 @@ public actor MailEngine {
 
     func launchRuntime(_ account: AccountItem) async {
         guard runtimes[account.id] == nil else { return }
-        let writable = EnginePolicy.runsDrainer(account: account)
-        if writable {
-            let now = configuration.clock.now
-            do {
-                let requeued = try store.requeueStaleInFlight(account: account.id, claimedBefore: now)
-                if requeued > 0 { log.notice("account \(account.id.rawValue): requeued \(requeued) interrupted op(s)") }
-                try UndoSendRunner.reconcileAtLaunch(account: account.id, store: store, now: now,
-                                                     emit: { [eventSink] in eventSink.yield($0) })
-            } catch {
-                log.error("account \(account.id.rawValue): launch reconcile failed (\(AccountSyncer.code(error)))")
-            }
+        reconcileAtLaunch(account)
+        guard let runtime = makeRuntime(account) else { return }
+        runtimes[account.id] = runtime
+        log.notice("account \(account.id.rawValue): owned (drainer \(runtime.writable), schedulers \(runtime.schedulerKinds.map(\.rawValue).sorted()))")
+        if !isActive { await runtime.setActive(false) }
+        if inBackground { await runtime.syncer.pauseBackfill() }
+        await runtime.start()
+    }
+
+    func reconcileAtLaunch(_ account: AccountItem) {
+        guard EnginePolicy.runsDrainer(account: account) else { return }
+        let now = configuration.clock.now
+        do {
+            let requeued = try store.requeueStaleInFlight(account: account.id, claimedBefore: now)
+            if requeued > 0 { log.notice("account \(account.id.rawValue): requeued \(requeued) interrupted op(s)") }
+            try UndoSendRunner.reconcileAtLaunch(account: account.id, store: store, now: now,
+                                                 emit: { [eventSink] in eventSink.yield($0) })
+        } catch {
+            log.error("account \(account.id.rawValue): launch reconcile failed (\(AccountSyncer.code(error)))")
         }
+    }
+
+    func makeRuntime(_ account: AccountItem) -> AccountRuntime? {
         guard let gmailFactory else {
             log.notice("account \(account.id.rawValue): no Gmail client factory, local only")
-            return
+            return nil
         }
         let api: any GmailAPI
         do { api = try gmailFactory.client(for: account.email) } catch {
@@ -151,30 +170,28 @@ public actor MailEngine {
                 try? store.setAccountStatus(account.id, .needsReauth)
                 eventSink.yield(.accountNeedsReauth(account.id))
             }
-            return
+            return nil
         }
         let kinds = EnginePolicy.schedulerKinds(configured: configuration.schedulers, account: account)
-        let runtime = AccountRuntime(account: account, api: api, writable: writable, schedulerKinds: kinds,
-                                     env: runtimeEnvironment())
-        runtimes[account.id] = runtime
-        log.notice("account \(account.id.rawValue): owned (drainer \(writable), schedulers \(kinds.map(\.rawValue).sorted()))")
-        if !isActive { await runtime.setActive(false) }
-        await runtime.start()
+        return AccountRuntime(account: account, api: api, writable: EnginePolicy.runsDrainer(account: account),
+                              schedulerKinds: kinds, env: runtimeEnvironment())
     }
 
-    private func runtimeEnvironment() -> RuntimeEnvironment {
+    func runtimeEnvironment() -> RuntimeEnvironment {
+        let window = configuration.window
         let unitsPerMinute = configuration.gmail.unitsPerMinute
-        var settings = SyncSettings(backfillUnitsPerMinute: max(unitsPerMinute / 2, 60))
-        if let days = try? store.setting(.bodyHorizonDays, scope: .global), days > 0 {
+        var settings = SyncSettings(backfillUnitsPerMinute: window.backfillUnitsPerMinute ?? max(unitsPerMinute / 2, 60))
+        if let days = try? store.setting(window.bodyHorizonKey, scope: .global), days > 0 {
             settings.bodyHorizon = .seconds(days * 86_400)
         }
-        if let days = (try? store.setting(.metadataHorizonDays, scope: .global)) ?? nil, days > 0 {
+        if let days = (try? store.setting(window.metadataHorizonKey, scope: .global)) ?? nil, days > 0 {
             settings.metadataHorizon = .seconds(days * 86_400)
         }
         let sink = eventSink
         return RuntimeEnvironment(store: store, clock: configuration.clock, emit: { sink.yield($0) },
                                   connectivity: connectivity, progress: progress, reachability: reachability,
                                   pollInterval: configuration.pollInterval, syncSettings: settings,
+                                  downloadBodies: window.downloadBodiesKey,
                                   jitter: jitterOverride ?? ScheduleJitter.delay(for: store.writerID),
                                   metrics: metrics, runnerOverride: runnerOverride)
     }
@@ -252,9 +269,12 @@ public actor MailEngine {
                 await runtime.pokeScheduler()
             }
         case .didBecomeActive:
+            let resumes = inBackground
+            inBackground = false
             isActive = true
             store.setExternalChangePollActive(true)
             for runtime in runtimes.values {
+                if resumes { await runtime.syncer.resumeBackfill() }
                 await runtime.setActive(true)
                 let syncer = runtime.syncer
                 Task { try? await syncer.refreshLabels() }
@@ -263,6 +283,8 @@ public actor MailEngine {
             isActive = false
             store.setExternalChangePollActive(false)
             for runtime in runtimes.values { await runtime.setActive(false) }
+        case .didEnterBackground:
+            await enterBackground()
         case .networkReachable(let up):
             let now = configuration.clock.now
             reachability.set(up, now: now)

@@ -98,6 +98,19 @@ final class ProbeGmail: GmailAPI {
         await gate.pass()
     }
 
+    func holdAfterCommit(_ method: GmailMethod) -> Hold {
+        let hold = Hold()
+        holds.withLock { $0[method] = hold }
+        return hold
+    }
+
+    private let holds = Mutex<[GmailMethod: Hold]>([:])
+
+    private func committed(_ method: GmailMethod) async throws {
+        guard let hold = holds.withLock({ $0.removeValue(forKey: method) }) else { return }
+        try await hold.pass()
+    }
+
     func getProfile(priority: RequestPriority) async throws -> GmailProfile { try await inner.getProfile(priority: priority) }
     func listSendAs() async throws -> [GmailSendAs] { try await inner.listSendAs() }
     func listLabels() async throws -> [GmailLabel] { try await inner.listLabels() }
@@ -160,7 +173,9 @@ final class ProbeGmail: GmailAPI {
     }
     func createDraft(rawRFC822: Data, threadID: String?) async throws -> GmailDraft {
         note(.createDraft, rawRFC822)
-        return try await inner.createDraft(rawRFC822: rawRFC822, threadID: threadID)
+        let draft = try await inner.createDraft(rawRFC822: rawRFC822, threadID: threadID)
+        try await committed(.createDraft)
+        return draft
     }
     func updateDraft(id: String, rawRFC822: Data, threadID: String?) async throws -> GmailDraft {
         await pass(.updateDraft)
@@ -177,13 +192,16 @@ final class ProbeGmail: GmailAPI {
     func sendDraft(id: String) async throws -> GmailMessage {
         await pass(.sendDraft)
         note(.sendDraft)
-        return try await inner.sendDraft(id: id)
+        let sent = try await inner.sendDraft(id: id)
+        try await committed(.sendDraft)
+        return sent
     }
     func listHistory(startHistoryID: HistoryID, pageToken: String?, types: [HistoryType], labelID: String?,
                      maxResults: Int, priority: RequestPriority) async throws -> GmailListHistoryResponse {
         let answer = try await inner.listHistory(startHistoryID: startHistoryID, pageToken: pageToken, types: types,
                                                  labelID: labelID, maxResults: maxResults, priority: priority)
         await answered(.listHistory)
+        try await committed(.listHistory)
         return answer
     }
     func insertMessage(rawRFC822: Data, labelIDs: [String]) async throws -> GmailMessage {
@@ -224,6 +242,77 @@ final class Gate: Sendable {
             return s.waiter
         }
         waiter?.resume()
+    }
+}
+
+// A Gmail answer held after the change is committed; cancelling the caller fails it the way URLSession does
+final class Hold: Sendable {
+    private struct State {
+        var arrived = false
+        var cancelled = false
+        var outcome: Result<Void, GmailError>?
+        var waiter: CheckedContinuation<Void, Error>?
+        var arrivals: [UUID: CheckedContinuation<Void, Never>] = [:]
+    }
+    private let state = Mutex(State())
+
+    var wasCancelled: Bool { state.withLock { $0.cancelled } }
+
+    func pass() async throws {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                let (arrivals, now) = state.withLock { s -> ([CheckedContinuation<Void, Never>], Result<Void, GmailError>?) in
+                    s.arrived = true
+                    defer { s.arrivals = [:] }
+                    if Task.isCancelled {
+                        s.cancelled = true
+                        return (Array(s.arrivals.values), .failure(.cancelled))
+                    }
+                    if let outcome = s.outcome { return (Array(s.arrivals.values), outcome) }
+                    s.waiter = continuation
+                    return (Array(s.arrivals.values), nil)
+                }
+                for arrival in arrivals { arrival.resume() }
+                if let now { continuation.resume(with: now.mapError { $0 as Error }) }
+            }
+        } onCancel: {
+            let waiter = state.withLock { s -> CheckedContinuation<Void, Error>? in
+                guard let waiter = s.waiter else { return nil }
+                s.waiter = nil
+                s.cancelled = true
+                return waiter
+            }
+            waiter?.resume(throwing: GmailError.cancelled)
+        }
+    }
+
+    func arrival() async {
+        let id = UUID()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                let now = state.withLock { s -> Bool in
+                    if s.arrived || Task.isCancelled { return true }
+                    s.arrivals[id] = continuation
+                    return false
+                }
+                if now { continuation.resume() }
+            }
+        } onCancel: {
+            state.withLock { $0.arrivals.removeValue(forKey: id) }?.resume()
+        }
+    }
+
+    func open() { finish(.success(())) }
+
+    func fail(_ error: GmailError) { finish(.failure(error)) }
+
+    private func finish(_ outcome: Result<Void, GmailError>) {
+        let waiter = state.withLock { s -> CheckedContinuation<Void, Error>? in
+            if s.outcome == nil { s.outcome = outcome }
+            defer { s.waiter = nil }
+            return s.waiter
+        }
+        waiter?.resume(with: outcome.mapError { $0 as Error })
     }
 }
 
