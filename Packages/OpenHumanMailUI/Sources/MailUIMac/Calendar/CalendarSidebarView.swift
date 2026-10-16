@@ -33,7 +33,7 @@ public struct CalendarSidebarView: View {
             Rectangle().fill(theme.borderHairline.color).frame(height: theme.borderWidthHairline)
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: theme.space5) {
-                    if model.draft != nil { CalendarDraftEditor(model: model) }
+                    if model.draft != nil { CalendarDraftEditor(model: model, takeKeys: { dayKeys.take() }) }
                     summary
                     if model.draft == nil, let day = model.dayViewDay {
                         CalendarDayView(model: model, day: day, takeKeys: { dayKeys.take() })
@@ -44,6 +44,7 @@ public struct CalendarSidebarView: View {
                 .padding(theme.space5)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .overlay(alignment: .top) { CalendarEventDetailsOverlay(model: model, router: router) }
             CalendarSidebarBottomBar(model: model, router: router)
         }
         .frame(width: theme.component.sidebar.width)
@@ -300,6 +301,7 @@ struct CalendarDraftEditor: View {
     @Bindable var model: CalendarSidebarModel
     var showsDay = true
     var onCancel: (() -> Void)?
+    var takeKeys: () -> Void = {}
     @Environment(\.theme) private var theme
     @State private var feedback: PendingEventStore.Feedback?
 
@@ -323,7 +325,7 @@ struct CalendarDraftEditor: View {
                         .padding(.leading, CalendarDraftEditor.iconColumn)
                 }
                 if showsDay, let day = model.dayViewDay {
-                    CalendarDayView(model: model, day: day, strikesConflicts: true, compact: true)
+                    CalendarDayView(model: model, day: day, strikesConflicts: true, takeKeys: takeKeys, compact: true)
                     conflicts(model.timeline(for: day))
                 }
                 status(draft)
@@ -479,10 +481,20 @@ final class CalendarDayKeyView: NSView, TextInputHost {
     func handle(_ event: NSEvent) -> Bool {
         guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return false }
         if event.keyCode == 53 {
-            window?.makeFirstResponder(nil)
+            if let model, model.openedEvent != nil {
+                model.closeEvent(keepsFocus: true)
+            } else {
+                window?.makeFirstResponder(nil)
+            }
             return true
         }
         guard let model else { return false }
+        switch event.keyCode {
+        case 36, 76: return model.openFocusedEvent()
+        case 125: return model.moveEventFocus(by: 1)
+        case 126: return model.moveEventFocus(by: -1)
+        default: break
+        }
         switch event.charactersIgnoringModifiers {
         case "-": model.moveDayInstantly(by: -1)
         case "=", "+": model.moveDayInstantly(by: 1)
@@ -495,7 +507,7 @@ final class CalendarDayKeyView: NSView, TextInputHost {
     override func isAccessibilityElement() -> Bool { true }
     override func accessibilityRole() -> NSAccessibility.Role? { .group }
     override func accessibilityLabel() -> String? {
-        String(localized: "Calendar days. Minus for the day before, equals for the day after, T for today.")
+        String(localized: "Calendar days. Minus for the day before, equals for the day after, T for today. Up and down arrows choose an event, Return shows its details, Escape closes them.")
     }
 }
 

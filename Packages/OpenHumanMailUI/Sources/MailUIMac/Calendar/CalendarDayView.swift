@@ -19,6 +19,7 @@ struct CalendarDayView: View {
     static let hourHeight: CGFloat = 44
     static let axisWidth: CGFloat = 46
     static let focusAnchor = "calendar.day.focus"
+    static let eventAnchor = "calendar.day.event"
     static let labelRoom: CGFloat = 8
 
     var body: some View {
@@ -73,16 +74,36 @@ struct CalendarDayView: View {
         VStack(alignment: .leading, spacing: 2) {
             ForEach(events) { event in
                 let color = Self.calendarColor(CalendarDayTimeline.colorIndex(for: event), theme: theme)
+                let opened = model.isOpened(event)
                 Text(event.title).themeFont(theme.typeCaption).foregroundStyle(theme.textPrimary.color)
                     .lineLimit(1).truncationMode(.tail)
                     .padding(.horizontal, theme.space2).padding(.vertical, 2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 4).fill(color.opacity(0.22)))
+                    .background(RoundedRectangle(cornerRadius: 4).fill(color.opacity(opened ? 0.4 : 0.22)))
+                    .overlay { if model.isFocused(event) { focusRing } }
+                    .contentShape(Rectangle())
+                    .onTapGesture { open(event) }
+                    .help(event.title)
+                    .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(event.title), all day")
+                    .accessibilityHint("Shows the event's details")
+                    .accessibilityAddTraits(opened ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityAction { open(event) }
+                    .accessibilityIdentifier("calendar.dayView.allDayEvent")
             }
         }
         .padding(.leading, Self.axisWidth)
         .accessibilityIdentifier("calendar.dayView.allDay")
+    }
+
+    private func open(_ event: CalendarEvent) {
+        takeKeys()
+        model.openEvent(event)
+    }
+
+    private var focusRing: some View {
+        RoundedRectangle(cornerRadius: 5).strokeBorder(theme.accentFill.color, lineWidth: 2).padding(-1)
+            .allowsHitTesting(false)
     }
 
     private func axis(_ timeline: CalendarDayTimeline) -> some View {
@@ -104,6 +125,7 @@ struct CalendarDayView: View {
             ScrollView(.vertical) {
                 HStack(alignment: .top, spacing: 0) {
                     scrollMarker(timeline, height: height)
+                        .overlay(alignment: .top) { eventMarker(timeline, height: height) }
                     hourLabels(timeline, height: height)
                     GeometryReader { geometry in
                         let width = geometry.size.width
@@ -123,7 +145,29 @@ struct CalendarDayView: View {
             .onAppear { scrollToFocus(timeline, proxy) }
             .onChange(of: timeline.focus) { scrollToFocus(timeline, proxy) }
             .onChange(of: day.start) { scrollToFocus(timeline, proxy) }
+            .onChange(of: model.focusedEventKey) {
+                // Why: a clicked event is already in view, and an open card covers the day
+                guard model.openedEvent == nil, focusedBlock(timeline) != nil else { return }
+                DispatchQueue.main.async { proxy.scrollTo(Self.eventAnchor, anchor: .center) }
+            }
         }
+    }
+
+    private func focusedBlock(_ timeline: CalendarDayTimeline) -> CalendarDayTimeline.Block? {
+        timeline.blocks.first { model.isFocused($0.event) }
+    }
+
+    private func eventMarker(_ timeline: CalendarDayTimeline, height: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            if let chosen = focusedBlock(timeline) {
+                Color.clear.frame(width: 1, height: CGFloat(chosen.top) * height)
+                Color.clear.frame(width: 1, height: max(CGFloat(chosen.height) * height, 1)).id(Self.eventAnchor)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(width: 1, height: height, alignment: .top)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private func scrollMarker(_ timeline: CalendarDayTimeline, height: CGFloat) -> some View {
@@ -183,6 +227,7 @@ struct CalendarDayView: View {
         let columnWidth = (width - gap * CGFloat(block.columns - 1)) / CGFloat(max(block.columns, 1))
         let color = Self.calendarColor(block.colorIndex, theme: theme)
         let struck = strikesConflicts && block.isConflict
+        let opened = model.isOpened(block.event)
         let blockHeight = max(CGFloat(block.height) * height - 1, 14)
         return HStack(alignment: .top, spacing: theme.space1) {
             RoundedRectangle(cornerRadius: 1.5).fill(color).frame(width: 3)
@@ -215,19 +260,30 @@ struct CalendarDayView: View {
         .padding(.trailing, theme.space1)
         .frame(width: max(columnWidth, 8), height: blockHeight, alignment: .topLeading)
         .clipped()
-        .background(RoundedRectangle(cornerRadius: 4).fill(color.opacity(block.isConflict ? 0.28 : 0.18)))
+        .background(RoundedRectangle(cornerRadius: 4).fill(color.opacity(opened ? 0.4 : block.isConflict ? 0.28 : 0.18)))
         .overlay {
             if block.isConflict {
                 RoundedRectangle(cornerRadius: 4).strokeBorder(theme.textDanger.color, lineWidth: 1.5)
             }
         }
+        .overlay { if model.isFocused(block.event) { focusRing } }
+        .contentShape(RoundedRectangle(cornerRadius: 4))
+        .onTapGesture { open(block.event) }
         .offset(x: CGFloat(block.column) * (columnWidth + gap), y: CGFloat(block.top) * height)
         .help(block.event.title + "\n" + model.timeText(block.event.start, block.event.end)
               + (block.event.account.map { "\n" + $0 } ?? ""))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(block.isConflict
             ? "\(block.event.title), \(model.timeText(block.event.start, block.event.end)), conflicts with the proposed time"
             : "\(block.event.title), \(model.timeText(block.event.start, block.event.end))")
+        .accessibilityHint("Shows the event's details")
+        .accessibilityAddTraits(opened ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { open(block.event) }
+        .accessibilityActions {
+            if let link = block.event.meetLink {
+                Button("Join Google Meet") { openURL(link) }
+            }
+        }
         .accessibilityIdentifier(block.isConflict ? "calendar.dayView.conflict" : "calendar.dayView.event")
     }
 

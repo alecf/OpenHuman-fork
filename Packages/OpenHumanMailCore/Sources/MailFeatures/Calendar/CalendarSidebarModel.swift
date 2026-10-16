@@ -40,6 +40,7 @@ public final class CalendarSidebarModel {
     public private(set) var mentionCount = 0
     public var draft: CalendarEventDraft? {
         didSet {
+            if oldValue == nil, draft != nil { openedEvent = nil }
             if draft != oldValue { draftNote = nil }
             if !switchingDraft, draft != oldValue { mirrorDraft() }
         }
@@ -58,6 +59,8 @@ public final class CalendarSidebarModel {
     public private(set) var progress: CalendarLoadProgress?
     public private(set) var refreshNote: String?
     public private(set) var mentionFocus: DateInterval?
+    public private(set) var openedEvent: CalendarEvent?
+    public private(set) var focusedEventKey: String?
     @ObservationIgnored public var timeZone: TimeZone
     @ObservationIgnored public var now: @MainActor () -> Date
     @ObservationIgnored public var createWindow: Duration = NoticeCenter.toastDuration
@@ -301,6 +304,7 @@ public final class CalendarSidebarModel {
     public func setVisible(_ visible: Bool) {
         let opened = visible && !isVisible
         isVisible = visible
+        if !visible { forgetEvent() }
         if visible {
             followConnections()
             secondTimeZoneSetting.start()
@@ -326,6 +330,7 @@ public final class CalendarSidebarModel {
 
     public func show(thread: ThreadKey?) async {
         followConnections()
+        if thread != self.thread { forgetEvent() }
         generation += 1
         let mine = generation
         if draft != nil, thread != draftThread { stashDraft() }
@@ -408,6 +413,7 @@ public final class CalendarSidebarModel {
 
     private func beginShowing(day start: Date) -> Int {
         generation += 1
+        forgetEvent()
         isBrowsing = true
         followsDraft = false
         let mentioned = Set(CalendarDateMentions.days(mentions, timeZone: timeZone, today: now(), limit: .max))
@@ -829,6 +835,81 @@ public final class CalendarSidebarModel {
         day.start.formatted(Date.FormatStyle(timeZone: timeZone).weekday(.abbreviated).month(.abbreviated).day())
     }
 
+    public func openEvent(_ event: CalendarEvent) {
+        focusedEventKey = CalendarDayTimeline.key(for: event)
+        openedEvent = event
+    }
+
+    public func closeEvent(keepsFocus: Bool = false) {
+        openedEvent = nil
+        if !keepsFocus { focusedEventKey = nil }
+    }
+
+    private func forgetEvent() {
+        openedEvent = nil
+        focusedEventKey = nil
+    }
+
+    public func isOpened(_ event: CalendarEvent) -> Bool {
+        openedEvent.map { CalendarDayTimeline.key(for: $0) == CalendarDayTimeline.key(for: event) } ?? false
+    }
+
+    public func isFocused(_ event: CalendarEvent) -> Bool { focusedEventKey == CalendarDayTimeline.key(for: event) }
+
+    public var focusableEvents: [CalendarEvent] {
+        guard let day = dayViewDay else { return [] }
+        return timeline(for: day).shownEvents
+    }
+
+    @discardableResult
+    public func moveEventFocus(by delta: Int) -> Bool {
+        let shown = focusableEvents
+        guard !shown.isEmpty else { return false }
+        let keys = shown.map(CalendarDayTimeline.key(for:))
+        let index: Int
+        if let current = focusedEventKey, let at = keys.firstIndex(of: current) {
+            index = min(max(at + delta, 0), keys.count - 1)
+        } else {
+            index = delta < 0 ? keys.count - 1 : 0
+        }
+        focusedEventKey = keys[index]
+        if openedEvent != nil { openedEvent = shown[index] }
+        return true
+    }
+
+    @discardableResult
+    public func openFocusedEvent() -> Bool {
+        let shown = focusableEvents
+        guard let event = shown.first(where: { CalendarDayTimeline.key(for: $0) == focusedEventKey }) ?? shown.first else {
+            return false
+        }
+        openEvent(event)
+        return true
+    }
+
+    public var openedDetails: CalendarEventDetails? {
+        guard let opened = openedEvent else { return nil }
+        let key = CalendarDayTimeline.key(for: opened)
+        let latest = days.lazy.flatMap(\.events).first { CalendarDayTimeline.key(for: $0) == key }
+        return details(for: latest ?? opened)
+    }
+
+    public func details(for event: CalendarEvent) -> CalendarEventDetails {
+        let calendar = eventCalendar(event)
+        return CalendarEventDetails(event: event, timeZone: timeZone, calendarName: calendar.name, calendarKey: calendar.key,
+                                    myAddresses: calendar.key.isEmpty ? [] : [calendar.key])
+    }
+
+    func eventCalendar(_ event: CalendarEvent) -> (key: String, name: String) {
+        let key = (event.account ?? shownProvider?.info.account ?? "").lowercased()
+        let info = sources.first { $0.owner == key }?.provider.info ?? (shownProvider ?? provider).info
+        if let named = event.calendarName?.trimmingCharacters(in: .whitespacesAndNewlines), !named.isEmpty, named != info.name {
+            return (key, named)
+        }
+        let owner = info.account ?? event.account ?? ""
+        return (key, owner.isEmpty ? info.name : "\(info.name) · \(owner)")
+    }
+
     static func focus(in mentions: [CalendarDateMention], now: Date) -> DateInterval? {
         let timed = mentions.filter(\.hasTime)
         guard let pick = timed.first(where: { $0.date >= now }) ?? timed.first else { return nil }
@@ -1112,8 +1193,10 @@ public final class CalendarSidebarModel {
         if paint(), state == .loading { state = .loaded }
     }
 
+    public static let placeholderPrefix = "local-"
+
     private func placeholder(for draft: CalendarEventDraft, on target: any CalendarProviding) -> CalendarEvent {
-        CalendarEvent(id: "local-\(UUID().uuidString)", title: draft.title, start: draft.start, end: draft.end,
+        CalendarEvent(id: Self.placeholderPrefix + UUID().uuidString, title: draft.title, start: draft.start, end: draft.end,
                       timeZone: draft.timeZone, attendees: draft.attendees, calendarName: target.info.name,
                       organizerIsMe: true)
     }
