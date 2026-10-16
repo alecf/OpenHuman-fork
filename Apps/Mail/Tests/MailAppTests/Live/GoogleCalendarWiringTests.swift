@@ -7,6 +7,7 @@ import OpenHumanGmailTesting
 import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private let readScopes = CalendarScopes.request.read
 private let writeScopes = CalendarScopes.request.write

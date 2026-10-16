@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import MailModel
 import OpenHumanGmailApple
+import OpenHumanMailLive
 
 extension SignInBrowserPlatform {
     static let system = SignInBrowserPlatform(

@@ -7,6 +7,7 @@ import OpenHumanGmailTesting
 import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private enum Hostile {
     static let subject = "MARKER-SUBJ-7f3a <script>alert(1)</script> \"quoted\" $(rm -rf ~) `id`"

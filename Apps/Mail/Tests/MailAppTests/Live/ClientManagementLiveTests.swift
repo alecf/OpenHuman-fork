@@ -7,6 +7,7 @@ import OpenHumanStore
 import Synchronization
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private enum ManagedClients {
     static let workID = "555555555555-managedwork5.apps.googleusercontent.com"

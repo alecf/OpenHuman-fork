@@ -6,6 +6,7 @@ import OpenHumanGmailTesting
 import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private let sharedGroup = "ABCDE12345." + KeychainSharing.groupName
 

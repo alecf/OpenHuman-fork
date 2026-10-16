@@ -11,6 +11,7 @@ import OpenHumanStore
 import OpenHumanSync
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 @MainActor
 private func waitFor(_ what: String, timeout: Duration = .seconds(30), _ condition: () async -> Bool,

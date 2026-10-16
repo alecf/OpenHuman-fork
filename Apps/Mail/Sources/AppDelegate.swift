@@ -4,6 +4,7 @@ import MailActions
 import MailFeatures
 import MailUIMac
 import OpenHumanLinks
+import OpenHumanMailLive
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {

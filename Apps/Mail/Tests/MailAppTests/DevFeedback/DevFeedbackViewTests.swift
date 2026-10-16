@@ -6,6 +6,7 @@ import OpenHumanLinks
 import SwiftUI
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 @MainActor
 @Suite(.serialized) struct DevFeedbackViewTests {

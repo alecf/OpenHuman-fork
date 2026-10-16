@@ -87,6 +87,7 @@ targets:
       - { package: OpenHumanAIMLX, product: OpenHumanAIMLX }
       - { package: OpenHumanAIMLX, product: OpenHumanAIMLXRuntime }
       - { package: OpenHumanSemanticIndex, product: OpenHumanSemanticIndex }
+      - { package: OpenHumanMailLive, product: OpenHumanMailLive }
       - { package: OpenHumanMailLive, product: MailSystem }
   MailAppTests:
     type: bundle.unit-test

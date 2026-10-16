@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Network
+import OpenHumanMailLive
 import OpenHumanSync
 import Synchronization
 

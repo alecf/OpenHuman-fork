@@ -8,6 +8,7 @@ import OpenHumanGmailTesting
 import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private struct Rig {
     let manager: LiveAccountManager

@@ -3,6 +3,7 @@ import MailFeatures
 import MailTheme
 import MailUI
 import MailUIMac
+import OpenHumanMailLive
 import SwiftUI
 
 @main

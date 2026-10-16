@@ -8,6 +8,7 @@ import OpenHumanGmail
 import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 @MainActor
 struct DevSurfaceTests {

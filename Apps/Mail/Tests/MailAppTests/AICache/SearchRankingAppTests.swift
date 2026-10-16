@@ -5,6 +5,7 @@ import OpenHumanCore
 import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private let now = Date(timeIntervalSince1970: 1_791_000_000)
 

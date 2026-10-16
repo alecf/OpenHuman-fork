@@ -6,6 +6,7 @@ import OpenHumanGmailTesting
 import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private func liveManager(store: MailStore, tokens: any TokenStore, home: URL,
                          transport: FakeHTTPTransport) throws -> LiveAccountManager {

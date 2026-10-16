@@ -8,6 +8,7 @@ import OpenHumanGmailTesting
 import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
+@testable import OpenHumanMailLive
 
 private func synthetic(_ scopes: [String] = [GmailScope.modify]) -> StoredToken {
     StoredToken(refreshToken: "synthetic-refresh", grantedScopes: scopes, clientID: SyntheticClient.clientID)

@@ -8,6 +8,7 @@ import MailUIMac
 import OpenHumanCore
 import OpenHumanGmail
 import OpenHumanGmailApple
+import OpenHumanMailLive
 import OpenHumanStore
 import OpenHumanAI
 import Security
