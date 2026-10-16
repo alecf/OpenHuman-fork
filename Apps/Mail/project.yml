@@ -27,10 +27,10 @@ targets:
     type: application
     platform: macOS
     sources: [Sources, { path: Resources, excludes: ["checklist/**"] }]
-    entitlements: { path: Entitlements/Mail.entitlements }
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: $(OH_ENTITLEMENTS)
     info:
       path: Resources/Info.generated.plist
       properties:

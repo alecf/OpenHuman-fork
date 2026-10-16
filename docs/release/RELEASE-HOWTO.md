@@ -105,8 +105,57 @@ cp Tools/release/release.env.example Tools/release/release.env
 ```
 
 The command prompts for an app-specific password. The ignored `release.env`
-contains profile and identity names only. See
-[Apple's notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
+contains profile and identity names and the provisioning profile's path only.
+See [Apple's notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
+
+## iCloud entitlements
+
+A signed build carries the iCloud entitlements in
+`Apps/Mail/Entitlements/Mail-iCloud.entitlements`: CloudKit with the container
+`iCloud.dev.openhuman.mail`, push notifications (`production`), the `Production`
+iCloud environment and the keychain group `<TEAMID>.dev.openhuman.shared` that the
+Mac and iPhone apps share. A Developer ID app may use them only with a
+Developer ID provisioning profile that grants them. macOS checks that profile
+when the app is installed and at every launch, and an app whose profile is
+missing, expired or does not match does not open.
+
+Set up once in the Apple Developer portal (Certificates, Identifiers & Profiles):
+
+1. Register the iCloud container `iCloud.dev.openhuman.mail`.
+2. Register the explicit App ID `dev.openhuman.mail` with iCloud (CloudKit, using
+   that container) and Push Notifications.
+3. Create a Developer ID provisioning profile for that App ID with your Developer
+   ID Application certificate, and download it.
+4. Keep the file outside the repository and set its path in
+   `Tools/release/release.env`:
+
+   ```sh
+   : "${OH_PROVISIONING_PROFILE:=$HOME/Documents/OpenHuman_Mail_Developer_ID.provisionprofile}"
+   ```
+
+Before it builds anything, `make-dmg.sh` decodes the profile with
+`security cms -D -i` and checks that it is a macOS Developer ID profile (it lists
+no devices) for your team and App ID, that it has not expired, that it lists the
+certificate you sign with, and that it grants every entitlement in
+`Mail-iCloud.entitlements` once `$(AppIdentifierPrefix)`, `$(DEVELOPMENT_TEAM)`
+and `$(PRODUCT_BUNDLE_IDENTIFIER)` are filled in. It stops and names each
+mismatch otherwise. After Xcode exports the app, the script copies the profile to
+`Contents/embedded.provisionprofile` and signs the app again with those
+entitlements, the hardened runtime and a secure timestamp.
+
+`check-release.sh` fails an app signed with any entitlement that needs a
+provisioning profile when the embedded profile is missing or does not grant it,
+an app with an entitlement outside its allowed list, nested code that carries
+one, an unsigned build that carries one, and an app whose `OHKeychainAccessGroup`
+in `Info.plist` is not a keychain group its signature grants.
+`make-dmg.sh` passes it `--icloud`, so a signed build that lost these
+entitlements fails too.
+
+`make-dmg.sh --no-icloud` signs and notarizes without these entitlements and
+without a profile. Unsigned builds never carry them, and Xcode, CI and contributor
+builds use the empty `Mail.entitlements` (see [Entitlements](../BUILD.md#entitlements)).
+Open the first build signed with a new profile on another Mac before handing it
+out: only macOS can tell whether it accepts the profile at launch.
 
 ## Signed build
 
