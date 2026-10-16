@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-APPLE_ONLY="OpenHumanMailUI OpenHumanAIMLX OpenHumanCloudSync"
+APPLE_ONLY="OpenHumanMailUI OpenHumanAIMLX OpenHumanCloudSync OpenHumanMailLive"
 # Why: AppKit-only views, and subprocess-based assistants (Process does not exist on iOS)
 IOS_SKIP="MailUIMac OpenHumanAIAgentCLI"
 

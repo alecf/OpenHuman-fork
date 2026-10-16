@@ -2,7 +2,7 @@ import Foundation
 import Security
 import Synchronization
 import Testing
-@testable import MailUIMac
+@testable import MailSystem
 
 final class FakeSecretKeychain: SecretKeychainBackend {
     struct Item: Sendable, Equatable {
@@ -123,7 +123,7 @@ final class FakeSecretKeychain: SecretKeychainBackend {
     @Test func theStoreHasNoUpdatePath() throws {
         let source = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/MailUIMac/System/KeychainSecretStore.swift")
+            .appendingPathComponent("Sources/MailSystem/KeychainSecretStore.swift")
         let text = try String(contentsOf: source, encoding: .utf8)
         #expect(text.contains("SecItemAdd(") && text.contains("SecItemDelete("))
         #expect(!text.contains("SecItemUpdate("), "an item is replaced, never updated in place")

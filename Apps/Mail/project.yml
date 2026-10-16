@@ -21,6 +21,7 @@ packages:
   OpenHumanAI: { path: ../../Packages/OpenHumanAI }
   OpenHumanAIMLX: { path: ../../Packages/OpenHumanAIMLX }
   OpenHumanSemanticIndex: { path: ../../Packages/OpenHumanSemanticIndex }
+  OpenHumanMailLive: { path: ../../Packages/OpenHumanMailLive }
 targets:
   Mail:
     type: application
@@ -86,6 +87,7 @@ targets:
       - { package: OpenHumanAIMLX, product: OpenHumanAIMLX }
       - { package: OpenHumanAIMLX, product: OpenHumanAIMLXRuntime }
       - { package: OpenHumanSemanticIndex, product: OpenHumanSemanticIndex }
+      - { package: OpenHumanMailLive, product: MailSystem }
   MailAppTests:
     type: bundle.unit-test
     platform: macOS

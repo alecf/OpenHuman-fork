@@ -2,7 +2,7 @@ import CoreSpotlight
 import Foundation
 import MailModel
 import Testing
-@testable import MailUIMac
+@testable import MailSystem
 
 struct CoreSpotlightMappingTests {
     private let item = SpotlightItem(identifier: "oh.thread.1.abc", domain: "oh.account.1", title: "Mail from Ada",
