@@ -349,4 +349,37 @@ import Testing
         #expect(try await h.sentOnGmail().count == 1)
         #expect(await h.gmail.callCount(.getDraft) == 1)
     }
+
+    @Test(.timeLimit(.minutes(1))) func aSendCancelledAfterGmailSentItIsConfirmedNotSentAgain() async throws {
+        let h = try await WriteHarness(clock: sendClock())
+        let events = EventLog()
+        let probe = ProbeGmail(h.gmail)
+        let drainer = h.drainer(api: probe, events: events)
+        let id = try h.newDraft()
+        try await h.upload(id, drainer: drainer)
+        let receipt = try h.store.send(id, undoWindow: .zero, origin: .app)
+        h.advancePast(receipt)
+        let hold = probe.holdAfterCommit(.sendDraft)
+        let pass = Task { await drainer.drainOnce() }
+        await hold.arrival()
+
+        pass.cancel()
+        let cut = await pass.value
+
+        #expect(hold.wasCancelled && cut.retried == 1 && cut.failed == 0)
+        let interrupted = try #require(try h.store.operation(receipt.sendOperationID))
+        #expect(interrupted.status == .pending && interrupted.attempts == 1)
+        #expect(interrupted.lastErrorCode == "send_interrupted")
+        #expect(try h.draft(id).state == .sending)
+        #expect(try await h.sentOnGmail().count == 1, "Gmail sent it before the answer was lost")
+
+        let resumed = await drainer.drainOnce()
+
+        #expect(resumed.succeeded == 1 && resumed.failed == 0)
+        #expect(await h.gmail.callCount(.sendDraft) == 1)
+        #expect(try h.draft(id).state == .sent)
+        #expect(try await h.sentOnGmail().count == 1)
+        #expect(events.sent.map(\.0) == [id] && events.sendFailures.isEmpty)
+        #expect(try h.store.operation(receipt.sendOperationID)?.status == .succeeded)
+    }
 }

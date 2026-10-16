@@ -8,8 +8,9 @@ import Testing
 @testable import OpenHumanSync
 
 @Suite struct BackgroundRefreshTests {
-    private func syncedHarness(threads: Int = 3, clock: TestClock? = nil, gmail: FakeGmail? = nil) async throws -> EngineHarness {
-        let h = try await EngineHarness(threads: threads, clock: clock, gmail: gmail)
+    private func syncedHarness(threads: Int = 3, clock: TestClock? = nil, gmail: FakeGmail? = nil,
+                               onDisk: Bool = false) async throws -> EngineHarness {
+        let h = try await EngineHarness(onDisk: onDisk, threads: threads, clock: clock, gmail: gmail)
         try await AccountSyncer(account: h.account, store: h.store, api: h.gmail, clock: h.clock).sync(reason: "launch")
         await h.gmail.resetAccounting()
         return h
@@ -380,6 +381,95 @@ import Testing
         #expect(probe.writes.filter { $0.method == .updateDraft }.count == 1, "the retry adopted the first attempt's draft")
     }
 
+    @Test func opsReleasedAtTheDeadlineKeepTheirAttemptsOriginScheduleAndLastError() async throws {
+        let h = try await syncedHarness()
+        let engine = h.engine()
+        try await queue(h, engine, count: 3)
+        await h.gmail.failNext(.batchModify, with: .server(status: 500, message: "synthetic"), count: 3)
+        let failed = await engine.refreshOnce(deadline: h.clock.now.addingTimeInterval(20))
+        #expect(failed.operations[h.account]?.retried == 3)
+        let before = try h.ops([.pending])
+        #expect(before.count == 3 && before.allSatisfy { $0.attempts == 1 && $0.lastErrorCode == "server" })
+        h.clock.advance(by: OperationDrainer.backoff(attempts: 0))
+        let clock = h.clock
+        let deadline = clock.now.addingTimeInterval(20)
+        await h.gmail.afterNext(.batchModify) { _ in clock.advance(to: deadline) }
+
+        let report = await engine.refreshOnce(deadline: deadline)
+
+        let drained = try #require(report.operations[h.account])
+        #expect(drained.succeeded == 1 && drained.released == 2)
+        let after = try h.ops([.pending])
+        #expect(after.count == 2)
+        for op in after {
+            let earlier = try #require(before.first { $0.id == op.id })
+            #expect(op.attempts == 1 && op.origin == .app && op.payload == earlier.payload)
+            #expect(op.notBefore == earlier.notBefore && op.dependsOn == earlier.dependsOn)
+            #expect(op.lastErrorCode == "server" && op.lastErrorMessage == earlier.lastErrorMessage)
+        }
+        #expect(try h.store.lease(account: h.account) == nil)
+    }
+
+    @Test func aRefusedOperationStaysRefusedAfterADeadlineReleaseAndUnderALimit() async throws {
+        let h = try await syncedHarness(onDisk: true)
+        defer { h.cleanup() }
+        let engine = h.engine()
+        let mine = try h.store.apply(.archive([try h.ref(h.threads[0])]), origin: .app).operationIDs[0]
+        let cli = try h.store.apply(.star([try h.ref(h.threads[1])]), origin: .cli).operationIDs[0]
+        let remote = try await h.gmail.createDraft(rawRFC822: rawDraft(subject: "Synthetic refused send"), threadID: nil)
+        let fetched = try #require(try await engine.fetchDraft(account: h.account, gmailDraftID: GmailDraftID(remote.id)))
+        let receipt = try h.store.send(fetched, undoWindow: .zero, origin: .app)
+        let send = receipt.sendOperationID
+        try ExternalOriginTests.setQueuedOrigin("agent", of: send, in: h.store)
+        h.advancePast(receipt)
+        let upsert = try h.store.saveDraftRemotely(try localDraft(h, subject: "Synthetic user draft"))
+        try ExternalOriginTests.setQueuedOrigin("agent", of: upsert, in: h.store)
+        let refused = [cli, send, upsert]
+        let before = try refused.map { try #require(try h.store.operation($0)) }
+        await h.gmail.resetAccounting()
+        let clock = h.clock
+        let deadline = clock.now.addingTimeInterval(20)
+        await h.gmail.afterNext(.batchModify) { _ in clock.advance(to: deadline) }
+
+        let cut = await engine.refreshOnce(deadline: deadline)
+
+        let drained = try #require(cut.operations[h.account])
+        #expect(drained.succeeded == 1 && drained.released == 3)
+        #expect(try h.store.operation(mine)?.status == .succeeded)
+        for earlier in before {
+            let op = try #require(try h.store.operation(earlier.id))
+            #expect(op.status == .pending && op.attempts == 0 && op.origin == earlier.origin, "\(op.kind)")
+            #expect(op.notBefore == earlier.notBefore && op.lastErrorCode == nil, "\(op.kind)")
+        }
+
+        let limited = await engine.refreshOnce(deadline: h.clock.now.addingTimeInterval(20), maxOperations: 2)
+        #expect(limited.operations[h.account]?.claimed == 2 && limited.operations[h.account]?.failed == 2)
+        let rest = await engine.refreshOnce(deadline: h.clock.now.addingTimeInterval(20), maxOperations: 2)
+        #expect(rest.operations[h.account]?.claimed == 1 && rest.operations[h.account]?.failed == 1)
+        for id in refused {
+            let op = try #require(try h.store.operation(id))
+            #expect(op.status == .failed && op.lastErrorCode == "not_applied_outside_app", "\(op.kind)")
+        }
+        #expect(await h.gmail.callCount(.batchModify) == 1)
+        for method: GmailMethod in [.sendDraft, .createDraft, .updateDraft, .modifyMessage] {
+            #expect(await h.gmail.callCount(method) == 0, "\(method.rawValue)")
+        }
+        #expect(!(await h.serverLabels(ofThread: h.threads[1])).contains("STARRED"))
+        #expect(try await sentOnGmail(h.gmail).isEmpty)
+    }
+
+    @Test func theLeaseIsHandedBackWhenTheRefreshFails() async throws {
+        let h = try await syncedHarness()
+        await h.gmail.failNext(.listHistory, with: .server(status: 500, message: "synthetic"))
+        let failed = await h.engine().refreshOnce(deadline: h.clock.now.addingTimeInterval(20))
+        #expect(failed.syncs.count == 1 && failed.syncs.first?.error != nil)
+        #expect(try h.store.lease(account: h.account) == nil)
+
+        let noClient = await h.engine(factory: ThrowingFactory()).refreshOnce(deadline: h.clock.now.addingTimeInterval(20))
+        #expect(noClient.syncs.isEmpty && noClient.ownedElsewhere.isEmpty)
+        #expect(try h.store.lease(account: h.account) == nil)
+    }
+
     @Test func phoneWindowDefaultsAreEngineConfiguration() async throws {
         #expect(LocalWindow.phone == LocalWindow(metadataHorizonDays: 365, bodyHorizonDays: 30, downloadBodies: false,
                                                  backfillUnitsPerMinute: 1_500))
@@ -429,6 +519,10 @@ private final class CountingFactory: GmailClientFactory {
         made.withLock { $0 += 1 }
         return api
     }
+}
+
+private struct ThrowingFactory: GmailClientFactory {
+    func client(for accountEmail: String) throws -> GmailAPI { throw GmailError.transport(.notConnected) }
 }
 
 private final class AnnouncingClock: OHClock {
