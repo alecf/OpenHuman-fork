@@ -34,8 +34,7 @@ struct RenderSweepSettingsTests {
     @Test(arguments: RenderSweepTheme.builtIns)
     func everySettingsPage(_ theme: RenderSweepTheme) async throws {
         let directory = try RenderSweepOutput.directory()
-        let center = AICenter.make(registry: ProviderRegistry(providers: [FakeAIProvider(displayName: "Apple on-device model")]),
-                                   settings: AISettingsBox(store: InMemoryAISettingsStore()))
+        let center = Self.aiCenter()
         let environment = AppEnvironment.fake(corpus: .rich(threadCount: 20, now: Date()), options: .init(remoteAck: .immediate),
                                               featureFlags: FeatureFlags(), ai: center, calendar: FakeCalendar.sample())
         environment.installPlatform(SystemPlatform(notifier: FakeSystemNotifier(authorization: .denied), dock: FakeDockBadge(),
@@ -49,35 +48,58 @@ struct RenderSweepSettingsTests {
         let semantic = SemanticServices(store: try MailStore.openInMemoryForTesting(), storage: .inMemory, ai: center,
                                         makeProvider: { nil })
         #expect(semantic != nil, "the smart search rows need a store with semantic reads")
+        PromptServices.install(persistent: false, directory: nil)
         let notifications = NotificationsSettingsModel(environment: environment)
-        let hosting = SettingsHosting(
-            appearance: { AnyView(AppearanceSettingsView(store: themes, fontFamilies: ["Inter", "New York"])) },
-            notifications: { AnyView(NotificationsSettingsView(model: notifications)) },
-            generalExtras: { AnyView(SystemGeneralSettingsView(environment: environment)) },
-            aiProviders: {
-                AnyView(SettingsSectionStack {
-                    AISettingsSection(center: center, environment: environment, listsUnavailableModels: false)
-                    if let semantic { SmartSearchIndexSettingsView(services: semantic) }
+        func hosting(_ tab: AISettingsTab = .overview) -> SettingsHosting {
+            SettingsHosting(
+                appearance: { AnyView(AppearanceSettingsView(store: themes, fontFamilies: ["Inter", "New York"])) },
+                notifications: { AnyView(NotificationsSettingsView(model: notifications)) },
+                generalExtras: { AnyView(SystemGeneralSettingsView(environment: environment)) },
+                aiProviders: {
+                    AISettingsPageContent.view(center: center, environment: environment, showsDeveloperItems: false,
+                                               classifier: nil, semantic: semantic, initialTab: tab)
                 })
-            })
+        }
         let pages = SettingsShellModel(environment: environment).pages
         #expect(pages.count >= 10, "every built-in page and the module pages")
         for page in pages {
             environment.settingsNavigator.open(page.id)
-            let shell = SettingsShellView(environment: environment, hosting: hosting)
+            let shell = SettingsShellView(environment: environment, hosting: hosting())
             let window = Self.window(shell, themes: themes)
             defer { window.orderOut(nil) }
             try await Task.sleep(for: .milliseconds(600))
             try Self.shoot(window, screen: "settings-\(page.id)", theme: theme, in: directory)
             if Self.fullHeightPages.contains(page.id) || Self.fullHeightPages.contains(where: { page.id.contains($0) }) {
                 environment.settingsNavigator.open(page.id)
-                let tall = Self.window(SettingsShellView(environment: environment, hosting: hosting), themes: themes,
+                let tall = Self.window(SettingsShellView(environment: environment, hosting: hosting()), themes: themes,
                                        size: Self.fullHeightSize)
                 defer { tall.orderOut(nil) }
                 try await Task.sleep(for: .milliseconds(600))
                 try Self.shoot(tall, screen: "settings-\(page.id)-full", theme: theme, in: directory)
             }
         }
+        for tab in [AISettingsTab.prompts, .activity] {
+            environment.settingsNavigator.open("ai")
+            let window = Self.window(SettingsShellView(environment: environment, hosting: hosting(tab)), themes: themes,
+                                     size: Self.fullHeightSize)
+            defer { window.orderOut(nil) }
+            try await Task.sleep(for: .milliseconds(600)) // flake-ok: opt-in render sweep; layout settles before the shot
+            try Self.shoot(window, screen: "settings-ai-\(tab.rawValue)-full", theme: theme, in: directory)
+        }
+    }
+
+    static func aiCenter() -> AICenter {
+        let claude = FakeAIProvider(id: .agentClaude, displayName: "Claude Code",
+                                    capabilities: .fake(dataLocation: .thirdParty(vendor: "Anthropic")))
+        let apple = FakeClassifier(id: .appleSystemClassifier, displayName: "Apple on-device model")
+        let downloaded = FakeClassifier(id: "local.sweep.classifier", displayName: "Downloaded model (Sweep 1B)",
+                                        availability: .unavailable(reason: .modelNotDownloaded(sizeBytes: 980_000_000)))
+        let registry = ProviderRegistry(providers: [FakeAIProvider(id: .appleSystem, displayName: "Apple on-device model")],
+                                        classifiers: [apple, downloaded])
+        return AICenter.make(registry: registry, settings: AISettingsBox(store: InMemoryAISettingsStore()),
+                             traces: InMemoryAITraceStore(SweepSettingsTraces.all), makeProvider: { id in
+                                 id == .agentClaude ? claude : nil
+                             })
     }
 
     static func window<V: View>(_ view: V, themes: ThemeStore, size windowSize: NSSize = windowSize) -> NSWindow {
@@ -192,4 +214,31 @@ enum RenderSweepIndex {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(entries).write(to: url, options: .atomic)
     }
+}
+
+enum SweepSettingsTraces {
+    static let start = Date(timeIntervalSince1970: 1_791_799_680)
+
+    static func id(_ n: Int) -> UUID { UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", n)) ?? UUID() }
+
+    static let all: [AITraceRecord] = [
+        AITraceRecord(id: id(1), createdAt: start.addingTimeInterval(-240), feature: .rewrite, task: .rewrite, trigger: .user,
+                      promptID: PromptID("rewrite.instruct", version: 2), providerID: .appleSystem,
+                      providerName: "Apple on-device model", dataLocation: .onDevice,
+                      systemText: "Rewrite the user's draft as they ask.", inputText: "Draft\nthursday works",
+                      outputText: "Thursday works for me.", finalText: "Thursday works for me.",
+                      usage: AIUsage(inputTokens: 210, outputTokens: 9), latencyMilliseconds: 980, cache: .miss,
+                      outcome: .completed, rating: 1),
+        AITraceRecord(id: id(2), createdAt: start.addingTimeInterval(-600), feature: .askInbox, task: .askInbox,
+                      trigger: .user, promptID: PromptID("ask.inbox", version: 1), providerID: .agentClaude,
+                      providerName: "Claude Code", dataLocation: .thirdParty(vendor: "Anthropic"),
+                      outputText: "The invoice from the print shop is due Friday.",
+                      finalText: "The invoice from the print shop is due Friday.", countedInputTokens: 1_840,
+                      latencyMilliseconds: 6_200, cache: .miss, outcome: .completed),
+        AITraceRecord(id: id(3), createdAt: start.addingTimeInterval(-900), feature: .summarize, task: .summarize,
+                      trigger: .automatic, promptID: PromptID("summarize.line", version: 1), providerID: .appleSystem,
+                      providerName: "Apple on-device model", dataLocation: .onDevice, countedInputTokens: 2_210,
+                      latencyMilliseconds: 20_000, cache: .miss, outcome: .failed, errorKind: "timeout",
+                      errorText: "The model took too long"),
+    ]
 }

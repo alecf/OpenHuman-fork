@@ -15,16 +15,6 @@ public struct ClassifierSettingsSection: View {
 
     public var body: some View {
         SettingsSection(ClassifierSettingsModel.title, footnote: ClassifierSettingsModel.footnote) {
-            SettingsRow(ClassifierSettingsModel.title, alignment: .firstTextBaseline, labelsControl: true) {
-                Picker(ClassifierSettingsModel.title, selection: $model.preference) {
-                    ForEach(model.choices, id: \.self) { choice in
-                        Text(ClassifierSettingsModel.title(for: choice)).tag(choice)
-                    }
-                }
-                .ohRadioGroupPickerStyle()
-                .labelsHidden()
-                .fixedSize()
-            }
             if let port = model.port {
                 SettingsRow(port.modelName, detail: model.statusText) {
                     HStack(spacing: theme.space3) {

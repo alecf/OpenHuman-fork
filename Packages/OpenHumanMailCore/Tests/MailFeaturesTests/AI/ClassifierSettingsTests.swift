@@ -71,7 +71,7 @@ final class FakeClassifierModelPort: LocalClassifierModelPort, Sendable {
         #expect(ClassifierSettingsModel.sizeText(2_400_000_000) == "about 2.4 GB")
         #expect(ClassifierSettingsModel.sizeText(300_000_000) == "about 300 MB")
         #expect(ClassifierSettingsModel(center: center(), port: nil).canDownload == false)
-        #expect(model.choices == [.automatic, .appleModel, .localModel])
+        #expect(ClassifierPreference.allCases == [.appleModel, .localModel], "no Automatic choice")
     }
 
     @Test func theChoiceAndTheLowPowerSwitchAreSavedAndTheFolderIsKept() async {
@@ -101,12 +101,15 @@ final class FakeClassifierModelPort: LocalClassifierModelPort, Sendable {
         var picked = await AutoLabelCenter.onDeviceClassifier(center(classifiers: [local, apple])).0
         #expect(picked?.id == apple.id)
         picked = await AutoLabelCenter.onDeviceClassifier(center(classifiers: [local, appleOff])).0
-        #expect(picked?.id == local.id)
+        #expect(picked == nil, "Apple's model is the default and the downloaded one is never tried on its own")
         picked = await AutoLabelCenter.onDeviceClassifier(
             center(AISettings(classifier: .appleModel), classifiers: [local, appleOff])).0
         #expect(picked == nil)
         picked = await AutoLabelCenter.onDeviceClassifier(
             center(AISettings(classifier: .localModel), classifiers: [localMissing, apple])).0
         #expect(picked == nil)
+        picked = await AutoLabelCenter.onDeviceClassifier(
+            center(AISettings(classifier: .localModel), classifiers: [local, apple])).0
+        #expect(picked?.id == local.id)
     }
 }

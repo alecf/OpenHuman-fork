@@ -131,6 +131,29 @@ actor SQLiteAITraceStore: AITraceStore {
         rows("SELECT \(Self.columns) FROM traces ORDER BY created_at DESC, rowid DESC LIMIT ?", [.int(Int64(max(0, limit)))])
     }
 
+    func traces(matching query: AITraceQuery, limit: Int) async throws -> [AITraceRecord] {
+        var conditions: [String] = []
+        var arguments: [Value] = []
+        if let features = query.features {
+            let names = features.map(\.rawValue).sorted()
+            conditions.append("feature IN (\(Array(repeating: "?", count: names.count).joined(separator: ", ")))")
+            arguments += names.map(Value.text)
+        }
+        if let triggers = query.triggers {
+            let names = triggers.map(\.rawValue).sorted()
+            conditions.append("trigger IN (\(Array(repeating: "?", count: names.count).joined(separator: ", ")))")
+            arguments += names.map(Value.text)
+        }
+        switch query.rating {
+        case nil: break
+        case .rated: conditions.append("rating IS NOT NULL AND rating != 0")
+        case .thumbsDown: conditions.append("rating < 0")
+        }
+        let filter = conditions.isEmpty ? "" : "WHERE " + conditions.joined(separator: " AND ") + " "
+        return rows("SELECT \(Self.columns) FROM traces \(filter)ORDER BY created_at DESC, rowid DESC LIMIT ?",
+                    arguments + [.int(Int64(max(0, limit)))])
+    }
+
     func trace(_ id: UUID) async throws -> AITraceRecord? {
         rows("SELECT \(Self.columns) FROM traces WHERE trace_id = ?", [.text(id.uuidString)]).first
     }

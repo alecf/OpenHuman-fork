@@ -5,6 +5,7 @@ public enum AIModelDefaults {
         .summarize: .appleSystem,
         .replyOptions: .appleSystem,
         .rewrite: .appleSystem,
+        .classify: .appleSystemClassifier,
         .askInbox: .appleSystem,
         .searchPlan: .appleSystem,
         .followUp: .appleSystem,
@@ -13,7 +14,11 @@ public enum AIModelDefaults {
 
     public static func model(for feature: AIFeature, among candidates: [ProviderCandidate]) -> AIProviderID? {
         guard let pinned = pins[feature] else { return nil }
-        let onDevice = candidates.filter { $0.kind == .languageModel && $0.dataLocation == .onDevice && $0.autoSelectable }
+        let kind: ProviderCandidate.Kind = feature == .classify ? .classifier : .languageModel
+        let onDevice = candidates.filter {
+            $0.kind == kind && $0.dataLocation == .onDevice && $0.autoSelectable
+                && (kind == .languageModel || !$0.id.isLocalModel)
+        }
         if onDevice.contains(where: { $0.id == pinned }) { return pinned }
         // Builds without Apple's model (fake data, tests) stand in their own on-device model.
         return onDevice.first?.id
@@ -55,17 +60,20 @@ public struct FeatureRoute: Sendable, Hashable {
     ) -> FeatureRoute {
         let defaultModel = AIModelDefaults.model(for: feature, among: candidates)
         let pin = settings.featurePins[feature]
-        let origin: Origin = pin != nil ? .yourChoice : (defaultModel != nil ? .mailDefault : .firstReady)
-        let choice = pin ?? defaultModel
+        let downloadedClassifier = feature == .classify && pin == nil && settings.classifier == .localModel
+        let origin: Origin = pin != nil || downloadedClassifier ? .yourChoice
+            : (defaultModel != nil ? .mailDefault : .firstReady)
+        let choice = pin ?? (downloadedClassifier
+            ? candidates.first { $0.kind == .classifier && $0.id.isLocalModel }?.id : defaultModel)
         let selection = select(feature: feature, workload: workload, accountKeys: accountKeys, candidates: candidates,
-                               settings: settings, choice: choice, pinned: pin != nil)
+                               settings: settings, choice: choice, pinned: pin != nil, explicit: origin != .firstReady)
         return FeatureRoute(feature: feature, workload: workload, choice: choice, defaultModel: defaultModel,
                             origin: origin, selection: selection)
     }
 
     private static func select(
         feature: AIFeature, workload: AIWorkload, accountKeys: [String?], candidates: [ProviderCandidate],
-        settings: AISettings, choice: AIProviderID?, pinned: Bool
+        settings: AISettings, choice: AIProviderID?, pinned: Bool, explicit: Bool
     ) -> ProviderSelection {
         if let gate = ProviderSelectionPolicy.featureGate(feature, workload: workload, settings: settings) {
             return .unavailable(gate, providerID: nil)
@@ -74,7 +82,7 @@ public struct FeatureRoute: Sendable, Hashable {
 
         if let choice {
             guard let chosen = candidates.first(where: { $0.id == choice }) else {
-                return .unavailable(.other("The provider chosen for this feature is not set up"), providerID: choice)
+                return .unavailable(.other(notSetUp), providerID: choice)
             }
             if let reason = ProviderSelectionPolicy.restriction(
                 for: chosen, feature: feature, workload: workload, onDeviceOnly: onDeviceOnly, settings: settings,
@@ -85,6 +93,7 @@ public struct FeatureRoute: Sendable, Hashable {
             if let reason = chosen.availability.unavailableReason { return .unavailable(reason, providerID: choice) }
             return .selected(chosen)
         }
+        if explicit { return .unavailable(.other(notSetUp), providerID: nil) }
 
         var firstUnavailable: (AIAvailability.UnavailableReason, AIProviderID)?
         var firstRestricted: (AIAvailability.UnavailableReason, AIProviderID)?
@@ -105,4 +114,6 @@ public struct FeatureRoute: Sendable, Hashable {
         if let (reason, id) = firstUnavailable ?? firstRestricted { return .unavailable(reason, providerID: id) }
         return .unavailable(.other("No AI provider is set up"), providerID: nil)
     }
+
+    static let notSetUp = "The model chosen for this feature is not set up"
 }

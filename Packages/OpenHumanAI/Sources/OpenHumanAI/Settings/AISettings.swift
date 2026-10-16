@@ -107,7 +107,7 @@ public struct AISettings: Sendable, Hashable, Codable {
         smartSearch: SmartSearchSettings = SmartSearchSettings(),
         aboutMe: String = "",
         writingInstructions: String = "",
-        classifier: ClassifierPreference = .automatic,
+        classifier: ClassifierPreference = .appleModel,
         localClassifierInLowPowerMode: Bool = false,
         modelsDirectory: String? = nil,
         traces: AITraceSettings = AITraceSettings()

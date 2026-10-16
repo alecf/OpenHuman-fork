@@ -4,15 +4,22 @@ import OpenHumanAI
 public enum AITraceWording {
     public static func feature(_ feature: AIFeature) -> String {
         switch feature {
-        case .summarize: String(localized: "Summary")
+        case .summarize: String(localized: "Conversation summary")
         case .replyOptions: String(localized: "Quick replies")
-        case .rewrite: String(localized: "Write and rewrite (⌘J)")
+        case .rewrite: String(localized: "Write and rewrite (⌘J in a draft)")
         case .classify: String(localized: "Triage and auto labels")
-        case .askInbox: String(localized: "Ask AI (⌘J)")
+        case .askInbox: String(localized: "Ask AI (⌘J in the mail list)")
         case .searchPlan: String(localized: "Search as a sentence")
         case .followUp: String(localized: "Follow-up check")
         case .scheduling: String(localized: "Scheduling replies")
         }
+    }
+
+    public static let oneLineSummary = String(localized: "One-line summary")
+
+    public static func title(_ trace: AITraceRecord) -> String {
+        if trace.feature == .summarize, trace.promptID?.name == "summarize.line" { return oneLineSummary }
+        return feature(trace.feature)
     }
 
     public static func model(_ trace: AITraceRecord) -> String {
@@ -23,7 +30,7 @@ public enum AITraceWording {
     }
 
     public static func modelName(_ id: AIProviderID, displayName: String) -> String {
-        id == .appleSystem ? String(localized: "Apple on-device model") : displayName
+        id == .appleSystem || id == .appleSystemClassifier ? String(localized: "Apple on-device model") : displayName
     }
 
     public static func duration(milliseconds: Int) -> String {
@@ -34,8 +41,9 @@ public enum AITraceWording {
     public static func tokens(_ trace: AITraceRecord) -> String? {
         let input = trace.usage?.inputTokens ?? trace.countedInputTokens
         guard let input else { return nil }
-        if let output = trace.usage?.outputTokens { return String(localized: "\(input) in, \(output) out") }
-        return String(localized: "\(input) tokens in")
+        let read = String(localized: "\(input) tokens in")
+        guard let output = trace.usage?.outputTokens else { return read }
+        return read + " · " + String(localized: "\(output) out")
     }
 
     public static func outcome(_ trace: AITraceRecord) -> String {
@@ -70,10 +78,28 @@ public enum AITraceWording {
         return text + ": " + detail
     }
 
+    public static func happensBeforeTheModel(_ kind: AITraceStep.Kind) -> Bool {
+        kind == .conversationShortened || kind == .summaryUsedForConversation
+    }
+
+    public static func steps(_ steps: [AITraceStep]) -> String? {
+        guard !steps.isEmpty else { return nil }
+        let before = steps.filter { happensBeforeTheModel($0.kind) }
+        let after = steps.filter { !happensBeforeTheModel($0.kind) }
+        var lines: [String] = []
+        if !before.isEmpty { lines += [String(localized: "Before the model")] + before.map { "• " + step($0) } }
+        if !after.isEmpty { lines += [String(localized: "After the model")] + after.map { "• " + step($0) } }
+        return lines.joined(separator: "\n")
+    }
+
+    public static func promptTitle(_ name: String) -> String {
+        PromptCatalog.entries.first { $0.id == name }?.title ?? name
+    }
+
     public static func prompt(_ trace: AITraceRecord) -> String? {
         guard let id = trace.promptID else { return nil }
-        let base = "\(id.name) v\(id.version)"
-        guard let revision = trace.overrideRevision else { return base + " · " + String(localized: "default text") }
+        let base = String(localized: "\(promptTitle(id.name)) prompt, version \(id.version)")
+        guard let revision = trace.overrideRevision else { return base + " · " + String(localized: "not edited") }
         return base + " · " + String(localized: "your edit, revision \(revision)")
     }
 
@@ -84,17 +110,31 @@ public enum AITraceWording {
         case .unavailable(let reason, let id):
             return AIWording.reason(reason, providerName: id.map(name))
         case .selected(let candidate):
-            let where_ = candidate.dataLocation.leavesDevice ? String(localized: "Leaves this Mac.")
-                                                              : String(localized: "Runs on this Mac.")
-            switch route.origin {
-            case .yourChoice:
-                return String(localized: "You chose \(name(candidate.id)) for this feature.") + " " + where_
-            case .mailDefault:
-                return String(localized: "Mail's default for this feature.") + " " + where_
-            case .firstReady:
-                return String(localized: "The first model that is ready.") + " " + where_
+            let where_ = candidate.dataLocation.leavesDevice ? String(localized: "leaves this Mac")
+                                                              : String(localized: "on this Mac")
+            let origin = switch route.origin {
+            case .yourChoice: String(localized: "Your choice")
+            case .mailDefault: String(localized: "Mail's default")
+            case .firstReady: String(localized: "No default model set up here")
             }
+            return origin + " · " + where_
         }
+    }
+
+    public static func traceWhy(_ route: FeatureRoute, name: (AIProviderID) -> String) -> String {
+        guard case .selected = route.selection else { return why(route, name: name) }
+        switch route.origin {
+        case .yourChoice: return String(localized: "You chose it for this feature.")
+        case .mailDefault: return String(localized: "Mail's default for this feature.")
+        case .firstReady: return String(localized: "No default model is set up for this feature here.")
+        }
+    }
+
+    public static func snippet(_ trace: AITraceRecord, limit: Int = 140) -> String? {
+        let text = trace.finalText ?? trace.outputText ?? ""
+        guard let line = text.split(whereSeparator: \.isNewline).lazy
+            .map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { !$0.isEmpty }) else { return nil }
+        return line.count > limit ? String(line.prefix(limit - 1)) + "…" : line
     }
 }
 
@@ -106,9 +146,20 @@ public struct AITraceDetail: Identifiable, Hashable, Sendable {
     }
 
     public struct Section: Identifiable, Hashable, Sendable {
+        public static let collapsedLines = 8
+        static let collapsedCharacters = collapsedLines * 90
+
         public let id: String
         public let title: String
         public let text: String
+
+        public var lineCount: Int { text.split(separator: "\n", omittingEmptySubsequences: false).count }
+
+        public var collapses: Bool {
+            (id == "prompt" || id == "input") && (lineCount > Self.collapsedLines || text.count > Self.collapsedCharacters)
+        }
+
+        public var isPlainText: Bool { id == "steps" || id == "text" }
     }
 
     public let id: UUID
@@ -118,13 +169,14 @@ public struct AITraceDetail: Identifiable, Hashable, Sendable {
     public let badge: AIProviderBadge
     public let rating: Int?
     public let failed: Bool
+    public let promptName: String?
     public let facts: [Fact]
     public let sections: [Section]
 
     public init(_ trace: AITraceRecord, why: String? = nil) {
         id = trace.id
         date = trace.createdAt
-        title = AITraceWording.feature(trace.feature)
+        title = AITraceWording.title(trace)
         model = AITraceWording.model(trace)
         var badge = AIProviderBadge(providerName: trace.providerName, location: trace.dataLocation,
                                     fromCache: trace.cache == .hit)
@@ -132,6 +184,7 @@ public struct AITraceDetail: Identifiable, Hashable, Sendable {
         self.badge = badge
         rating = trace.rating
         failed = trace.outcome == .failed
+        promptName = trace.promptID?.name
 
         var facts = [Fact(key: "model", label: String(localized: "Model"), value: model),
                      Fact(key: "where", label: String(localized: "Where"), value: badge.title)]
@@ -145,7 +198,7 @@ public struct AITraceDetail: Identifiable, Hashable, Sendable {
         if !timing.isEmpty { facts.append(Fact(key: "time", label: String(localized: "Time"), value: timing.joined(separator: ", "))) }
         if let tokens = AITraceWording.tokens(trace) { facts.append(Fact(key: "tokens", label: String(localized: "Tokens"), value: tokens)) }
         facts.append(Fact(key: "result", label: String(localized: "Result"), value: trace.cache == .hit
-            ? String(localized: "Saved answer reused, no model call") : AITraceWording.outcome(trace)))
+            ? String(localized: "From cache, no model call") : AITraceWording.outcome(trace)))
         if let rating = AITraceWording.rating(trace.rating) {
             facts.append(Fact(key: "rating", label: String(localized: "Your rating"), value: rating))
         }
@@ -160,17 +213,18 @@ public struct AITraceDetail: Identifiable, Hashable, Sendable {
             let kind = trace.errorKind.map { "[\($0)] " } ?? ""
             add("error", String(localized: "Error"), kind + (trace.errorText ?? AITraceWording.outcome(trace)))
         }
+        if trace.finalText != trace.outputText { add("final", String(localized: "Shown to you"), trace.finalText) }
+        add("output", String(localized: "Model output"), trace.outputText)
+        add("steps", String(localized: "What Mail did"), AITraceWording.steps(trace.steps))
         add("prompt", String(localized: "Prompt as sent"), trace.systemText)
         add("input", String(localized: "Input as sent, with the email text"), trace.inputText)
-        add("output", String(localized: "Model output"), trace.outputText)
-        if trace.finalText != trace.outputText { add("final", String(localized: "Shown to you"), trace.finalText) }
-        add("steps", String(localized: "Steps after the model"), trace.steps.isEmpty ? nil
-            : trace.steps.map { "• " + AITraceWording.step($0) }.joined(separator: "\n"))
         if trace.systemText == nil, trace.inputText == nil, trace.outputText == nil {
             add("text", String(localized: "Text"), String(localized: "Mail didn't keep the text of this request."))
         }
         self.sections = sections
     }
+
+    public var whyThisFacts: [Fact] { facts.filter { $0.key != "where" } }
 
     public var plainText: String {
         let head = ([title] + facts.map { "\($0.label): \($0.value)" }).joined(separator: "\n")

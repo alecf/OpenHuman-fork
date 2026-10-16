@@ -5,10 +5,10 @@
   "steps": [
     "Launch with -UseFakeData, open a draft, press ⌘J and run Improve writing",
     "Open Settings › AI › Activity",
-    "Click the newest Write and rewrite (⌘J) row"
+    "Click the newest Write and rewrite (⌘J in a draft) row"
   ],
   "deepLink": null,
-  "expected": "The row shows the time, the model, tokens, the time taken and the On this Mac mark. The trace shows the model, where it ran, why this model, the prompt id, the prompt as sent, the input with the email text, the model output and any steps. ‹ Requests goes back to the list.",
+  "expected": "The list shows what you asked for by default (Background is one choice away in Show). The row shows the time, the model, tokens, the time taken and the On this Mac mark. The trace shows the model, where it ran, why this model and the prompt by name, then the model output, What Mail did, and the prompt and input folded to a few lines with Show all and Copy. ‹ You asked for goes back to the list.",
   "requires": "fake",
   "addedIn": "2026-10-15"
 }

@@ -37,7 +37,7 @@ final class AutoLabelFixture {
         rules = FakeImportanceRules(corpus: .rich(threadCount: 60, now: fixedNow), now: { fixedNow })
         index = InMemoryAutoLabelStore(entries)
         let log = self.log
-        let classifier = FakeClassifier(id: "local.autolabels", autoLabel: { input in
+        let classifier = FakeClassifier(id: "fake.autolabels", autoLabel: { input in
             log.add(input.threadKey)
             return try verdict(input)
         })
@@ -84,7 +84,7 @@ final class AutoLabelFixture {
         #expect(calls > 0 && f.center.failures == 0)
         let entries = try await f.index.entries(account: F.work)
         #expect(entries.contains {
-            $0.source == .model && $0.category == "Marketing" && $0.promptVersion == 1 && $0.modelID == "local.autolabels|classifier-1"
+            $0.source == .model && $0.category == "Marketing" && $0.promptVersion == 1 && $0.modelID == "fake.autolabels|classifier-1"
         })
         await f.center.classifyRecent()
         #expect(f.center.modelCalls == calls, "same thread, newest message, prompt and model: no second model call")
@@ -124,7 +124,7 @@ final class AutoLabelFixture {
     }
 
     @Test func withoutTheOnDeviceModelTheSwitchSaysWhyAndNothingRuns() async throws {
-        let unavailable = FakeClassifier(id: "local.autolabels", availability: .unavailable(reason: .appleIntelligenceNotEnabled),
+        let unavailable = FakeClassifier(id: "fake.autolabels", availability: .unavailable(reason: .appleIntelligenceNotEnabled),
                                          autoLabel: { _ in
                                              Issue.record("an unavailable classifier is never asked")
                                              return .marketing

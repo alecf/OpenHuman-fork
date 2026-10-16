@@ -1,18 +1,20 @@
 import MailFeatures
 import SwiftUI
 
-public struct AISettingsTabs<Overview: View>: View {
-    public enum Tab: String, CaseIterable, Sendable {
-        case overview, prompts, activity
+public enum AISettingsTab: String, CaseIterable, Sendable {
+    case overview, prompts, activity
 
-        var title: String {
-            switch self {
-            case .overview: String(localized: "Overview")
-            case .prompts: String(localized: "Prompts")
-            case .activity: String(localized: "Activity")
-            }
+    var title: String {
+        switch self {
+        case .overview: String(localized: "Overview")
+        case .prompts: String(localized: "Prompts")
+        case .activity: String(localized: "Activity")
         }
     }
+}
+
+public struct AISettingsTabs<Overview: View>: View {
+    public typealias Tab = AISettingsTab
 
     @State private var tab: Tab
     @State private var prompts: PromptsSettingsModel?
@@ -50,7 +52,7 @@ public struct AISettingsTabs<Overview: View>: View {
             case .prompts:
                 if let prompts { PromptsSettingsView(model: prompts) }
             case .activity:
-                if let activity { AIActivityView(model: activity) }
+                if let activity { AIActivityView(model: activity, editPrompt: prompts == nil ? nil : { editPrompt($0) }) }
             }
         }
         .task(id: navigator?.requestedPrompt) { await takeRequest() }
@@ -64,6 +66,12 @@ public struct AISettingsTabs<Overview: View>: View {
             case .activity: activity != nil
             }
         }
+    }
+
+    private func editPrompt(_ id: String) {
+        guard let prompts else { return }
+        tab = .prompts
+        Task { await prompts.open(promptID: id) }
     }
 
     private func takeRequest() async {

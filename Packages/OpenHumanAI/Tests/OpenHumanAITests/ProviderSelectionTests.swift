@@ -219,7 +219,7 @@ import Testing
         let order = await registry.candidates(for: .summarize, settings: AISettings()).map(\.id)
         #expect(order == [.appleSystem, .local("qwen"), .applePCC, .agentClaude, .agentCodex])
         let classify = await registry.candidates(for: .classify, settings: AISettings()).map(\.id)
-        #expect(classify.first == "local.classifier")
+        #expect(classify.first == "fake.classifier")
         let custom = await registry.candidates(
             for: .summarize, settings: AISettings(providerOrder: [.agentClaude, .appleSystem])
         ).map(\.id)

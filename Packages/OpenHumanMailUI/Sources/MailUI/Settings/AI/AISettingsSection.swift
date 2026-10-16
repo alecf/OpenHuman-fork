@@ -8,18 +8,21 @@ public struct AISettingsSection: View {
     @State private var model: AISettingsPageModel
     @State private var summarizeEvery: StoredSetting<Bool>?
     private let offersQuickRepliesRow: Bool
+    private weak var environment: AppEnvironment?
     @Environment(\.theme) private var theme
 
     public init(center: AICenter, environment: AppEnvironment?, listsUnavailableModels: Bool = true) {
         _model = State(initialValue: AISettingsPageModel(center: center, environment: environment,
                                                          listsUnavailableModels: listsUnavailableModels))
         offersQuickRepliesRow = environment?.actions.contains(.aiToggleInstantReply) ?? true
+        self.environment = environment
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: theme.space7) {
             providers
-            AIFeatureModelsSection(center: model.center)
+            AIFeatureModelsSection(center: model.center, reloadKey: model.providers.hashValue,
+                                   onTriageChange: { [weak environment] in await environment?.autoLabels?.refreshAvailability() })
             choices
             personal
             accounts
@@ -33,9 +36,33 @@ public struct AISettingsSection: View {
                         footnote: String(localized: "The models Mail can use. Each feature's model is chosen below.")) {
             ForEach(model.providers) { row in
                 SettingsRow(row.name, detail: row.status, status: row.warning, statusTone: .warning) {
-                    AIProviderBadgeView(badge: row.badge)
+                    HStack(spacing: theme.space3) {
+                        if row.action == nil {
+                            AIProviderBadgeView(badge: row.badge)
+                        } else {
+                            Image(systemName: row.badge.symbol)
+                                .font(.system(size: 10))
+                                .foregroundStyle((row.badge.leavesMac ? theme.textWarning : theme.textTertiary).color)
+                                .help(row.badge.help)
+                                .accessibilityLabel(row.badge.title)
+                        }
+                        switch row.action {
+                        case .allow?:
+                            Button(String(localized: "Allow…")) { Task { await model.allow(row.id) } }
+                                .accessibilityIdentifier("settings.ai.allow.\(row.id)")
+                        case .stopUsing?:
+                            Button(String(localized: "Stop using")) { Task { await model.stopUsing(row.id) } }
+                                .accessibilityIdentifier("settings.ai.stopUsing.\(row.id)")
+                        case nil:
+                            EmptyView()
+                        }
+                    }
                 }
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .contain)
+                if let consent = model.consent, consent.providerID.rawValue == row.id {
+                    AIConsentView(request: consent, center: model.center,
+                                  accept: { Task { await model.acceptConsent() } }, decline: { model.declineConsent() })
+                }
             }
         }
     }
@@ -45,7 +72,7 @@ public struct AISettingsSection: View {
             SettingsRow(String(localized: "Use AI"), isOn: $model.useAI)
             SettingsRow(String(localized: "Draft replies"), alignment: .firstTextBaseline, labelsControl: true) {
                 Picker("Draft replies", selection: $model.draftReplies) {
-                    Text("Yes, draft replies on this Mac").tag(DraftRepliesChoice.onDeviceAuto)
+                    Text("Yes, when I open a conversation").tag(DraftRepliesChoice.onDeviceAuto)
                     Text("Only when I ask (⌘J)").tag(DraftRepliesChoice.onDemand)
                     Text("Not at all").tag(DraftRepliesChoice.off)
                 }
@@ -61,12 +88,6 @@ public struct AISettingsSection: View {
                             isOn: $model.instantReplyStrip)
                     .disabled(!model.offersInstantReplyStrip)
                     .accessibilityIdentifier("settings.ai.quickRepliesRow")
-            }
-            if model.offersAgentQuickReplies {
-                SettingsRow(String(localized: "Also write quick replies with Claude Code or Codex"),
-                            detail: String(localized: "Each conversation you open is sent to that company."),
-                            isOn: $model.agentQuickReplies)
-                    .disabled(!model.useAI || model.draftReplies != .onDeviceAuto)
             }
             SettingsRow(String(localized: "Summarize conversations when I open them"),
                         detail: String(localized: "On this Mac, for conversations of 3 messages or more."),

@@ -12,6 +12,7 @@ public struct AIProviderID: RawRepresentable, Hashable, Sendable, Codable, Codin
     public var description: String { rawValue }
 
     public static let appleSystem: AIProviderID = "apple.system"
+    public static let appleSystemClassifier: AIProviderID = "apple.system.classifier"
     public static let applePCC: AIProviderID = "apple.pcc"
     public static let agentClaude: AIProviderID = "agent.claude"
     public static let agentCodex: AIProviderID = "agent.codex"

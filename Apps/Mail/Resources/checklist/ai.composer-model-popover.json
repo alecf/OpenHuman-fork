@@ -8,7 +8,7 @@
     "Click View trace, go back, then click Re-run on this model"
   ],
   "deepLink": null,
-  "expected": "The popover shows the model behind this answer with its time and tokens, the model list for ⌘J with Mail's default checked and marked Default (no Automatic choice), why it is used, and the trace. Re-run closes the popover and writes a new version with the checked model.",
+  "expected": "The popover shows the model behind this answer with its time and tokens, the model list for ⌘J with Mail's default checked and marked Default (no Automatic choice), models that can't be used yet greyed out with the reason, a line saying the choice is used for every future ⌘J in a draft, why it is used, and the trace. Re-run closes the popover and writes a new version with the checked model.",
   "requires": "fake",
   "addedIn": "2026-10-15"
 }

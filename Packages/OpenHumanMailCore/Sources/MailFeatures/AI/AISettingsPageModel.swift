@@ -7,12 +7,15 @@ import OpenHumanCore
 @MainActor @Observable
 public final class AISettingsPageModel {
     public struct ProviderRow: Identifiable, Hashable, Sendable {
+        public enum Action: Hashable, Sendable { case allow, stopUsing }
+
         public let id: String
         public let name: String
         public let status: String
         public let isReady: Bool
         public let badge: AIProviderBadge
         public let warning: String?
+        public var action: Action? = nil
     }
 
     public struct AccountRow: Identifiable, Hashable, Sendable {
@@ -90,13 +93,6 @@ public final class AISettingsPageModel {
         await center.preparation.clearPrepared()
     }
 
-    public var offersAgentQuickReplies: Bool { center.settings.consents.keys.contains(where: \.isAgentCLI) }
-
-    public var agentQuickReplies: Bool {
-        get { center.settings.agentCLIAutoQuickReplies }
-        set { change { $0.agentCLIAutoQuickReplies = newValue && self.offersAgentQuickReplies } }
-    }
-
     public var allowWritingTools: Bool {
         get { center.settings.allowWritingTools }
         set { change { $0.allowWritingTools = newValue } }
@@ -134,18 +130,24 @@ public final class AISettingsPageModel {
         return center.settings.enabled ? Self.instantReplyStripNeedsDrafts : Self.instantReplyStripNeedsAI
     }
 
-    public static let instantReplyStripNeedsDrafts = String(localized: "Needs Draft replies set to “Yes, draft replies on this Mac”.")
-    public static let instantReplyStripNeedsAI = String(localized: "Needs Use AI on, and Draft replies set to “Yes, draft replies on this Mac”.")
+    public static let instantReplyStripNeedsDrafts = String(localized: "Needs Draft replies set to “Yes, when I open a conversation”.")
+    public static let instantReplyStripNeedsAI = String(localized: "Needs Use AI on, and Draft replies set to “Yes, when I open a conversation”.")
 
     public static let instantReplyStripTitle = String(localized: "Show quick replies when I reply (⇥ to cycle)")
-    public static let instantReplyStripDetail = String(localized: "Three short drafts above your reply, written on this Mac. Nothing goes into the message until you press ↵, and nothing is sent until you press ⌘↵.")
+    public static let instantReplyStripDetail = String(localized: "Three short drafts above your reply, written by the Quick replies model. Nothing goes into the message until you press ↵, and nothing is sent until you press ⌘↵.")
+
+    public private(set) var offered: [ProviderRow] = []
+    public private(set) var consent: AIProviderConsentRequest?
 
     public var providers: [ProviderRow] {
         var rows = center.providers.map { row in
-            ProviderRow(id: row.id.rawValue, name: Self.name(row), status: row.status, isReady: row.isReady, badge: row.badge,
-                        warning: row.needsConsent ? String(localized: "Sends the email text to the provider. Off until you allow it.")
-                                                  : nil)
+            ProviderRow(id: row.id.rawValue, name: Self.name(row), status: row.consented || !row.needsConsent ? row.status
+                            : Self.notAllowed,
+                        isReady: row.isReady, badge: row.badge,
+                        warning: row.needsConsent && !row.consented ? Self.sendsText : nil,
+                        action: row.needsConsent ? (row.consented ? .stopUsing : .allow) : nil)
         }
+        rows += offered.filter { row in !rows.contains { $0.id == row.id } }
         guard listsUnavailableModels else { return rows }
         if !rows.contains(where: { $0.id.hasPrefix("local.") }) {
             rows.append(ProviderRow(id: "local", name: String(localized: "Local model"),
@@ -176,9 +178,50 @@ public final class AISettingsPageModel {
         do { try center.setOnDeviceOnly(on, accountID: account) } catch { self.error = Self.saveFailure }
     }
 
+    public static let notAllowed = String(localized: "Not allowed. Nothing is sent to it.")
+    public static let sendsText = String(localized: "Sends the text of the email it works on off this Mac. Off until you allow it.")
+
     public func refresh() async {
         await center.refreshProviders()
+        let registered = center.providers.map { ProviderCandidate(id: $0.id, displayName: $0.name, dataLocation: .onDevice,
+                                                                  availability: .available, consented: true,
+                                                                  autoSelectable: true) }
+        offered = await center.offeredModels(besides: registered).map { model in
+            ProviderRow(id: model.id.rawValue, name: model.displayName, status: Self.notAllowed, isReady: false,
+                        badge: AIProviderBadge(providerName: model.displayName, location: model.dataLocation),
+                        warning: Self.sendsText, action: .allow)
+        }
         onDeviceReady = await center.onDeviceStatus().available
+    }
+
+    public func allow(_ id: String) async {
+        consent = await center.consentRequest(for: AIProviderID(id))
+    }
+
+    public func acceptConsent() async {
+        guard let consent else { return }
+        self.consent = nil
+        do {
+            try await center.grantConsent(consent)
+            error = nil
+        } catch {
+            self.error = Self.saveFailure
+        }
+        await refresh()
+    }
+
+    public func declineConsent() {
+        consent = nil
+    }
+
+    public func stopUsing(_ id: String) async {
+        do {
+            try await center.revokeConsent(AIProviderID(id))
+            error = nil
+        } catch {
+            self.error = Self.saveFailure
+        }
+        await refresh()
     }
 
     public func clearCache() async {
