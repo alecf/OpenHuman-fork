@@ -314,6 +314,12 @@ public final class ThreadListModel {
     }
 
     @discardableResult
+    public func applyOptimisticImportance(_ key: ThreadKey, toImportant: Bool, changesGmail: Bool) -> OptimisticTicket? {
+        applyEffect(OptimisticEffect.importanceMove([key], toImportant: toImportant, changesGmail: changesGmail,
+                                                    in: location, impliesImportance: impliesImportance))
+    }
+
+    @discardableResult
     public func applyOptimisticLabel(named name: String, to keys: [ThreadKey]) -> OptimisticTicket? {
         let name = name.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty, !keys.isEmpty else { return nil }

@@ -42,8 +42,11 @@ public final class ThreadRowView: NSTableCellView {
     var hoverActions: (() -> [HoverAction])?
     var onActionHover: ((NSView, HoverAction, Bool) -> Void)?
     var accessibilityContent: (() -> (label: String, actions: [NSAccessibilityCustomAction]))?
+    var importanceTip: (() -> String)?
+    var onPointerEnter: (() -> Void)?
 
     private var content: Content?
+    private var tipRect: NSRect?
     private var plate: NSView?
     private var plateButtons: [RowActionButton] = []
     private var shownHoverActions: [HoverAction] = []
@@ -98,6 +101,7 @@ public final class ThreadRowView: NSTableCellView {
         self.isChecked = isChecked
         isCursor = isCursorRow
         updateActions()
+        updateTipRect()
         needsDisplay = true
     }
 
@@ -105,6 +109,9 @@ public final class ThreadRowView: NSTableCellView {
         isPlaceholder = true
         content = nil
         isChecked = false
+        importanceTip = nil
+        onPointerEnter = nil
+        updateTipRect()
         setHovering(false)
         accessibilityContent = { (String(localized: "Loading conversation"), []) }
         drawsSkeleton = showsSkeleton
@@ -291,6 +298,7 @@ public final class ThreadRowView: NSTableCellView {
         if hovering != isPointerInside {
             isPointerInside = hovering
             needsDisplay = true
+            if hovering { onPointerEnter?() }
         }
         let wasShowing = showsActions
         updateActions(pointer: hovering)
@@ -378,6 +386,32 @@ public final class ThreadRowView: NSTableCellView {
         hoverActions = nil
         onActionHover = nil
         accessibilityContent = nil
+        importanceTip = nil
+        onPointerEnter = nil
+        updateTipRect()
+    }
+
+    func importanceTipRect() -> NSRect? {
+        guard importanceTip != nil, let frame = drawnFrames().line else { return nil }
+        let line = fittedLine(width: frame.width)
+        var span: ThreadRowStyle.ChipSpan?
+        line.enumerateAttribute(ThreadRowStyle.tipSpan, in: NSRange(location: 0, length: line.length)) { value, _, stop in
+            guard let value = value as? ThreadRowStyle.ChipSpan else { return }
+            span = value
+            stop.pointee = true
+        }
+        guard let span, span.start < frame.width else { return nil }
+        let end = min(span.end, frame.width)
+        let x = userInterfaceLayoutDirection == .rightToLeft ? frame.maxX - end : frame.minX + span.start
+        return NSRect(x: x, y: 0, width: end - span.start, height: bounds.height)
+    }
+
+    private func updateTipRect() {
+        let rect = importanceTipRect()
+        guard rect != tipRect else { return }
+        tipRect = rect
+        removeAllToolTips()
+        if let rect { addToolTip(rect, owner: self, userData: nil) }
     }
 
     public struct Columns: Equatable {
@@ -434,6 +468,7 @@ public final class ThreadRowView: NSTableCellView {
 
     public override func layout() {
         super.layout()
+        updateTipRect()
         guard let plate, !plateButtons.isEmpty else { return }
         let width = bounds.width, height = bounds.height
         let c = style.columns(width: width)
@@ -449,6 +484,13 @@ public final class ThreadRowView: NSTableCellView {
             button.frame = NSRect(x: rtl ? plateWidth - bx - target : bx, y: ((plateHeight - target) / 2).rounded(),
                                   width: target, height: target)
         }
+    }
+}
+
+extension ThreadRowView: NSViewToolTipOwner {
+    public func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag, point: NSPoint,
+                     userData data: UnsafeMutableRawPointer?) -> String {
+        importanceTip?() ?? ""
     }
 }
 

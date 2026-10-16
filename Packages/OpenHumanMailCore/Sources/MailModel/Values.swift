@@ -140,13 +140,15 @@ public struct ThreadRow: Identifiable, Sendable, Hashable {
     public let categoryLabelIDs: [Int64]
     public let searchMatch: SearchMatchKind?
     public let returnedByReminder: Bool
+    // Mail's own placement in the Important tab; isImportant is Gmail's mark
+    public let isPlacedImportant: Bool
 
     public init(id: ThreadKey, subject: String, snippet: String, participantsDisplay: String,
                 participants: [Participant], messageCount: Int, unreadCount: Int, draftCount: Int,
                 attachmentCount: Int, isUnread: Bool, isStarred: Bool, isImportant: Bool, userLabelIDs: [Int64],
                 lastMessageAt: Date, sortAt: Date, snoozedUntil: Date? = nil, reminderAt: Date? = nil,
                 scheduledSendAt: Date? = nil, hasPendingChanges: Bool = false, categoryLabelIDs: [Int64] = [],
-                searchMatch: SearchMatchKind? = nil, returnedByReminder: Bool = false) {
+                searchMatch: SearchMatchKind? = nil, returnedByReminder: Bool = false, isPlacedImportant: Bool = false) {
         self.id = id
         self.subject = subject
         self.snippet = snippet
@@ -169,6 +171,7 @@ public struct ThreadRow: Identifiable, Sendable, Hashable {
         self.categoryLabelIDs = categoryLabelIDs
         self.searchMatch = searchMatch
         self.returnedByReminder = returnedByReminder
+        self.isPlacedImportant = isPlacedImportant
     }
 }
 

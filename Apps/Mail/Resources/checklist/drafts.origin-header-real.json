@@ -1,0 +1,14 @@
+{
+  "id": "drafts.origin-header-real",
+  "area": "Composer",
+  "title": "A draft sent from Gmail doesn't carry the X-OpenHuman-Origin header (real Gmail)",
+  "steps": [
+    "With a real Gmail account, let an agent create a draft reply to yourself so it shows in Gmail's Drafts",
+    "Open that draft in Gmail on the web or in the Gmail phone app and send it from there",
+    "In Gmail on the web open the sent message, choose Show original and search the headers for X-OpenHuman-Origin"
+  ],
+  "deepLink": null,
+  "expected": "The sent message has no X-OpenHuman-Origin header. If it is there, note which client sent it (web or phone) and keep only the header lines, not the message text.",
+  "requires": "real",
+  "addedIn": "2026-10-16"
+}

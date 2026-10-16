@@ -56,6 +56,13 @@ extension FakeMailStore {
         }
     }
 
+    public func isGmailImportant(_ thread: ThreadKey) -> Bool? {
+        state.withLock { s in
+            guard let t = s.threads[thread] else { return nil }
+            return FakeAggregator.scope(s.views(t)).contains { $0.labels.contains(FakeLabels.important) }
+        }
+    }
+
     public func isInTrash(_ thread: ThreadKey) -> Bool {
         state.withLock { s in
             guard let t = s.threads[thread] else { return false }

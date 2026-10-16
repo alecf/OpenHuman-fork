@@ -97,6 +97,29 @@ import Testing
         await #expect(throws: MailPortError.unavailable("test")) { try await port.delete([]) }
     }
 
+    @Test func gmailsMarkFollowsTheFakeStoreAndTheRowCarriesBothSignals() async throws {
+        let store = FakeMailStore(corpus: .make(threadCount: 6, now: fixedNow),
+                                  options: .init(remoteAck: .immediate, now: { fixedNow }))
+        let port = FakeImportanceRules(corpus: nil, now: { fixedNow })
+        port.setGmailImportantLookup { [weak store] key in store?.isGmailImportant(key) }
+        let inbox = try await store.threadPage(.system(.inbox), account: work, after: nil, limit: 100).rows
+        let marked = try #require(inbox.first { $0.isImportant })
+        #expect(marked.isPlacedImportant, "the fake's Important split is is:important")
+        #expect(inbox.filter { !$0.isImportant }.allSatisfy { !$0.isPlacedImportant })
+
+        _ = try await port.apply(ImportanceChange(kind: .neverThread, account: work,
+                                                  value: marked.id.gmailThreadID.rawValue, thread: marked.id))
+        var why = try await port.explain(marked.id)
+        #expect(!why.isImportant && why.gmailImportant && why.gmailDisagrees)
+
+        _ = try await store.apply(.modifyLabels([marked.id], add: [], remove: [GmailLabelID("IMPORTANT")]))
+        why = try await port.explain(marked.id)
+        #expect(!why.gmailImportant && !why.gmailDisagrees)
+        let after = try await store.threadPage(.system(.allMail), account: work, after: nil, limit: 100).rows
+        let row = try #require(after.first { $0.id == marked.id })
+        #expect(!row.isImportant && !row.isPlacedImportant)
+    }
+
     @Test func theRulesStreamFollowsSettingsEdits() async throws {
         let port = FakeImportanceRules()
         var iterator = port.rules(work).makeAsyncIterator()

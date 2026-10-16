@@ -16,6 +16,11 @@ public struct FakeCorpus: Sendable {
 
         public var bodies: [MessageKey: MessageContent] { bodySpecs.mapValues(\.content) }
 
+        func with(row: ThreadRow) -> Thread {
+            Thread(row: row, detail: detail, allMessages: allMessages, fromMe: fromMe, bodySpecs: bodySpecs, labels: labels,
+                   unsubscribe: unsubscribe, listIDs: listIDs)
+        }
+
         init(row: ThreadRow, detail: ConversationDetail, allMessages: [MessageSummary], fromMe: Set<MessageKey>,
              bodySpecs: [MessageKey: FakeBodySpec], labels: [MessageKey: [GmailLabelID]],
              unsubscribe: [MessageKey: UnsubscribeInfo] = [:], listIDs: [MessageKey: String] = [:]) {
@@ -73,9 +78,14 @@ public struct FakeCorpus: Sendable {
 
     public init(account: Account, threads: [Thread]) {
         var ids = FakeIDs()
-        self.init(mailboxes: [Mailbox(account: account, threads: threads,
-                                      labels: FakeLabels.standard(account: account.id, ids: &ids),
-                                      splits: [FakeLabels.importantSplit(account: account.id, ids: &ids)])])
+        let labels = FakeLabels.standard(account: account.id, ids: &ids)
+        let important = FakeLabels.importantSplit(account: account.id, ids: &ids)
+        let placed = threads.map { thread in
+            let inInbox = thread.labels.values.contains { $0.contains(FakeLabels.inbox) }
+            return thread.with(row: thread.row.with(
+                placedImportant: inInbox && thread.row.isImportant && FakeLabels.placesInImportant(important)))
+        }
+        self.init(mailboxes: [Mailbox(account: account, threads: placed, labels: labels, splits: [important])])
     }
 
     public static let me = EmailAddress(name: "Robin Example", email: "robin@example.com")

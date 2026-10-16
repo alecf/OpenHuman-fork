@@ -12,8 +12,7 @@ extension AppSettings {
     public static let classificationDecisionLogMaxDays = AppSettingKey(name: "classification.decision_log.max_days",
                                                                        defaultValue: 180)
     public static let classificationKeepInputText = AppSettingKey(name: "classification.keep_input_text", defaultValue: false)
-    public static let classificationNotImportantRemovesGmailFlag = AppSettingKey(
-        name: "classification.not_important.removes_gmail_flag", defaultValue: false)
+    public static let importanceSendsToGmail = AppSettingKey(name: "importance.sends_to_gmail", defaultValue: true)
     public static let classificationRulesHistoryLimit = AppSettingKey(name: "classification.rules.history_limit",
                                                                       defaultValue: 500)
     public static let classificationKeySalt = AppSettingKey(name: "classification.key_salt", defaultValue: "")

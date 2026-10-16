@@ -15,6 +15,7 @@ public protocol ThreadListHost: AnyObject {
     func threadListDescriptors() -> [ActionDescriptor]
     func threadListAddsRelatedResults() -> Bool
     func threadListFollowUpReason(for row: ThreadRow) -> String?
+    func threadListImportanceReason(for thread: ThreadKey) async -> String?
 }
 
 public struct ThreadListMenuEntry: Equatable, Sendable {
@@ -40,6 +41,8 @@ extension ThreadListHost {
     public func threadListAddsRelatedResults() -> Bool { false }
 
     public func threadListFollowUpReason(for row: ThreadRow) -> String? { nil }
+
+    public func threadListImportanceReason(for thread: ThreadKey) async -> String? { nil }
 }
 
 public enum ThreadListActionIDs {
@@ -77,6 +80,11 @@ final class RouterThreadListHost: ThreadListHost {
     func threadListFollowUpReason(for row: ThreadRow) -> String? {
         guard let environment = router?.environment, environment.ai != nil, row.reminderAt != nil else { return nil }
         return environment.followUps.reason(for: row)
+    }
+
+    func threadListImportanceReason(for thread: ThreadKey) async -> String? {
+        guard let port = router?.environment.importance else { return nil }
+        return try? await port.explain(thread).line
     }
 
     func threadListMenuEntry(_ action: ActionID) -> ThreadListMenuEntry {

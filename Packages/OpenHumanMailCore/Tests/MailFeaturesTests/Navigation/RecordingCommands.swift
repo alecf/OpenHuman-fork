@@ -9,16 +9,22 @@ final class RecordingCommands: MailCommanding {
     private let log = Mutex<[String]>([])
     private let scheduleHold = Mutex<Checkpoint?>(nil)
     private let discardFailure = Mutex<MailPortError?>(nil)
+    private let applied = Mutex<[MailCommand]>([])
 
     init(_ store: FakeMailStore) { self.store = store }
 
     var calls: [String] { log.withLock { $0 } }
+    var commands: [MailCommand] { applied.withLock { $0 } }
     private func record(_ name: String) { log.withLock { $0.append(name) } }
 
     func holdSchedules(at checkpoint: Checkpoint) { scheduleHold.withLock { $0 = checkpoint } }
     func failDiscards(with error: MailPortError) { discardFailure.withLock { $0 = error } }
 
-    func apply(_ command: MailCommand) async throws -> UndoToken { record("apply"); return try await store.apply(command) }
+    func apply(_ command: MailCommand) async throws -> UndoToken {
+        record("apply")
+        applied.withLock { $0.append(command) }
+        return try await store.apply(command)
+    }
     func undo(_ token: UndoToken) async throws -> UndoToken? { record("undo"); return try await store.undo(token) }
     func createDraft(_ input: DraftInput) async throws -> (key: DraftKey, version: Int) {
         record("createDraft"); return try await store.createDraft(input)

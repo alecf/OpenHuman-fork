@@ -59,6 +59,10 @@ enum FakeLabels {
         SplitInfo(id: ids.nextSplit(), account: account, name: "Important", position: 0, ruleText: "is:important")
     }
 
+    static func placesInImportant(_ split: SplitInfo?) -> Bool {
+        split?.ruleText.trimmingCharacters(in: .whitespaces).lowercased() == "is:important"
+    }
+
     static func calendarSplit(account: AccountID, ids: inout FakeIDs) -> SplitInfo {
         SplitInfo(id: ids.nextSplit(), account: account, name: "Calendar", position: 1, ruleText: "is:event")
     }

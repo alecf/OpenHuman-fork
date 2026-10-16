@@ -33,7 +33,9 @@ import Testing
         #expect(try f.placement("gmail") == "Other" && f.placement("plain") == "Other")
         #expect(try f.threadRowReason("gmail") == never.ruleIDs.first?.rawValue)
         #expect(try f.threadRowReason("colleague") == domain.ruleIDs.first?.rawValue)
-        #expect(try f.store.importanceReason(f.ref("gmail")).line == "In Other: never important from alice@acme.example")
+        #expect(try f.store.importanceReason(f.ref("gmail")).line
+            == "In Other: never important from alice@acme.example; Gmail marks it important")
+        #expect(try f.store.importanceReason(f.ref("plain")).line == "In Other: never important from alice@acme.example")
         try fullRebuildChangesNothing(f.store)
     }
 

@@ -56,7 +56,9 @@ import Testing
         #expect(await f.run(.neverImportant))
         #expect(await f.run(.moveToImportant))
         let explanation = ImportanceExplanation(isImportant: false, placement: "Other", reason: "Never important from \(sender)")
-        await f.toast(ImportanceActionHandler.senderRuleWinsText(explanation))
+        await f.toast(ImportanceMover.ruleWinsText(explanation, gmail: true))
+        #expect(ImportanceMover.ruleWinsText(explanation, gmail: true)
+            == ImportanceActionHandler.senderRuleWinsText(explanation) + " Gmail now marks it important.")
         #expect(Set(rules(f).allRules.map(\.kind)) == [.neverSender, .alwaysThread], "the move is kept for later")
     }
 

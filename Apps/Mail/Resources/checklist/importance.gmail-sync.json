@@ -1,0 +1,14 @@
+{
+  "id": "importance.gmail-sync",
+  "area": "Importance",
+  "title": "Move to Other clears Gmail's mark with one Cmd-Z (fake data)",
+  "steps": [
+    "On the fake data, in the Important tab run Move to Other from ⌘K on a conversation, then press Cmd-Z",
+    "Run Not important (⌘K) on another conversation in the Important tab",
+    "Turn off Settings › Importance & labels › Rules › Tell Gmail when I move mail and run Move to Other again"
+  ],
+  "deepLink": null,
+  "expected": "Step 1: the row leaves Important at once, the toast says Moved to Other, and one Cmd-Z brings back the row and its Important mark. Step 2: the same as step 1, plus an offer of Never important for this sender or domain that saves nothing until clicked. Step 3: the toast says Moved to Other on this Mac (the fake inbox follows only Gmail's mark, so the row may stay).",
+  "requires": "fake",
+  "addedIn": "2026-10-16"
+}

@@ -467,6 +467,7 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
     }
 
     private var day = ThreadListViewController.today()
+    private var importanceTips: [ThreadKey: String] = [:]
 
     private static func today() -> Int { Calendar.autoupdatingCurrent.ordinality(of: .day, in: .era, for: Date()) ?? 0 }
 
@@ -490,6 +491,13 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
         cell.hoverActions = { [weak self] in self?.availableHoverActions() ?? [] }
         cell.onActionHover = { [weak self] button, action, inside in self?.rowActionHover(button, action, inside: inside) }
         cell.cursorRowShowsActions = Self.cursorRowShowsActions(in: model.location)
+        if chips.contains(where: { $0.kind == .gmailImportant }) {
+            cell.importanceTip = { [weak self] in self?.importanceTips[key] ?? ThreadRowFormatting.gmailImportantTip }
+            cell.onPointerEnter = { [weak self] in self?.loadImportanceTip(key) }
+        } else {
+            cell.importanceTip = nil
+            cell.onPointerEnter = nil
+        }
         cell.configure(row, texts: texts, date: date, indicators: indicators, isChecked: checked, isMuted: muted)
         cell.accessibilityContent = { [weak self, weak model] in
             guard let self, let model, let current = model.row(for: key) else { return ("", []) }
@@ -501,6 +509,16 @@ public final class ThreadListViewController: NSViewController, NSTableViewDataSo
                 label += ", " + String(localized: "Follow-up: \(reason)")
             }
             return (label, self.customActions(for: current))
+        }
+    }
+
+    // Fetched on hover, not per row, so scrolling never reads the store
+    private func loadImportanceTip(_ key: ThreadKey) {
+        Task { [weak self] in
+            guard let host = self?.resolvedHost, let line = await host.threadListImportanceReason(for: key),
+                  let self else { return }
+            if self.importanceTips.count >= 200 { self.importanceTips.removeAll() }
+            self.importanceTips[key] = line
         }
     }
 

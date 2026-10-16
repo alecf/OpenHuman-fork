@@ -103,6 +103,7 @@ public struct ImportanceReason: Hashable, Sendable {
     public var chipSplitIDs: [SplitID]
     public var exemptions: [ImportanceRule]
     public var sender: String?
+    public var gmailImportant: Bool = false
 
     // generated-init: Tools/ci/gen-public-inits.py
     public init(
@@ -116,7 +117,8 @@ public struct ImportanceReason: Hashable, Sendable {
         placementName: String,
         chipSplitIDs: [SplitID],
         exemptions: [ImportanceRule],
-        sender: String? = nil
+        sender: String? = nil,
+        gmailImportant: Bool = false
     ) {
         self.thread = thread
         self.importance = importance
@@ -129,6 +131,7 @@ public struct ImportanceReason: Hashable, Sendable {
         self.chipSplitIDs = chipSplitIDs
         self.exemptions = exemptions
         self.sender = sender
+        self.gmailImportant = gmailImportant
     }
     // end generated-init
 }

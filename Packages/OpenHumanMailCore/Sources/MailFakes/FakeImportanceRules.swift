@@ -41,6 +41,7 @@ public final class FakeImportanceRules: ImportanceRulesPort, Sendable {
         var nextID = 1
         var failNext: MailPortError?
         var autoLabel: (@Sendable (ThreadKey) -> String?)?
+        var gmailImportant: (@Sendable (ThreadKey) -> Bool?)?
         var observers: [UUID: (AccountID, AsyncThrowingStream<[ImportanceRuleInfo], Error>.Continuation)] = [:]
     }
 
@@ -122,27 +123,30 @@ public final class FakeImportanceRules: ImportanceRulesPort, Sendable {
 
     public func explain(_ thread: ThreadKey) async throws -> ImportanceExplanation {
         state.withLock { s in
-            let facts = s.facts[thread] ?? ThreadFacts(sender: nil, gmailImportant: false)
+            var facts = s.facts[thread] ?? ThreadFacts(sender: nil, gmailImportant: false)
+            if let marked = s.gmailImportant?(thread) { facts.gmailImportant = marked }
+            let gmail = facts.gmailImportant
             let rules = Array(s.rules.filter { $0.account == thread.account }.reversed())
             let category = s.autoLabel?(thread) ?? Self.labelCategory(facts.labels)
             if let rule = Self.decidingRule(rules, facts, thread: thread, category: category) {
                 let important = rule.effect == .important
                 return ImportanceExplanation(isImportant: important, placement: important ? "Important" : "Other",
-                                             reason: Self.reason(rule), ruleID: rule.id)
+                                             reason: Self.reason(rule), ruleID: rule.id, gmailImportant: gmail)
             }
             if let sender = facts.sender {
                 if let rule = rules.first(where: { $0.value == sender && $0.kind == .notPitch }) {
-                    return ImportanceExplanation(isImportant: facts.gmailImportant,
-                                                 placement: facts.gmailImportant ? "Important" : "Other",
-                                                 reason: "Not a pitch (\(sender))", ruleID: rule.id)
+                    return ImportanceExplanation(isImportant: gmail, placement: gmail ? "Important" : "Other",
+                                                 reason: "Not a pitch (\(sender))", ruleID: rule.id, gmailImportant: gmail)
                 }
                 if let rule = rules.first(where: { $0.value == sender && $0.kind == .excludeFromSplit }) {
-                    return ImportanceExplanation(isImportant: facts.gmailImportant, placement: "Other",
-                                                 reason: "Removed from a split for \(sender)", ruleID: rule.id)
+                    return ImportanceExplanation(isImportant: gmail, placement: "Other",
+                                                 reason: "Removed from a split for \(sender)", ruleID: rule.id,
+                                                 gmailImportant: gmail)
                 }
             }
-            return facts.gmailImportant
-                ? ImportanceExplanation(isImportant: true, placement: "Important", reason: "Gmail marked it important")
+            return gmail
+                ? ImportanceExplanation(isImportant: true, placement: "Important", reason: "Gmail marked it important",
+                                        gmailImportant: true)
                 : ImportanceExplanation(isImportant: false, placement: "Other", reason: "No rule matched")
         }
     }
@@ -165,6 +169,10 @@ public final class FakeImportanceRules: ImportanceRulesPort, Sendable {
 
     public func setAutoLabelLookup(_ lookup: (@Sendable (ThreadKey) -> String?)?) {
         state.withLock { $0.autoLabel = lookup }
+    }
+
+    public func setGmailImportantLookup(_ lookup: (@Sendable (ThreadKey) -> Bool?)?) {
+        state.withLock { $0.gmailImportant = lookup }
     }
 
     public func learn(_ thread: ThreadKey, _ facts: ThreadFacts) { state.withLock { $0.facts[thread] = facts } }

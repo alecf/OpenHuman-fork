@@ -31,6 +31,25 @@ extension RenderSweepTests {
         try await sweepShoot(window.window, screen: "list-chip-palette", theme: theme)
     }
 
+    @Test(arguments: SweepTheme.lightAndDark)
+    func listGmailImportantChip(_ theme: SweepTheme) async throws {
+        let gmail = ThreadRowChip(kind: .gmailImportant, title: ThreadRowFormatting.gmailImportantTitle)
+        let rows = [
+            ListPolishRow(subject: "Weekly digest from a newsletter", unread: true,
+                          chips: [gmail, ThreadRowChip(kind: .category, title: "Social")]),
+            ListPolishRow(subject: "Both agree it matters", unread: false,
+                          chips: [ThreadRowChip(kind: .important, title: "Important"),
+                                  ThreadRowChip(kind: .category, title: "Updates")]),
+            ListPolishRow(subject: "Gmail important under the cursor", unread: false, chips: [gmail], state: .cursor),
+            ListPolishRow(subject: "Gmail important and checked", unread: false, chips: [gmail], state: .checked),
+            ListPolishRow(subject: "Gmail important with a label", unread: false,
+                          chips: [gmail, ThreadRowChip(kind: .label, title: "Clients", color: "#fb4c2f")]),
+        ]
+        let window = ListPolishWindow(rows: rows, theme: theme)
+        defer { window.close() }
+        try await sweepShoot(window.window, screen: "list-gmail-important", theme: theme)
+    }
+
     @Test(arguments: SweepTheme.builtInsAndIncreaseContrast)
     func listRowStates(_ theme: SweepTheme) async throws {
         let chips = [ThreadRowChip(kind: .label, title: "Clients", color: "#fb4c2f"), ThreadRowChip(kind: .category, title: "Updates")]

@@ -28,6 +28,15 @@ public final class ImportanceActionHandler: ActionHandler {
         guard let port = environment?.importance, let thread = request.context.focusedThread else { return .notHandled }
         let c = request.context
         if request.id == .explainPlacement { return explain(thread, port: port) }
+        if request.id == .moveToImportant || request.id == .moveToOther {
+            guard let environment else { return .notHandled }
+            let (row, _) = AutoLabelActionHandler.row(of: thread, router: request.router)
+            let mover = ImportanceMover(environment: environment, port: port, feedback: feedback,
+                                        list: ImportanceMover.list(for: thread, router: request.router))
+            return .started(mover.start(ImportanceMover.Move(thread: thread, toImportant: request.id == .moveToImportant,
+                                                             location: c.location, sender: c.sender,
+                                                             domain: c.senderDomain, row: row)))
+        }
         let account = c.account ?? thread.account
         let change: ImportanceChange
         let title: LocalizedStringResource
@@ -57,32 +66,18 @@ public final class ImportanceActionHandler: ActionHandler {
             guard let sender = c.sender else { return .notHandled }
             change = ImportanceChange(kind: .notPitch, account: account, value: sender, thread: thread)
             title = "Not a pitch: \(sender)"
-        case .moveToImportant:
-            change = ImportanceChange(kind: .alwaysThread, account: account, value: thread.gmailThreadID.rawValue,
-                                      thread: thread)
-            title = "Moved to Important"
-        case .moveToOther:
-            change = ImportanceChange(kind: .neverThread, account: account, value: thread.gmailThreadID.rawValue,
-                                      thread: thread)
-            title = "Moved to Other"
         default:
             return .notHandled
         }
         guard let undo = environment?.undo else { return .notHandled }
         let feedback = self.feedback
-        let id = request.id
-        let movesOne = id == .moveToImportant || id == .moveToOther
-        let pitchLabel = id == .notAPitch && c.targets.autoLabel == "Pitch"
+        let pitchLabel = request.id == .notAPitch && c.targets.autoLabel == "Pitch"
             ? environment?.autoLabels : nil
         let (row, labels) = AutoLabelActionHandler.row(of: thread, router: request.router)
-        return .started(Task { [weak self] in
+        return .started(Task {
             do {
                 try await undo.perform(title, threads: [thread], via: port) { try await port.apply(change) }
                 if let pitchLabel { _ = try? await pitchLabel.markWrong(thread, row: row, labels: labels) }
-                if movesOne, let explanation = try? await port.explain(thread),
-                   explanation.isImportant != (id == .moveToImportant) {
-                    self?.environment?.notices.post(Self.senderRuleWinsText(explanation), style: .info)
-                }
             } catch {
                 feedback.failed("Couldn't change the importance rule")
             }

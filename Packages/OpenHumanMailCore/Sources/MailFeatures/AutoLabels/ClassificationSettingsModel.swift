@@ -135,7 +135,6 @@ public final class ClassificationTrackingModel {
     public let teach: StoredSetting<Bool>
     public let suggest: StoredSetting<Bool>
     public let keepText: StoredSetting<Bool>
-    public let removesGmailFlag: StoredSetting<Bool>
 
     public private(set) var decisions: [ClassificationDecision] = []
     public private(set) var examples: [LabelledExample] = []
@@ -162,14 +161,13 @@ public final class ClassificationTrackingModel {
         teach = StoredSetting(AppSettings.classificationTeachFromCorrections, port: port)
         suggest = StoredSetting(AppSettings.classificationSuggestRules, port: port)
         keepText = StoredSetting(AppSettings.classificationKeepInputText, port: port)
-        removesGmailFlag = StoredSetting(AppSettings.classificationNotImportantRemovesGmailFlag, port: port)
         self.decisions = decisions
         self.examples = examples
         hasLoaded = !decisions.isEmpty || !examples.isEmpty
     }
 
     public func start() {
-        for setting in [logEnabled, teach, suggest, keepText, removesGmailFlag] { setting.start() }
+        for setting in [logEnabled, teach, suggest, keepText] { setting.start() }
         Task { await reload() }
     }
 

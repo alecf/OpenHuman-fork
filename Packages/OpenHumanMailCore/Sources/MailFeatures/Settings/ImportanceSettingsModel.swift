@@ -56,6 +56,7 @@ public final class ImportanceSettingsModel {
     public private(set) var lastChange: LastChange?
     public private(set) var isWorking = false
     public let availability: SettingsAvailability
+    public let sendsToGmail: StoredSetting<Bool>
 
     nonisolated public static let editableMatches: [ImportanceRuleMatch] = [.sender, .domain, .label, .keyword]
 
@@ -69,16 +70,17 @@ public final class ImportanceSettingsModel {
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
 
     public init(data: any MailDataSource, port: (any ImportanceRulesPort)?, undo: UndoCoordinator?,
-                availability: SettingsAvailability) {
+                availability: SettingsAvailability, settings: (any SettingsPort)? = nil) {
         self.data = data
         self.port = port
         self.undo = undo
         self.availability = availability
+        sendsToGmail = StoredSetting(AppSettings.importanceSendsToGmail, port: settings)
     }
 
     public convenience init(environment: AppEnvironment) {
         self.init(data: environment.data, port: environment.importance, undo: environment.undo,
-                  availability: SettingsAvailability(environment: environment))
+                  availability: SettingsAvailability(environment: environment), settings: environment.settings)
     }
 
     isolated deinit {
@@ -88,6 +90,7 @@ public final class ImportanceSettingsModel {
 
     public func start() {
         guard accountsTask == nil else { return }
+        sendsToGmail.start()
         let data = self.data
         accountsTask = Task { [weak self] in
             do {
@@ -285,6 +288,11 @@ public final class ImportanceSettingsModel {
 
     nonisolated public static let exemptionsNote = "These only change which split a sender's mail goes to, never whether "
         + "it is important."
+
+    nonisolated public static let sendsToGmailTitle = "Tell Gmail when I move mail"
+    nonisolated public static let sendsToGmailDetail = "Move to Important, Move to Other, Mark important and Not important "
+        + "also set or clear Gmail's Important mark on that conversation's messages. Undo puts both back. Off: only this "
+        + "Mac changes."
 
     nonisolated public static var emptyText: String {
         func key(_ id: ActionID) -> String {

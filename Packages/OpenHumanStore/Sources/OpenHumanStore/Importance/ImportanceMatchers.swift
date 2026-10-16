@@ -161,6 +161,7 @@ extension ImportanceReason {
             text = placementSplitID != nil ? "matches the \(placementName) split" : "no rule or split matched"
         }
         if !exemptions.isEmpty { text += "; removed from a split by your rule" }
+        if gmailImportant, importance != .important { text += "; Gmail marks it important" }
         return text
     }
 
