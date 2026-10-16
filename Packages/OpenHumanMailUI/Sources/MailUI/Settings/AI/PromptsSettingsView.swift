@@ -78,7 +78,7 @@ struct PromptEditorView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: theme.space2) {
             Button(String(localized: "‹ All prompts")) { model.closeEditor() }
-                .buttonStyle(.link)
+                .ohLinkButtonStyle()
                 .accessibilityIdentifier("settings.ai.prompts.back")
             if let row = model.selected {
                 Text(row.info.title).themeFont(theme.typeTitle).foregroundStyle(theme.textPrimary.color)

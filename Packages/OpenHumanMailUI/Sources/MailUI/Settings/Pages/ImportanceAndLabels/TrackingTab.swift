@@ -67,7 +67,7 @@ struct TrackingTab: View {
                             detail: ClassificationTrackingModel.exampleLine(example),
                             status: example.createdAt.formatted(date: .abbreviated, time: .shortened)) {
                     Button("Delete") { Task { await model.delete(example) } }
-                        .buttonStyle(.link)
+                        .ohLinkButtonStyle()
                 }
             }
             SettingsRow("Clear corrections", detail: "Local examples only; your rules and mail are not touched.") {

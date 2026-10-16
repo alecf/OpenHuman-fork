@@ -124,7 +124,7 @@ public struct InviteCardView: View {
                 } label: {
                     Text("More options").font(theme.typeMeta.swiftUIFont).foregroundStyle(theme.textSecondary.color)
                 }
-                .menuStyle(.borderlessButton)
+                .ohBorderlessMenuStyle()
                 .fixedSize()
                 .help("Answer every event of the series. Yes, Maybe and No answer this event only.")
                 .accessibilityLabel("More answers for the whole series")
@@ -176,7 +176,7 @@ public struct InviteCardView: View {
     private var connectPrompt: some View {
         HStack(spacing: theme.space2) {
             Button("Connect calendar to respond") { center.openCalendarSettings() }
-                .buttonStyle(.link)
+                .ohLinkButtonStyle()
                 .font(theme.typeMeta.swiftUIFont)
                 .help("Opens Settings › Calendar, where this account's calendar connects.")
                 .accessibilityIdentifier("invite.connect")
@@ -244,7 +244,7 @@ public struct InviteCardView: View {
             }
             if all.count > shown.count {
                 Button("and \(all.count - shown.count) more") { center.toggleGuests(message) }
-                    .buttonStyle(.link).font(theme.typeMeta.swiftUIFont)
+                    .ohLinkButtonStyle().font(theme.typeMeta.swiftUIFont)
             }
         }
     }
@@ -290,7 +290,7 @@ public struct InviteCardView: View {
                 .fixedSize(horizontal: false, vertical: true)
             if long {
                 Button(open ? "Show less" : "Show more") { center.toggleNotes(message) }
-                    .buttonStyle(.link).font(theme.typeMeta.swiftUIFont)
+                    .ohLinkButtonStyle().font(theme.typeMeta.swiftUIFont)
                     .accessibilityIdentifier("invite.showMore")
             }
         }
@@ -314,7 +314,7 @@ public struct InviteCardView: View {
 
     private func originalToggle(showingOriginal: Bool) -> some View {
         Button(showingOriginal ? "Show invitation" : "Show original") { center.toggleOriginal(message) }
-            .buttonStyle(.link)
+            .ohLinkButtonStyle()
             .font(theme.typeMeta.swiftUIFont)
             .help(showingOriginal ? "Back to the invitation card." : "Shows the email as the sender wrote it.")
             .accessibilityIdentifier("invite.showOriginal")

@@ -69,7 +69,7 @@ struct BlockedSettingsPage: View {
                 HStack(spacing: theme.space3) {
                     Text(change.title).themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
                     Button("Undo") { Task { await model.undoLastChange() } }
-                        .buttonStyle(.link)
+                        .ohLinkButtonStyle()
                         .accessibilityLabel("Undo \(change.title)")
                 }
             }
@@ -91,10 +91,10 @@ struct BlockedSettingsPage: View {
                 .disabled(!model.canEdit || model.isWorking)
                 .accessibilityLabel("What happens to new mail from \(rule.value)")
                 Button("Show mail") { model.showMail(rule) }
-                    .buttonStyle(.link)
+                    .ohLinkButtonStyle()
                     .accessibilityLabel("Show mail from \(rule.value)")
                 Button("Unblock") { Task { await model.unblock(rule) } }
-                    .buttonStyle(.link)
+                    .ohLinkButtonStyle()
                     .disabled(!model.canEdit || model.isWorking)
                     .accessibilityLabel("Unblock \(rule.value)")
             }
