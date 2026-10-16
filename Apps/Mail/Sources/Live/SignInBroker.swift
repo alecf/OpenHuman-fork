@@ -1,4 +1,3 @@
-import AppKit
 import CryptoKit
 import Foundation
 import MailModel
@@ -12,26 +11,13 @@ struct SignInBrowserPlatform: Sendable {
     var openWith: @Sendable (URL, InstalledBrowser) async throws -> Void
     var browsers: @Sendable () async -> [InstalledBrowser]
 
-    static let system = SignInBrowserPlatform(
-        openDefault: { try await SystemBrowser().open($0) },
-        openWith: { url, browser in
-            let app = URL(fileURLWithPath: browser.appPath)
-            _ = try await NSWorkspace.shared.open([url], withApplicationAt: app,
-                                                  configuration: NSWorkspace.OpenConfiguration())
-        },
-        browsers: {
-            await MainActor.run {
-                guard let probe = URL(string: "https://accounts.google.com/") else { return [] }
-                let own = Bundle.main.bundleIdentifier
-                var seen = Set<String>()
-                return NSWorkspace.shared.urlsForApplications(toOpen: probe).compactMap { app -> InstalledBrowser? in
-                    guard let id = Bundle(url: app)?.bundleIdentifier, id != own, seen.insert(id).inserted else { return nil }
-                    let name = FileManager.default.displayName(atPath: app.path)
-                    let trimmed = name.hasSuffix(".app") ? String(name.dropLast(4)) : name
-                    return InstalledBrowser(id: id, name: trimmed, appPath: app.path)
-                }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-            }
-        })
+    init(openDefault: @escaping @Sendable (URL) async throws -> Void,
+         openWith: @escaping @Sendable (URL, InstalledBrowser) async throws -> Void,
+         browsers: @escaping @Sendable () async -> [InstalledBrowser]) {
+        self.openDefault = openDefault
+        self.openWith = openWith
+        self.browsers = browsers
+    }
 }
 
 protocol SignInBrowserMemory: Sendable {
@@ -41,6 +27,8 @@ protocol SignInBrowserMemory: Sendable {
 
 struct UserDefaultsSignInBrowserMemory: SignInBrowserMemory, @unchecked Sendable {
     let defaults: UserDefaults
+
+    init(defaults: UserDefaults) { self.defaults = defaults }
 
     static func key(_ account: String?) -> String {
         guard let account = account?.lowercased(), !account.isEmpty else { return "signin.browser.any" }
@@ -71,7 +59,7 @@ final class SignInBroker: ExternalBrowser, SignInBrowsing, Sendable {
     private let memory: any SignInBrowserMemory
     private let state = Mutex(State())
 
-    init(platform: SignInBrowserPlatform = .system, memory: any SignInBrowserMemory) {
+    init(platform: SignInBrowserPlatform, memory: any SignInBrowserMemory) {
         self.platform = platform
         self.memory = memory
     }
@@ -223,23 +211,5 @@ final class BrokeredReceiver: LoopbackRedirectReceiver, Sendable {
 
     func cancelWait() {
         cancelSignal.yield(())
-    }
-}
-
-@MainActor
-final class PasteboardSignInClipboard: SignInClipboard {
-    func copy(_ text: String) -> Int {
-        let board = NSPasteboard.general
-        board.clearContents()
-        board.setString(text, forType: .string)
-        return board.changeCount
-    }
-
-    @discardableResult
-    func clear(ifUnchangedSince mark: Int) -> Bool {
-        let board = NSPasteboard.general
-        guard board.changeCount == mark else { return false }
-        board.clearContents()
-        return true
     }
 }

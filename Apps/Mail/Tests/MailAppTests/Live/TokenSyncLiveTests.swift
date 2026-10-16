@@ -14,7 +14,7 @@ private func liveManager(store: MailStore, tokens: any TokenStore, home: URL,
         dependencies: LiveAccountManager.Dependencies(
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()], storeDirectory: home,
             tokenStore: tokens, transport: transport, makeReceiver: { AnsweringReceiver(browser: RecordingBrowser()) },
-            browser: RecordingBrowser(), clock: TestClock()))
+            browser: RecordingBrowser(), clock: TestClock(), developerClientFile: BuildFlavor.oauthClientFile))
 }
 
 @Test func theLiveManagerSharesAtLaunchFollowsTheSwitchAndSignOutKeepsTheSharedCopy() async throws {
@@ -99,7 +99,7 @@ private func liveManager(store: MailStore, tokens: any TokenStore, home: URL,
         dependencies: LiveAccountManager.Dependencies(
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()], storeDirectory: home,
             tokenStore: tokens, transport: google, makeReceiver: { AnsweringReceiver(browser: browser) },
-            browser: browser, clock: TestClock()))
+            browser: browser, clock: TestClock(), developerClientFile: BuildFlavor.oauthClientFile))
 
     #expect(await manager.sharedSignIns() == [address])
     let account = try await manager.useSharedSignIn(email: address)

@@ -212,7 +212,7 @@ func liveBackend(google: FakeGoogle, store: MailStore, tokens: InMemoryTokenStor
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": clientPath],
             storeDirectory: FileManager.default.temporaryDirectory.appendingPathComponent("oh-none-\(UUID().uuidString)"), tokenStore: tokens, transport: google.http,
             makeReceiver: { AnsweringReceiver(browser: browser) }, browser: browser, clock: SystemClock(),
-            signInTimeout: .seconds(30)),
+            signInTimeout: .seconds(30), developerClientFile: BuildFlavor.oauthClientFile),
         transports: LiveBackend.Transports(api: google.http, token: google.http),
         userAgent: "OpenHumanMail/test", makeSystemEvents: { systemEvents })
 }
@@ -394,7 +394,7 @@ extension AppSystemEvents {
             storeDirectory: directory.appendingPathComponent("none"),
             tokenStore: InMemoryTokenStore(), transport: FakeHTTPTransport(),
             makeReceiver: { AnsweringReceiver(browser: RecordingBrowser()) }, browser: RecordingBrowser(),
-            clock: TestClock()))
+            clock: TestClock(), developerClientFile: BuildFlavor.oauthClientFile))
     #expect(manager.currentClientStatus() == .configuredWithoutSecret(source: .environment))
     let withSecret = try SyntheticClient.writeJSON()
     let other = LiveAccountManager(
@@ -404,7 +404,7 @@ extension AppSystemEvents {
             storeDirectory: directory.appendingPathComponent("none"),
             tokenStore: InMemoryTokenStore(), transport: FakeHTTPTransport(),
             makeReceiver: { AnsweringReceiver(browser: RecordingBrowser()) }, browser: RecordingBrowser(),
-            clock: TestClock()))
+            clock: TestClock(), developerClientFile: BuildFlavor.oauthClientFile))
     #expect(other.currentClientStatus() == .configured(source: .environment))
 }
 

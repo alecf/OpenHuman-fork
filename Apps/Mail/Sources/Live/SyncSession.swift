@@ -16,13 +16,32 @@ final class SyncSession: Sendable {
         var oauthClient: OAuthClientConfig?
         var clock: any OHClock
         var pollInterval: Duration
-        var systemEvents: AppSystemEvents?
+        var systemEvents: (any StoppableSystemEvents)?
         var tokenEvents: AsyncStream<TokenEvent>?
         var draftsDirectory: URL? = nil
         var unsubscribeTransport: (any HTTPTransport)? = nil
         var accounts: (any AccountManaging)? = nil
         var calendar: GoogleCalendarSession? = nil
         var calendarConnections: LiveCalendarConnections? = nil
+
+        init(factory: DefaultGmailClientFactory, gmail: GmailClientConfig, metrics: SyncMetricsRegistry,
+             tokenStore: (any TokenStore)? = nil, oauthClient: OAuthClientConfig? = nil, clock: any OHClock,
+             pollInterval: Duration, systemEvents: (any StoppableSystemEvents)? = nil,
+             tokenEvents: AsyncStream<TokenEvent>? = nil, draftsDirectory: URL? = nil,
+             unsubscribeTransport: (any HTTPTransport)? = nil, accounts: (any AccountManaging)? = nil) {
+            self.factory = factory
+            self.gmail = gmail
+            self.metrics = metrics
+            self.tokenStore = tokenStore
+            self.oauthClient = oauthClient
+            self.clock = clock
+            self.pollInterval = pollInterval
+            self.systemEvents = systemEvents
+            self.tokenEvents = tokenEvents
+            self.draftsDirectory = draftsDirectory
+            self.unsubscribeTransport = unsubscribeTransport
+            self.accounts = accounts
+        }
     }
 
     let account: AccountID
@@ -33,7 +52,7 @@ final class SyncSession: Sendable {
     let environment: AppEnvironment
     let calendar: GoogleCalendarSession?
     let calendarConnections: LiveCalendarConnections?
-    private let systemEvents: AppSystemEvents?
+    private let systemEvents: (any StoppableSystemEvents)?
     private let tokenEvents: AsyncStream<TokenEvent>?
     private let relay = Mutex<Task<Void, Never>?>(nil)
     private let eventRelay = Mutex<Task<Void, Never>?>(nil)
@@ -255,6 +274,8 @@ final class EngineSlot: Sendable {
 
 final class SyncMetricsRegistry: Sendable {
     private let collectors = Mutex<[String: SyncMetricsCollector]>([:])
+
+    init() {}
 
     func collector(for email: String) -> SyncMetricsCollector {
         let key = email.lowercased()

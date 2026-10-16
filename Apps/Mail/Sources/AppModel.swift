@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import MailFeatures
 import MailModel
@@ -26,7 +25,7 @@ final class AppModel {
     }
     @ObservationIgnored private(set) lazy var deepLinks: DeepLinkRouter = {
         let links = DeepLinkRouter(router: { [weak self] in self?.router })
-        links.didFollow = { _ in NSApp.activate() }
+        links.didFollow = { _ in PlatformServices.current.activateApp() }
         return links
     }()
     @ObservationIgnored private(set) lazy var intents: IntentActions = IntentActions(router: { [weak self] in self?.router },

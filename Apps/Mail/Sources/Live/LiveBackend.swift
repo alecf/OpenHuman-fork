@@ -12,6 +12,12 @@ final class LiveBackend {
         var api: any HTTPTransport
         var token: any HTTPTransport
         var unsubscribe: (any HTTPTransport)? = nil
+
+        init(api: any HTTPTransport, token: any HTTPTransport, unsubscribe: (any HTTPTransport)? = nil) {
+            self.api = api
+            self.token = token
+            self.unsubscribe = unsubscribe
+        }
     }
 
     enum Start: Equatable {
@@ -27,14 +33,14 @@ final class LiveBackend {
     private let clock: any OHClock
     private let userAgent: String
     private let pollInterval: Duration?
-    private let makeSystemEvents: @MainActor () -> AppSystemEvents?
+    private let makeSystemEvents: @MainActor () -> (any StoppableSystemEvents)?
     private let calendarTokenStore: (any TokenStore)?
     private let makeReceiver: @Sendable () -> any LoopbackRedirectReceiver
     private let browser: any ExternalBrowser
 
     init(store: MailStore, accountDependencies: LiveAccountManager.Dependencies,
          transports: Transports, userAgent: String, pollInterval: Duration? = nil,
-         makeSystemEvents: @escaping @MainActor () -> AppSystemEvents? = { AppSystemEvents() }) {
+         makeSystemEvents: @escaping @MainActor () -> (any StoppableSystemEvents)?) {
         self.store = store
         self.tokenStore = accountDependencies.tokenStore
         self.transports = transports

@@ -30,6 +30,27 @@ final class LiveAccountManager: AccountManaging {
         var signInTimeout: Duration = .seconds(300)
         var remoteSignInTimeout: Duration = .seconds(600)
         var calendarTokenStore: (any TokenStore)? = nil
+        var developerClientFile: @Sendable ([String: String]) -> String? = { _ in nil }
+
+        init(environment: [String: String], storeDirectory: URL, clientStore: any OAuthClientStore = InMemoryOAuthClientStore(),
+             tokenStore: any TokenStore, transport: any HTTPTransport,
+             makeReceiver: @escaping @Sendable () -> any LoopbackRedirectReceiver, browser: any ExternalBrowser,
+             clock: any OHClock, signInTimeout: Duration = .seconds(300), remoteSignInTimeout: Duration = .seconds(600),
+             calendarTokenStore: (any TokenStore)? = nil,
+             developerClientFile: @escaping @Sendable ([String: String]) -> String? = { _ in nil }) {
+            self.environment = environment
+            self.storeDirectory = storeDirectory
+            self.clientStore = clientStore
+            self.tokenStore = tokenStore
+            self.transport = transport
+            self.makeReceiver = makeReceiver
+            self.browser = browser
+            self.clock = clock
+            self.signInTimeout = signInTimeout
+            self.remoteSignInTimeout = remoteSignInTimeout
+            self.calendarTokenStore = calendarTokenStore
+            self.developerClientFile = developerClientFile
+        }
     }
 
     private struct PendingRemote {
@@ -72,7 +93,7 @@ final class LiveAccountManager: AccountManaging {
 
     private var session: SessionLink? { link.withLock { $0 } }
 
-    private var developerClientFile: String? { BuildFlavor.oauthClientFile(dependencies.environment) }
+    private var developerClientFile: String? { dependencies.developerClientFile(dependencies.environment) }
 
     private func makeFlow(_ client: OAuthClientConfig) -> OAuthFlow {
         OAuthFlow(client: client, scopes: OAuthScopes.mailRequest, transport: dependencies.transport,

@@ -1,7 +1,9 @@
 import Foundation
 import MailFeatures
 import OpenHumanAI
+#if os(macOS)
 import OpenHumanAIAgentCLI
+#endif
 import OpenHumanAIApple
 import OpenHumanAITesting
 
@@ -53,6 +55,7 @@ enum AIServices {
     }
 
     nonisolated static func agentCLI(_ id: AIProviderID, settings: AISettings) -> (any AIProvider)? {
+        #if os(macOS)
         let kind: AgentCLIKind
         switch id {
         case .agentClaude: kind = .claude
@@ -62,5 +65,8 @@ enum AIServices {
         let chosen = settings.agentCLI[id] ?? AgentCLISettings()
         return AgentCLIProvider(kind: kind, configuration: AgentCLIConfiguration(
             overridePath: chosen.binaryPathOverride, model: chosen.model, policyInputCap: chosen.inputCapTokens))
+        #else
+        nil
+        #endif
     }
 }

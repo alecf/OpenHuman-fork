@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import MailFeatures
 import MailModel
@@ -102,8 +101,12 @@ struct StoreSemanticSource: SemanticCorpusSource {
 final class AppIndexingGate: IndexingGate {
     private let lastActivity = Mutex<Date?>(nil)
     private let folder: URL?
+    private let isAppActive: @MainActor @Sendable () -> Bool
 
-    init(folder: URL?) { self.folder = folder }
+    init(folder: URL?, isAppActive: @escaping @MainActor @Sendable () -> Bool = { PlatformServices.current.isAppActive() }) {
+        self.folder = folder
+        self.isAppActive = isAppActive
+    }
 
     func noteActivity() { lastActivity.withLock { $0 = Date() } }
 
@@ -118,7 +121,7 @@ final class AppIndexingGate: IndexingGate {
         return nil
     }
 
-    func dutyShare() async -> Double { await MainActor.run { NSApplication.shared.isActive } ? 0.25 : 0.5 }
+    func dutyShare() async -> Double { await MainActor.run { isAppActive() } ? 0.25 : 0.5 }
 }
 
 private final class CandidateCache: Sendable {
