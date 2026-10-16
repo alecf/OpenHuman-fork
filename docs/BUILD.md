@@ -69,6 +69,22 @@ Local build output is under `build/`; the app product is
 `build/dd/Build/Products/Release/OpenHumanMail.app`. Release signing and binary
 distribution are described in [the release guide](release/RELEASE-HOWTO.md).
 
+## Entitlements
+
+The build setting `OH_ENTITLEMENTS` names the entitlements file Xcode signs the
+app with. It defaults to `Entitlements/Mail.entitlements` (in `Apps/Mail`), which
+is empty, so every build without a provisioning profile, ad-hoc signed or with a
+personal team, still launches. Keep that file empty: `Tools/release/check-release.sh`
+fails when it is not. Xcode's Signing & Capabilities editor writes new capabilities
+into the file `OH_ENTITLEMENTS` names, so do not commit what it adds there.
+
+`Entitlements/Mail-iCloud.entitlements` holds the iCloud, push and keychain group
+entitlements. They need a provisioning profile that grants them; the signed release
+adds them together with its Developer ID profile (see
+[iCloud entitlements](release/RELEASE-HOWTO.md#icloud-entitlements)). A local
+`Local.xcconfig` may set `OH_ENTITLEMENTS` to another file only for a build that is
+signed with a matching provisioning profile.
+
 ## Build flavours
 
 The app has three build configurations, all from the one `Mail` target:

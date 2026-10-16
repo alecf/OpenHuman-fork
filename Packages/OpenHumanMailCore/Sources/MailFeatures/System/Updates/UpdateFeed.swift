@@ -32,6 +32,18 @@ public struct UpdateFeed: Sendable, Equatable {
         guard path.hasPrefix("/\(repository.lowercased())/releases/"), !path.contains("..") else { return releasesPage }
         return url
     }
+
+    public static let maxRedirects = 3
+
+    // Why: the check only ever talks to GitHub, so a hop anywhere else or a long chain ends it
+    public static func allowsRedirect(from source: URL, to target: URL, count: Int) -> Bool {
+        (1...maxRedirects).contains(count) && isGitHub(source) && isGitHub(target)
+    }
+
+    private static func isGitHub(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "https", let host = url.host(percentEncoded: true)?.lowercased() else { return false }
+        return (host == "api.github.com" || host == "github.com") && url.port == nil && url.user(percentEncoded: true) == nil
+    }
 }
 
 public struct UpdateFeedReply: Sendable, Equatable {
@@ -54,6 +66,7 @@ public enum UpdateFeedFailure: Error, Equatable, Sendable {
     case offline
     case timedOut
     case unreachable
+    case redirectRefused
 }
 
 public typealias UpdateFeedFetch = @Sendable (URL) async throws -> UpdateFeedReply
