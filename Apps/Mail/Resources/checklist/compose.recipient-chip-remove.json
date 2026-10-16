@@ -1,0 +1,14 @@
+{
+  "id": "compose.recipient-chip-remove",
+  "area": "Composer",
+  "title": "Every recipient chip shows its remove x",
+  "steps": [
+    "Launch Mail with -UseFakeGmail and open a new message",
+    "Add two synthetic recipients to To",
+    "Without hovering, click the x on the first chip"
+  ],
+  "deepLink": null,
+  "expected": "Each chip shows an x at rest, the x is easy to hit and clicking it removes only that recipient.",
+  "requires": "fake",
+  "addedIn": "2026-10-15"
+}

@@ -172,7 +172,9 @@ struct RenderReviewFixTests {
     @Test func composerPolishMetrics() {
         #expect(FormatBarMetrics.glyphInset == (FormatBarMetrics.button - FormatBarMetrics.glyph) / 2)
         #expect(FormatBarMetrics.glyphInset > 0)
-        #expect(!RecipientToken.showsRemove(hovered: false))
-        #expect(RecipientToken.showsRemove(hovered: true))
+        #expect(RecipientToken.removeStyle(hovered: false).opacity == 1, "the remove x is always shown, as in Gmail")
+        #expect(RecipientToken.removeStyle(hovered: true).opacity == 1)
+        #expect(RecipientToken.removeStyle(hovered: true).emphasized && !RecipientToken.removeStyle(hovered: false).emphasized)
+        #expect(RecipientToken.removeHitWidth >= 2 * RecipientToken.removeGlyphSize, "a hit target larger than the glyph")
     }
 }

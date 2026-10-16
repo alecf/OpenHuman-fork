@@ -14,7 +14,7 @@ import Testing
             for block in list {
                 switch block {
                 case .paragraph(let inlines): walk(inlines)
-                case .list(_, let items): items.forEach(blocks)
+                case .list(_, let items, _): items.forEach(blocks)
                 case .quote(let inner): blocks(inner)
                 case .image: break
                 }

@@ -48,10 +48,10 @@ public enum ComposePaste {
                 let cleaned = clean(inlines, report: &report)
                 if cleaned.isEmpty, !inlines.isEmpty { continue }
                 out.append(.paragraph(cleaned))
-            case .list(let ordered, let items):
+            case .list(let ordered, let items, let start):
                 var cleanedItems: [[RichTextDocument.Block]] = []
                 for item in items { cleanedItems.append(clean(item, report: &report)) }
-                out.append(.list(ordered: ordered, items: cleanedItems))
+                out.append(.list(ordered: ordered, items: cleanedItems, start: start))
             case .quote(let inner):
                 out.append(.quote(clean(inner, report: &report)))
             case .image:

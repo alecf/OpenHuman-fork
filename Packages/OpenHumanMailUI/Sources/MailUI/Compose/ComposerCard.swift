@@ -43,12 +43,12 @@ public struct ComposerCard<Editor: View>: View {
                          autofocus: (session.mode == .new || session.mode == .forward) && session.to.tokens.isEmpty) {
                 fieldButtons
             }
-            if session.showsCc {
+            if session.isRecipientRowShown(.cc) {
                 fieldRule
                 RecipientRow(field: session.cc, session: session, rowHeight: rowHeight, inlinePopovers: isDocked,
                              recentMailLookup: recentMail, autofocus: false) { EmptyView() }
             }
-            if session.showsBcc {
+            if session.isRecipientRowShown(.bcc) {
                 fieldRule
                 RecipientRow(field: session.bcc, session: session, rowHeight: rowHeight, inlinePopovers: isDocked,
                              recentMailLookup: recentMail, autofocus: false) { EmptyView() }

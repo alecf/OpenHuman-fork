@@ -95,7 +95,9 @@ struct HTMLImporter {
             inlines.append(.lineBreak)
         case "ul", "ol":
             flush()
-            output.append(.list(ordered: tag == "ol", items: listItems(element, depth: depth)))
+            let start = tag == "ol" ? (try? element.attr("start")).flatMap { Int($0.trimmingCharacters(in: .whitespaces)) } : nil
+            output.append(.list(ordered: tag == "ol", items: listItems(element, depth: depth),
+                                start: RichTextDocument.listStart(start, ordered: tag == "ol")))
         case "blockquote":
             flush()
             var inner = nested()

@@ -30,9 +30,11 @@ public struct ComposeTextFlags: Sendable, Hashable {
     public var dashSubstitution: Bool
     public var linkDetection: Bool
     public var writingTools: Bool
+    public var autoLists: Bool
 
     public init(continuousSpelling: Bool, autocorrect: Bool, grammar: Bool, textReplacement: Bool,
-                quoteSubstitution: Bool, dashSubstitution: Bool, linkDetection: Bool = true, writingTools: Bool) {
+                quoteSubstitution: Bool, dashSubstitution: Bool, linkDetection: Bool = true, writingTools: Bool,
+                autoLists: Bool = true) {
         self.continuousSpelling = continuousSpelling
         self.autocorrect = autocorrect
         self.grammar = grammar
@@ -41,6 +43,7 @@ public struct ComposeTextFlags: Sendable, Hashable {
         self.dashSubstitution = dashSubstitution
         self.linkDetection = linkDetection
         self.writingTools = writingTools
+        self.autoLists = autoLists
     }
 
     public static let standard = ComposeTextFlags(continuousSpelling: true, autocorrect: true, grammar: false,
@@ -56,8 +59,11 @@ public final class ComposeTextSettings {
     public static let textReplacementKey = "compose.spelling.textReplacement"
     public static let smartPunctuationKey = "compose.spelling.smartPunctuation"
     public static let writingToolsKey = "compose.allow_writing_tools"
+    public static let autoListsKey = "compose.auto_lists"
 
     public static let replacementsNote = "Uses the text replacements you set up in macOS."
+    public static let autoListsNote = "Typing 1. or - or * and a space at the start of a line starts a list. "
+        + "Return adds the next item; Return on an empty item ends the list."
     public static let protectedNote = "Autocorrect never changes email addresses, links, snippet shortcuts or fill-in fields."
 
     public var autocorrect: AutocorrectChoice { didSet { defaults.set(autocorrect.rawValue, forKey: Self.autocorrectKey) } }
@@ -70,6 +76,7 @@ public final class ComposeTextSettings {
         didSet { defaults.set(smartPunctuation.rawValue, forKey: Self.smartPunctuationKey) }
     }
     public var allowWritingTools: Bool { didSet { defaults.set(allowWritingTools, forKey: Self.writingToolsKey) } }
+    public var autoLists: Bool { didSet { defaults.set(autoLists, forKey: Self.autoListsKey) } }
     public private(set) var system: SystemTextValues
 
     @ObservationIgnored let defaults: UserDefaults
@@ -86,6 +93,7 @@ public final class ComposeTextSettings {
         smartPunctuation = defaults.string(forKey: Self.smartPunctuationKey).flatMap(FollowSystemChoice.init(rawValue:))
             ?? .system
         allowWritingTools = defaults.object(forKey: Self.writingToolsKey) as? Bool ?? false
+        autoLists = defaults.object(forKey: Self.autoListsKey) as? Bool ?? true
         system = port.current()
         port.observe { [weak self] values in self?.system = values }
     }
@@ -97,7 +105,7 @@ public final class ComposeTextSettings {
                          textReplacement: textReplacement == .system && system.textReplacement,
                          quoteSubstitution: smartPunctuation == .system && system.quoteSubstitution,
                          dashSubstitution: smartPunctuation == .system && system.dashSubstitution,
-                         writingTools: writingToolsAllowed(for: account))
+                         writingTools: writingToolsAllowed(for: account), autoLists: autoLists)
     }
 
     public func writingToolsAllowed(for account: Account) -> Bool {

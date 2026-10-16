@@ -1,0 +1,15 @@
+{
+  "id": "compose.recipient-chip-drag",
+  "area": "Composer",
+  "title": "Drag a recipient chip from To to Cc or Bcc",
+  "steps": [
+    "Launch Mail with -UseFakeGmail and open a new message with two synthetic To recipients",
+    "Drag one chip down: the hidden Cc and Bcc rows appear; drop it on Bcc",
+    "Press ⌘Z",
+    "Right-click a chip and choose Move to Cc"
+  ],
+  "deepLink": null,
+  "expected": "The chip moves to Bcc and the Bcc row stays; an address already in the target is not added twice. ⌘Z puts it back in To in one step. The menu (and the VoiceOver actions) move it to Cc.",
+  "requires": "fake",
+  "addedIn": "2026-10-15"
+}

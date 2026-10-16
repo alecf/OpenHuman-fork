@@ -43,6 +43,7 @@ public struct ComposerEditor: NSViewRepresentable {
     let allowsWritingTools: Bool
     let onClose: () -> Void
     let textFlags: ComposeTextFlags
+    let isPlainText: Bool
 
     public init(session: ComposeSession, manager: ComposeManager, theme: ThemeTokens, focusOnAppear: Bool,
                 placeholder: String = "", growsWithContent: Bool = false, minHeight: CGFloat = 0,
@@ -68,6 +69,7 @@ public struct ComposerEditor: NSViewRepresentable {
         var flags = manager.textSettings.flags(for: session.account)
         flags.writingTools = manager.allowsWritingTools(in: session)
         self.textFlags = flags
+        self.isPlainText = session.isPlainText
     }
 
     public static func placeholder(for mode: DraftMode) -> String {
@@ -84,6 +86,7 @@ public struct ComposerEditor: NSViewRepresentable {
         scroll.borderType = .noBorder
         let text = ComposerTextView.make()
         text.configure(with: textFlags)
+        text.isPlainTextMode = isPlainText
         text.bridge = AttributedBridge(theme: theme)
         text.placeholder = placeholder
         text.allowsWritingTools = allowsWritingTools
@@ -120,6 +123,7 @@ public struct ComposerEditor: NSViewRepresentable {
         }
         if text.allowsWritingTools != allowsWritingTools { text.allowsWritingTools = allowsWritingTools }
         text.configure(with: textFlags)
+        text.isPlainTextMode = isPlainText
         text.ghostText = ghostText
         text.spokenPlaceholder = spokenPlaceholder
         context.coordinator.growsWithContent = growsWithContent

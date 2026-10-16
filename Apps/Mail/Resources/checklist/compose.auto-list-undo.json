@@ -1,0 +1,15 @@
+{
+  "id": "compose.auto-list-undo",
+  "area": "Composer",
+  "title": "One Undo turns an automatic list back into the typed text",
+  "steps": [
+    "Launch Mail with -UseFakeGmail and open a new message",
+    "In the body type 1. and a space",
+    "Press ⌘Z once",
+    "Turn off Settings › General › Writing › Automatic lists and type 1. and a space again"
+  ],
+  "deepLink": null,
+  "expected": "⌘Z leaves the typed 1. and space as plain text in one step. With the setting off nothing is converted.",
+  "requires": "fake",
+  "addedIn": "2026-10-15"
+}

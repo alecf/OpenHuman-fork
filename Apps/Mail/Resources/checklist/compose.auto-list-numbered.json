@@ -1,0 +1,14 @@
+{
+  "id": "compose.auto-list-numbered",
+  "area": "Composer",
+  "title": "Typing 3. starts a numbered list that continues itself",
+  "steps": [
+    "Launch Mail with -UseFakeGmail and open a new message",
+    "In the body type 3. and a space, then Plan, Return, Book",
+    "Send it to a synthetic recipient and open it from Sent"
+  ],
+  "deepLink": null,
+  "expected": "The line becomes a numbered list at 3 and Return adds 4. The sent message shows 3. Plan and 4. Book in both the formatted and the plain-text part.",
+  "requires": "fake",
+  "addedIn": "2026-10-15"
+}

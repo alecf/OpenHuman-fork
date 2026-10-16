@@ -32,6 +32,8 @@ public struct AttributedBridge {
     public static let inlineImageKey = NSAttributedString.Key("dev.openhuman.mail.composer.inlineImage")
     public static let inlineImageAltKey = NSAttributedString.Key("dev.openhuman.mail.composer.inlineImageAlt")
     static let quoteIndent: CGFloat = 12
+    static let listIndent: CGFloat = 24
+    static let markerGap: CGFloat = 6
     static let maxImageWidth: CGFloat = 480
 
     public init(theme: ThemeTokens) {
@@ -86,9 +88,11 @@ public struct AttributedBridge {
         var indent: CGFloat = quoted ? Self.quoteIndent : 0
         if !lists.isEmpty {
             style.textLists = lists
-            indent += CGFloat(lists.count) * 24
-            style.tabStops = [NSTextTab(textAlignment: .left, location: indent - 12),
+            indent += CGFloat(lists.count) * Self.listIndent
+            // Right-aligned so a wide number such as "10." still ends before the item text
+            style.tabStops = [NSTextTab(textAlignment: .right, location: indent - Self.markerGap),
                               NSTextTab(textAlignment: .left, location: indent)]
+            style.defaultTabInterval = Self.listIndent
             style.headIndent = indent
             style.firstLineHeadIndent = quoted ? Self.quoteIndent : 0
         } else {
@@ -117,13 +121,15 @@ public struct AttributedBridge {
             let start = out.length
             for inline in inlines { append(inline, marks: [], link: nil, to: out) }
             applyParagraph(lists: lists, to: out, from: start)
-        case .list(let ordered, let items):
+        case .list(let ordered, let items, let first):
             let list = NSTextList(markerFormat: Self.markerFormat(ordered: ordered, depth: lists.count), options: 0)
+            let number = RichTextDocument.listStart(first, ordered: ordered) ?? 1
+            list.startingItemNumber = number
             let levels = lists + [list]
             for (i, item) in items.enumerated() {
                 if i > 0 { out.append(NSAttributedString(string: "\n", attributes: typingAttributes)) }
                 var start = out.length
-                let marker = "\t" + list.marker(forItemNumber: i + 1) + "\t"
+                let marker = Self.marker(list, number: number + i)
                 out.append(NSAttributedString(string: marker, attributes: typingAttributes))
                 let paragraphs = item.isEmpty ? [RichTextDocument.Block.paragraph([])] : item
                 for (j, inner) in paragraphs.enumerated() {
@@ -417,17 +423,31 @@ public struct AttributedBridge {
             items[items.count - 1].append(listBlock(entries[i..<j], depth: depth + 1))
             i = j
         }
-        return .list(ordered: own.map(isOrdered) ?? false, items: items)
+        let ordered = own.map(isOrdered) ?? false
+        return .list(ordered: ordered, items: items, start: RichTextDocument.listStart(own?.startingItemNumber, ordered: ordered))
     }
 
+    // A fresh list from 1, so the shown number never depends on how AppKit applies startingItemNumber
+    static func marker(_ list: NSTextList, number: Int) -> String {
+        let text = NSTextList(markerFormat: list.markerFormat, options: 0).marker(forItemNumber: number)
+        let numbered = isOrdered(list) && text.last.map { $0.isNumber || $0.isLetter } == true
+        return "\t" + (numbered ? text + "." : text) + "\t"
+    }
+
+    // The period is part of the format so every marker TextKit makes for the list carries it too
+    static let numberedFormat = NSTextList.MarkerFormat("{decimal}.")
+
     static func markerFormat(ordered: Bool, depth: Int) -> NSTextList.MarkerFormat {
-        if ordered { return .decimal }
+        if ordered { return numberedFormat }
         switch depth % 3 {
         case 0: return .disc
         case 1: return .circle
         default: return .square
         }
     }
+
+    // The regular bullet is a faint speck next to body text
+    static func bulletFont(size: CGFloat) -> NSFont { .systemFont(ofSize: size, weight: .black) }
 
     static func isOrdered(_ list: NSTextList) -> Bool {
         list.markerFormat != .disc && list.markerFormat != .circle && list.markerFormat != .square

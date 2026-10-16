@@ -35,9 +35,11 @@ public enum ComposeSerializer {
         case .paragraph(let inlines):
             let content = html(inlines)
             return paragraphOpen + (content.isEmpty ? "<br>" : content) + "</p>"
-        case .list(let ordered, let items):
+        case .list(let ordered, let items, let start):
             let tag = ordered ? "ol" : "ul"
-            var out = "<" + tag + ">"
+            var out = "<" + tag
+            if let first = RichTextDocument.listStart(start, ordered: ordered) { out += " start=\"\(first)\"" }
+            out += ">"
             for item in items {
                 out += "<li>"
                 if item.count == 1, case .paragraph(let inlines) = item[0] {
@@ -155,10 +157,11 @@ public enum ComposeSerializer {
         switch block {
         case .paragraph(let inlines):
             return text(inlines).components(separatedBy: "\n").map { indent + $0 }
-        case .list(let ordered, let items):
+        case .list(let ordered, let items, let start):
             var lines: [String] = []
+            let firstNumber = RichTextDocument.listStart(start, ordered: ordered) ?? 1
             for (n, item) in items.enumerated() {
-                let marker = ordered ? "\(n + 1). " : "- "
+                let marker = ordered ? "\(firstNumber + n). " : "- "
                 let continuation = indent + String(repeating: " ", count: marker.count)
                 var first = true
                 for b in item {

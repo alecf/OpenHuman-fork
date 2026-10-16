@@ -65,6 +65,7 @@ struct GeneralSettingsPage: View {
                 SettingsRow("Smart quotes and dashes", selection: $writing.smartPunctuation) {
                     ForEach(FollowSystemChoice.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
+                SettingsRow("Automatic lists", detail: ComposeTextSettings.autoListsNote, isOn: $writing.autoLists)
             }
             SettingsSection("Window") {
                 switchRow("Show shortcut hints", model.showShortcutHints,
