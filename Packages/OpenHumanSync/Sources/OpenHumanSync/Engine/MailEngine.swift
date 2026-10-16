@@ -22,6 +22,7 @@ public actor MailEngine {
     var runtimes: [AccountID: AccountRuntime] = [:]
     var ownership: OwnershipManager?
     var started = false
+    var refreshing: Task<RefreshReport, Never>?
     var isActive = true
     var inBackground = false
     static let maintenanceEvery: TimeInterval = 600
@@ -50,6 +51,8 @@ public actor MailEngine {
     public func start() async {
         guard configuration.role == .app, !started else { return }
         started = true
+        await settleRefresh()
+        guard started else { return }
         let ownership = OwnershipManager(store: store, identity: processIdentity, kind: "app", clock: configuration.clock)
         self.ownership = ownership
         let accounts: [AccountItem]
@@ -68,6 +71,7 @@ public actor MailEngine {
     }
 
     public func stop() async {
+        await settleRefresh()
         await draftDebouncer?.flushAll()
         for task in background { task.cancel() }
         background = []

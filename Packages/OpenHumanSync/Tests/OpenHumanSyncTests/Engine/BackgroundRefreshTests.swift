@@ -3,6 +3,7 @@ import OpenHumanCore
 import OpenHumanGmail
 import OpenHumanGmailTesting
 import OpenHumanStore
+import Synchronization
 import Testing
 @testable import OpenHumanSync
 
@@ -25,6 +26,32 @@ import Testing
             _ = try await engine.perform(action, origin: .app)
         }
         #expect(try h.ops([.pending]).count == count)
+    }
+
+    private func localDraft(_ h: EngineHarness, subject: String = "Synthetic background upload") throws -> DraftID {
+        try h.store.createDraft(account: h.account, mode: .new, replyTo: nil,
+                                content: DraftContent(to: [EmailAddress(email: "bob@example.com")], cc: [], bcc: [],
+                                                      subject: subject, bodyHTML: "<p>Synthetic body</p>", attachments: []),
+                                origin: .user, reviewState: .none, agentNote: nil, extraHeaders: [:])
+    }
+
+    private func gmailDraftIDs(_ h: EngineHarness) async throws -> [String] {
+        try await h.gmail.listDrafts(pageToken: nil, q: nil, maxResults: 500).drafts?.map(\.id) ?? []
+    }
+
+    private func queuedUploadAndArchive(_ h: EngineHarness) throws -> (draft: DraftID, upload: OperationID, archive: OperationID) {
+        let draft = try localDraft(h)
+        let upload = try h.store.saveDraftRemotely(draft)
+        let archive = try h.store.apply(.archive([try h.ref(h.threads[0])]), origin: .app).operationIDs[0]
+        return (draft, upload, archive)
+    }
+
+    private func expectUploadedOnce(_ h: EngineHarness, _ probe: ProbeGmail, draft: DraftID, upload: OperationID,
+                                    sourceLocation: SourceLocation = #_sourceLocation) async throws {
+        #expect(try h.store.operation(upload)?.status == .succeeded, sourceLocation: sourceLocation)
+        let saved = try #require(try h.store.draft(draft)?.gmailDraftID, sourceLocation: sourceLocation).rawValue
+        #expect(try await gmailDraftIDs(h) == [saved], sourceLocation: sourceLocation)
+        #expect(probe.writes.filter { $0.method == .createDraft }.count == 1, sourceLocation: sourceLocation)
     }
 
     @Test func refreshOnceRunsOneHistoryPassAndNeverBackfills() async throws {
@@ -200,6 +227,159 @@ import Testing
         await engine.stop()
     }
 
+    @Test(.timeLimit(.minutes(1))) func aRefreshAskedForDuringAnotherSharesItsPass() async throws {
+        let h = try await syncedHarness()
+        let probe = ProbeGmail(h.gmail)
+        let engine = h.engine(factory: FixedGmailFactory(api: probe))
+        let hold = probe.holdAfterCommit(.listHistory)
+        let deadline = h.clock.now.addingTimeInterval(20)
+
+        let first = await engine.refreshPass(deadline: deadline, maxOperations: 5)
+        await hold.arrival()
+        let second = await engine.refreshPass(deadline: deadline.addingTimeInterval(60), maxOperations: 1)
+        #expect(second == first)
+        hold.open()
+        let report = await first.value
+
+        #expect(report.syncs.map(\.error) == [nil])
+        #expect(await h.gmail.callCount(.listHistory) == 1)
+        let next = await engine.refreshPass(deadline: deadline, maxOperations: 5)
+        #expect(next != first, "a finished pass is not reused")
+        _ = await next.value
+        #expect(await h.gmail.callCount(.listHistory) == 2)
+        #expect(try h.store.lease(account: h.account) == nil)
+    }
+
+    @Test func aStartedEngineRefreshesWithItsOwnRuntimeAndKeepsItsLease() async throws {
+        let h = try await syncedHarness()
+        let factory = CountingFactory(h.gmail)
+        let engine = h.engine(factory: factory)
+        await engine.start()
+        let runtime = try #require(await engine.runtime(for: h.account))
+        #expect(factory.clients == 1)
+
+        let report = await engine.refreshOnce(deadline: h.clock.now.addingTimeInterval(20))
+
+        #expect(report.syncs.count == 1 && report.ownedElsewhere.isEmpty)
+        #expect(factory.clients == 1, "no second runtime")
+        #expect(await engine.runtime(for: h.account) === runtime)
+        #expect(try h.store.lease(account: h.account)?.ownerID == h.store.writerID)
+        await engine.stop()
+        #expect(try h.store.lease(account: h.account) == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1))) func startingDuringABackgroundRefreshEndsItBeforeTheEngineTakesOver() async throws {
+        let h = try await syncedHarness()
+        let probe = ProbeGmail(h.gmail)
+        let factory = CountingFactory(probe)
+        let engine = h.engine(factory: factory)
+        let hold = probe.holdAfterCommit(.listHistory)
+        let refreshing = Task { await engine.refreshOnce(deadline: h.clock.now.addingTimeInterval(20)) }
+        await hold.arrival()
+        #expect(factory.clients == 1)
+
+        await engine.start()
+
+        #expect(hold.wasCancelled, "the background pass ended before start went on")
+        hold.open()
+        let report = await refreshing.value
+        #expect(report.syncs.map(\.error) == ["cancelled"] && report.operations.isEmpty)
+        #expect(factory.clients == 2)
+        #expect(await engine.runtime(for: h.account) != nil)
+        #expect(try h.store.lease(account: h.account)?.ownerID == h.store.writerID)
+        await engine.stop()
+    }
+
+    @Test(.timeLimit(.minutes(1))) func aDraftUploadInFlightAtTheDeadlineFinishesAndIsNotRepeated() async throws {
+        let h = try await syncedHarness()
+        let probe = ProbeGmail(h.gmail)
+        let engine = h.engine(factory: FixedGmailFactory(api: probe))
+        let queued = try queuedUploadAndArchive(h)
+        let hold = probe.holdAfterCommit(.createDraft)
+        let deadline = h.clock.now.addingTimeInterval(20)
+        let refreshing = Task { await engine.refreshOnce(deadline: deadline) }
+        await hold.arrival()
+
+        h.clock.advance(to: deadline.addingTimeInterval(1))
+        hold.open()
+        let report = await refreshing.value
+
+        #expect(!hold.wasCancelled)
+        #expect(report.deadlineReached)
+        let drained = try #require(report.operations[h.account])
+        #expect(drained.succeeded == 1 && drained.released == 1)
+        try await expectUploadedOnce(h, probe, draft: queued.draft, upload: queued.upload)
+        let archive = try #require(try h.store.operation(queued.archive))
+        #expect(archive.status == .pending && archive.attempts == 0, "no new operation starts after the deadline")
+        #expect(await h.gmail.callCount(.batchModify) == 0)
+        #expect(try h.store.lease(account: h.account) == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1))) func cancellingTheRefreshLetsAnUploadInFlightFinish() async throws {
+        let h = try await syncedHarness()
+        let probe = ProbeGmail(h.gmail)
+        let engine = h.engine(factory: FixedGmailFactory(api: probe))
+        let queued = try queuedUploadAndArchive(h)
+        let hold = probe.holdAfterCommit(.createDraft)
+        let refreshing = Task { await engine.refreshOnce(deadline: h.clock.now.addingTimeInterval(20)) }
+        await hold.arrival()
+
+        refreshing.cancel()
+        hold.open()
+        let report = await refreshing.value
+
+        #expect(!hold.wasCancelled)
+        #expect(!report.deadlineReached)
+        let drained = try #require(report.operations[h.account])
+        #expect(drained.succeeded == 1 && drained.released == 1)
+        try await expectUploadedOnce(h, probe, draft: queued.draft, upload: queued.upload)
+        let archive = try #require(try h.store.operation(queued.archive))
+        #expect(archive.status == .pending && archive.attempts == 0)
+        #expect(try h.store.lease(account: h.account) == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1))) func aHungUploadKeepsItsClaimAndARenewedLeaseUntilTheTransportGivesUp() async throws {
+        let h = try await syncedHarness()
+        let probe = ProbeGmail(h.gmail)
+        let clock = AnnouncingClock(h.clock)
+        let engine = MailEngine(store: h.store, gmailFactory: FixedGmailFactory(api: probe), tokenStore: nil, oauthClient: nil,
+                                configuration: EngineConfiguration(role: .app, appVersion: "0.0.0-test",
+                                                                   gmail: engineGmailConfig, clock: clock),
+                                systemEvents: nil)
+        let draft = try localDraft(h)
+        let upload = try h.store.saveDraftRemotely(draft)
+        let hold = probe.holdAfterCommit(.createDraft)
+        let start = h.clock.now
+        let refreshing = Task { await engine.refreshOnce(deadline: start.addingTimeInterval(20)) }
+        await hold.arrival()
+        await clock.sleeper(at: start.addingTimeInterval(15))
+        for beat in 1...4 {
+            h.clock.advance(to: start.addingTimeInterval(TimeInterval(15 * beat)))
+            await clock.sleeper(at: start.addingTimeInterval(TimeInterval(15 * (beat + 1))))
+        }
+        refreshing.cancel()
+
+        #expect(!hold.wasCancelled)
+        #expect(try h.store.operation(upload)?.status == .inFlight)
+        #expect(try h.store.lease(account: h.account)?.heartbeatAt == start.addingTimeInterval(60))
+        let rival = OwnershipManager(store: h.store, identity: ProcessIdentity(writerID: "other-writer", pid: 1,
+                                                                               host: "another-host"),
+                                     kind: "cli", clock: h.clock)
+        #expect(await !rival.acquire(h.account), "renewed past the lease's 45 s lifetime")
+
+        hold.fail(.transport(.timedOut))
+        _ = await refreshing.value
+        let timedOut = try #require(try h.store.operation(upload))
+        #expect(timedOut.status == .pending && timedOut.attempts == 1, "a transport failure counts the attempt")
+        #expect(try h.store.lease(account: h.account) == nil)
+
+        h.clock.advance(by: OperationDrainer.backoff(attempts: 0))
+        let retry = await engine.refreshOnce(deadline: h.clock.now.addingTimeInterval(20))
+        #expect(retry.operations[h.account]?.succeeded == 1)
+        try await expectUploadedOnce(h, probe, draft: draft, upload: upload)
+        #expect(probe.writes.filter { $0.method == .updateDraft }.count == 1, "the retry adopted the first attempt's draft")
+    }
+
     @Test func phoneWindowDefaultsAreEngineConfiguration() async throws {
         #expect(LocalWindow.phone == LocalWindow(metadataHorizonDays: 365, bodyHorizonDays: 30, downloadBodies: false,
                                                  backfillUnitsPerMinute: 1_500))
@@ -234,6 +414,64 @@ import Testing
         #expect(chosen.syncSettings.bodyHorizon == .seconds(60 * 86_400))
         #expect(chosen.syncSettings.metadataHorizon == .seconds(730 * 86_400))
         #expect(AccountRuntime.bodyPolicy(h.store, downloadBodies: chosen.downloadBodies).enabled)
+    }
+}
+
+private final class CountingFactory: GmailClientFactory {
+    let api: any GmailAPI
+    private let made = Mutex(0)
+
+    init(_ api: any GmailAPI) { self.api = api }
+
+    var clients: Int { made.withLock { $0 } }
+
+    func client(for accountEmail: String) throws -> GmailAPI {
+        made.withLock { $0 += 1 }
+        return api
+    }
+}
+
+private final class AnnouncingClock: OHClock {
+    private struct Waiter {
+        let id: UUID
+        let deadline: Date
+        let continuation: CheckedContinuation<Void, Never>
+    }
+    let base: TestClock
+    private let state = Mutex<(announced: Set<Date>, waiters: [Waiter])>(([], []))
+
+    init(_ base: TestClock) { self.base = base }
+
+    var now: Date { base.now }
+
+    func sleep(until deadline: Date) async throws {
+        let ready = state.withLock { s -> [Waiter] in
+            s.announced.insert(deadline)
+            defer { s.waiters.removeAll { $0.deadline == deadline } }
+            return s.waiters.filter { $0.deadline == deadline }
+        }
+        for waiter in ready { waiter.continuation.resume() }
+        try await base.sleep(until: deadline)
+    }
+
+    func sleeper(at deadline: Date) async {
+        let id = UUID()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                let now = state.withLock { s -> Bool in
+                    if s.announced.contains(deadline) || Task.isCancelled { return true }
+                    s.waiters.append(Waiter(id: id, deadline: deadline, continuation: continuation))
+                    return false
+                }
+                if now { continuation.resume() }
+            }
+        } onCancel: {
+            let waiter = state.withLock { s -> Waiter? in
+                guard let index = s.waiters.firstIndex(where: { $0.id == id }) else { return nil }
+                return s.waiters.remove(at: index)
+            }
+            waiter?.continuation.resume()
+        }
     }
 }
 

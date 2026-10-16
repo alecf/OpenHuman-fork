@@ -2,6 +2,7 @@ import Foundation
 import OpenHumanCore
 import OpenHumanGmail
 import OpenHumanStore
+import Synchronization
 
 struct RuntimeEnvironment: Sendable {
     let store: MailStore
@@ -21,6 +22,12 @@ struct RuntimeEnvironment: Sendable {
 struct RefreshOutcome: Sendable {
     var sync: Result<SyncReport, any Error>?
     var operations: OperationDrainer.PassReport?
+}
+
+final class StopFlag: Sendable {
+    private let raised = Mutex(false)
+    var isRaised: Bool { raised.withLock { $0 } }
+    func raise() { raised.withLock { $0 = true } }
 }
 
 actor AccountRuntime {
@@ -55,6 +62,7 @@ actor AccountRuntime {
     private var lastReportedPhase: SyncPhase?
     private var lastReportedOldest: Date?
     private var budgetWarned = false
+    private var refreshStop: StopFlag?
 
     init(account: AccountItem, api: any GmailAPI, writable: Bool, schedulerKinds: Set<ScheduleKind>,
          env: RuntimeEnvironment) {
@@ -97,6 +105,7 @@ actor AccountRuntime {
 
     func stop() async {
         pollState = .stopped
+        refreshStop?.raise()
         pollTask?.cancel()
         pollTask = nil
         sleeper?.cancel()
@@ -156,19 +165,55 @@ actor AccountRuntime {
         let clock = env.clock
         func open() -> Bool { clock.now < deadline && !Task.isCancelled }
         guard open() else { return outcome }
+        outcome.sync = await Self.racing(deadline, clock: clock) { await self.backgroundSync() }
+        guard writable else { return outcome }
+        if !schedulerKinds.isEmpty, open() {
+            if let scheduler {
+                await scheduler.poke()
+            } else {
+                let scheduler = makeScheduler()
+                _ = await Self.racing(deadline, clock: clock) { await scheduler.runPass(now: clock.now) }
+            }
+        }
+        guard open() else { return outcome }
+        outcome.operations = await drainUninterrupted(limit: maxOperations, deadline: deadline)
+        return outcome
+    }
+
+    private func backgroundSync() async -> Result<SyncReport, Error> {
         let syncer = self.syncer
-        outcome.sync = await withTaskCancellationHandler {
+        return await withTaskCancellationHandler {
             await runSync(reason: "background", rerun: false, backfill: false)
         } onCancel: {
             Task { await syncer.cancelRun() }
         }
-        guard writable else { return outcome }
-        if !schedulerKinds.isEmpty, open() {
-            if let scheduler { await scheduler.poke() } else { await makeScheduler().runPass(now: clock.now) }
+    }
+
+    // Why: a cancelled write may already have reached Gmail and a first draft upload is then repeated, so only new ops stop
+    private func drainUninterrupted(limit: Int, deadline: Date) async -> OperationDrainer.PassReport {
+        let drainer = self.drainer ?? makeDrainer()
+        let stop = StopFlag()
+        refreshStop = stop
+        defer { refreshStop = nil }
+        let pass = Task { await drainer.drainOnce(limit: limit, deadline: deadline, shouldStop: { stop.isRaised }) }
+        return await withTaskCancellationHandler { await pass.value } onCancel: { stop.raise() }
+    }
+
+    private static func racing<T: Sendable>(_ deadline: Date, clock: any OHClock,
+                                            _ work: @escaping @Sendable () async -> T) async -> T? {
+        await withTaskGroup(of: T?.self) { group in
+            group.addTask { await work() }
+            group.addTask {
+                try? await clock.sleep(until: deadline)
+                return nil
+            }
+            var value: T?
+            while let lap = await group.next() {
+                if let lap { value = lap }
+                group.cancelAll()
+            }
+            return value
         }
-        guard open() else { return outcome }
-        outcome.operations = await (drainer ?? makeDrainer()).drainOnce(limit: maxOperations, deadline: deadline)
-        return outcome
     }
 
     private func pollLoop() async {

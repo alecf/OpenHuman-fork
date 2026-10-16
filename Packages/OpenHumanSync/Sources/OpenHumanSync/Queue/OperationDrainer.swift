@@ -101,16 +101,17 @@ public actor OperationDrainer {
     }
 
     @discardableResult
-    public func drainOnce(limit: Int? = nil, deadline: Date? = nil) async -> PassReport {
+    public func drainOnce(limit: Int? = nil, deadline: Date? = nil,
+                          shouldStop: (@Sendable () -> Bool)? = nil) async -> PassReport {
         gate?.beginDraining()
         defer { gate?.endDraining() }
-        return await drainPass(limit: limit, deadline: deadline)
+        return await drainPass(limit: limit, deadline: deadline, shouldStop: shouldStop)
     }
 
-    private func drainPass(limit: Int?, deadline: Date?) async -> PassReport {
+    private func drainPass(limit: Int?, deadline: Date?, shouldStop: (@Sendable () -> Bool)?) async -> PassReport {
         var report = PassReport()
         passes += 1
-        func pastDeadline() -> Bool { deadline.map { clock.now >= $0 } ?? false }
+        func pastDeadline() -> Bool { (deadline.map { clock.now >= $0 } ?? false) || shouldStop?() == true }
         pass: while !Task.isCancelled, state != .pausedNeedsReauth, !pastDeadline() {
             let room = limit.map { $0 - report.claimed } ?? Self.claimLimit
             if room <= 0 { break }

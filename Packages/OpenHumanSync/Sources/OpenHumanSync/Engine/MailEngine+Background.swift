@@ -47,8 +47,29 @@ extension MailEngine {
     }
 
     public func refreshOnce(deadline: Date, maxOperations: Int = refreshOperationLimit) async -> RefreshReport {
+        guard configuration.role == .app else { return RefreshReport() }
+        let pass = refreshPass(deadline: deadline, maxOperations: maxOperations)
+        return await withTaskCancellationHandler { await pass.value } onCancel: { pass.cancel() }
+    }
+
+    func refreshPass(deadline: Date, maxOperations: Int) -> Task<RefreshReport, Never> {
+        if let running = refreshing { return running }
+        let pass = Task { await runRefresh(deadline: deadline, maxOperations: maxOperations) }
+        refreshing = pass
+        return pass
+    }
+
+    func settleRefresh() async {
+        while let pass = refreshing {
+            pass.cancel()
+            _ = await pass.value
+        }
+    }
+
+    func cancelRefresh() { refreshing?.cancel() }
+
+    private func runRefresh(deadline: Date, maxOperations: Int) async -> RefreshReport {
         var report = RefreshReport()
-        guard configuration.role == .app else { return report }
         let clock = configuration.clock
         let accounts = ((try? store.accounts()) ?? []).filter(Self.isSyncable).sorted { $0.id < $1.id }
         var leases: OwnershipManager?
@@ -62,12 +83,14 @@ extension MailEngine {
             if let owned = runtimes[account.id] {
                 runtime = owned
             } else if started {
-                if await ownership?.isOwner(account.id) != true { report.ownedElsewhere.append(account.id) }
+                if let ownership, await !ownership.isOwner(account.id) { report.ownedElsewhere.append(account.id) }
                 continue
             } else {
-                let manager = leases ?? OwnershipManager(store: store, identity: processIdentity, kind: "app", clock: clock)
+                let manager: OwnershipManager
+                if let leases { manager = leases } else { manager = await renewedLeases() }
                 leases = manager
                 guard await manager.acquire(account.id) else {
+                    await manager.release(account.id)
                     report.ownedElsewhere.append(account.id)
                     continue
                 }
@@ -79,14 +102,12 @@ extension MailEngine {
                 runtime = made
                 transient = true
             }
-            let (outcome, reached) = await Self.racing(deadline, clock: clock) {
-                await runtime.refresh(until: deadline, maxOperations: maxOperations)
-            }
+            let outcome = await runtime.refresh(until: deadline, maxOperations: maxOperations)
             if transient {
                 await runtime.stop()
-                if !started { await leases?.release(account.id) }
+                await leases?.release(account.id)
             }
-            switch outcome?.sync {
+            switch outcome.sync {
             case .success(let sync)?:
                 report.syncs.append(sync)
             case .failure(let error)?:
@@ -95,37 +116,22 @@ extension MailEngine {
             case nil:
                 break
             }
-            if let operations = outcome?.operations { report.operations[account.id] = operations }
-            if reached || clock.now >= deadline { report.deadlineReached = true }
+            if let operations = outcome.operations { report.operations[account.id] = operations }
+            if clock.now >= deadline { report.deadlineReached = true }
         }
+        if let leases {
+            await leases.stopHeartbeat()
+            await leases.releaseAll()
+        }
+        refreshing = nil
         return report
     }
 
-    private enum Lap<T: Sendable>: Sendable { case finished(T), deadline, cancelled }
-
-    static func racing<T: Sendable>(_ deadline: Date, clock: any OHClock,
-                                    _ work: @escaping @Sendable () async -> T) async -> (T?, Bool) {
-        await withTaskGroup(of: Lap<T>.self) { group in
-            group.addTask { .finished(await work()) }
-            group.addTask {
-                do { try await clock.sleep(until: deadline) } catch { return .cancelled }
-                return .deadline
-            }
-            var value: T?
-            var reached = false
-            while let lap = await group.next() {
-                switch lap {
-                case .finished(let result):
-                    value = result
-                    group.cancelAll()
-                case .deadline:
-                    reached = true
-                    group.cancelAll()
-                case .cancelled:
-                    break
-                }
-            }
-            return (value, reached)
-        }
+    private func renewedLeases() async -> OwnershipManager {
+        let manager = OwnershipManager(store: store, identity: processIdentity, kind: "app", clock: configuration.clock)
+        await manager.startHeartbeat(onChange: { [weak self] _, isOwner in
+            if !isOwner { await self?.cancelRefresh() }
+        })
+        return manager
     }
 }
