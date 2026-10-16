@@ -11,6 +11,7 @@ struct MailApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @MainActor static let app = CompositionRoot.makeApp()
     @MainActor static let devFeedback = DevFeedbackRuntime.start()
+    @MainActor static let updates = UpdateCheckSupport.makeCenter()
 
     init() {
         QuietTestHost.installIfTesting()
@@ -29,7 +30,7 @@ struct MailApp: App {
         .defaultSize(width: 1360, height: 860)
         .defaultLaunchBehavior(.presented)
         .commands {
-            AboutCommands(label: .main)
+            AboutCommands(label: .main, updates: Self.updates)
             MailCommands(router: { Self.app.router }, themes: { Self.app.router == nil ? nil : AppThemes.store })
             WindowZoomCommands()
             #if OH_DEV_TOOLS
@@ -59,6 +60,7 @@ struct RootView: View {
 
     var body: some View {
         screen.quietUnderTests()
+            .modifier(UpdateCheckSheetHost(center: MailApp.updates, themes: AppThemes.store))
     }
 
     @ViewBuilder
@@ -105,6 +107,7 @@ struct MailWindowView: View {
         MainWindowRoot(environment: environment, themes: themes) { controller in
             DevFeedbackRuntime.attach(controller, to: MailApp.devFeedback)
             SendFeedbackSupport.install(in: environment, window: controller.windowModel)
+            UpdateCheckSupport.install(in: environment, center: MailApp.updates)
             DebuggingTools.install(in: environment)
             environment.system.logLines = { MailApp.devFeedback.logs.diagnosticLines(now: Date()) }
         }

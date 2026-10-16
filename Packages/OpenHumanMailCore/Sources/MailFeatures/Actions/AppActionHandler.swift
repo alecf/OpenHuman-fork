@@ -4,7 +4,7 @@ import MailModel
 
 @MainActor
 final class AppActionHandler: ActionHandler {
-    static let ids: [ActionID] = [.refresh, .addAccount, .goSnippets, .importSuperhumanLabels, .sendFeedback]
+    static let ids: [ActionID] = [.refresh, .addAccount, .goSnippets, .importSuperhumanLabels, .sendFeedback, .checkForUpdates]
         + ActionCatalog.settingsPages.map(\.id)
 
     static let snippetsPage = "snippets"
@@ -32,6 +32,8 @@ final class AppActionHandler: ActionHandler {
             return availability(of: .settingsPage(Self.generalPage), in: context, host: host)
         case .sendFeedback:
             return environment.system.sendFeedback.canBegin ? .enabled : .hidden
+        case .checkForUpdates:
+            return environment.system.updates == nil ? .hidden : .enabled
         default:
             guard let page = id.settingsPageID, navigator.canOpen,
                   SettingsShellModel.pages(for: environment.modules).contains(where: { $0.id == page }) else { return .hidden }
@@ -64,6 +66,10 @@ final class AppActionHandler: ActionHandler {
             return .done
         case .sendFeedback:
             environment.system.sendFeedback.begin()
+            return .done
+        case .checkForUpdates:
+            guard let updates = environment.system.updates else { return .notHandled }
+            updates.begin()
             return .done
         default:
             guard let page = request.id.settingsPageID else { return .notHandled }

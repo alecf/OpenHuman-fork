@@ -28,3 +28,10 @@ import Testing
     let urlTypes = try #require(Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]])
     #expect(urlTypes.contains { ($0["CFBundleURLSchemes"] as? [String])?.contains("openhuman") == true })
 }
+
+@MainActor
+@Test func theAppOffersToOpenMailtoLinksAndNoOtherScheme() throws {
+    let urlTypes = try #require(Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]])
+    let schemes = urlTypes.flatMap { ($0["CFBundleURLSchemes"] as? [String]) ?? [] }
+    #expect(schemes.sorted() == ["mailto", "openhuman"])
+}

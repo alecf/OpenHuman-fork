@@ -22,14 +22,19 @@ public enum AboutPanel {
 
 public struct AboutCommands: Commands {
     let label: BuildLabel
+    let updates: UpdateCheckCenter?
 
-    public init(label: BuildLabel) {
+    public init(label: BuildLabel, updates: UpdateCheckCenter? = nil) {
         self.label = label
+        self.updates = updates
     }
 
     public var body: some Commands {
         CommandGroup(replacing: .appInfo) {
             Button("About OpenHuman Mail") { AboutPanel.show(label) }
+            if let updates {
+                Button(UpdateCheckCenter.menuTitle) { updates.begin() }
+            }
         }
     }
 }

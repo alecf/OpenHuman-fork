@@ -43,6 +43,19 @@ Tools/release/check-release.sh --github-release v0.1.0
 
 Releases use the tag `v<version>`.
 
+## How the app sees a new release
+
+Check for Updates… (in the app menu, Settings › General and the command
+palette) reads the releases of `michaelmagan/OpenHuman` from GitHub's public
+API (`UpdateFeed.openHuman` in
+`Packages/OpenHumanMailCore/Sources/MailFeatures/System/Updates/UpdateFeed.swift`)
+and compares the newest tag with the running version and build. It sends one
+GET request, only when someone clicks, with no account data, and never
+downloads or installs anything: Download opens the release page in the
+browser. Drafts are ignored, so a release is seen once it is published. While
+the repository has no published release, or cannot be read without signing in,
+the app says it couldn't check yet.
+
 ## Unsigned release
 
 From your Mac, on a clean checkout of the commit to release:

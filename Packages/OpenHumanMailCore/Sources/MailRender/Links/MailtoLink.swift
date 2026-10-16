@@ -9,7 +9,7 @@ public enum MailtoLink {
     public static func parse(string raw: String) -> Result<ComposePrefill, MailLinkError> {
         guard raw.utf8.count <= LinkGrammar.maxURLBytes else { return .failure(.tooLong) }
         guard raw.prefix(7).lowercased() == "mailto:" else { return .failure(.wrongScheme) }
-        let rest = raw.dropFirst(7)
+        let rest = raw.dropFirst(7).prefix { $0 != "#" }
         let path = rest.prefix { $0 != "?" }
         let query = rest.dropFirst(path.count + (rest.count > path.count ? 1 : 0))
 

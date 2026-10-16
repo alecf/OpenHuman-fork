@@ -41,7 +41,9 @@ targets:
         LSApplicationCategoryType: public.app-category.productivity
         LSMinimumSystemVersion: "27.0"
         LSFileQuarantineEnabled: true
-        CFBundleURLTypes: [{ CFBundleURLName: dev.openhuman.mail.link, CFBundleURLSchemes: [openhuman] }]
+        CFBundleURLTypes:
+          - { CFBundleURLName: dev.openhuman.mail.link, CFBundleURLSchemes: [openhuman] }
+          - { CFBundleURLName: dev.openhuman.mail.mailto, CFBundleURLSchemes: [mailto] }
         NSServices:
           - NSMenuItem: { default: "New Message in OpenHuman Mail" }
             NSMessage: newMessageWithSelection

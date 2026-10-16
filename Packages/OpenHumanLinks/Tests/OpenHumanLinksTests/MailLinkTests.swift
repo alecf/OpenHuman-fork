@@ -82,6 +82,7 @@ private func parse(_ s: String) -> Result<MailLink, MailLinkError> { MailLinkPar
 
     static let idChars = Array("abcdefABCDEF0123456789_-")
     static let textChars = Array("ab c+&=?#%/,:;@\n\téü日本😀\"'<>")
+    static let subjectChars = textChars.filter { $0 != "\n" && $0 != "\t" }
 
     func account(_ g: inout SplitMix) -> AccountRef {
         g.int(2) == 0 ? AccountRef(g.string(from: Array("abcxyz019"), 1...8) + "@ex-" + g.string(from: Array("abc"), 1...4) + ".com")
@@ -104,7 +105,7 @@ private func parse(_ s: String) -> Result<MailLink, MailLinkError> { MailLinkPar
             return .compose(ComposePrefill(
                 account: g.int(2) == 0 ? nil : account(&g),
                 to: (0..<g.int(4)).map { _ in addr(&g) }, cc: (0..<g.int(3)).map { _ in addr(&g) },
-                subject: g.int(3) == 0 ? nil : g.string(from: Self.textChars, 0...60),
+                subject: g.int(3) == 0 ? nil : g.string(from: Self.subjectChars, 0...60),
                 body: g.int(3) == 0 ? nil : g.string(from: Self.textChars, 0...400)))
         }
     }

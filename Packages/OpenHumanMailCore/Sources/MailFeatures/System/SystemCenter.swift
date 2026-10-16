@@ -19,6 +19,7 @@ public final class SystemCenter {
     public private(set) var focus: FocusFilterModel?
 
     @ObservationIgnored public let sendFeedback = SendFeedbackCenter()
+    @ObservationIgnored public var updates: UpdateCheckCenter?
 
     @ObservationIgnored public let platform: SystemPlatform
     @ObservationIgnored public let preferences: SystemPreferences

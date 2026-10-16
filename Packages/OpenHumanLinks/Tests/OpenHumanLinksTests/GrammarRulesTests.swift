@@ -43,6 +43,12 @@ private func parse(_ s: String) -> Result<MailLink, MailLinkError> { MailLinkPar
         #expect(r == .success(.compose(ComposePrefill(subject: "abcd", body: "x\ny\tzw[31m"))))
     }
 
+    @Test func aSubjectStaysOnOneLineAndTheBodyKeepsItsLines() {
+        let r = parse("openhuman://compose?subject=Hi%0D%0ABcc:%20x@evil.example%0A%0Anow%09later%E2%80%A8end&body=one%0D%0Atwo")
+        #expect(r == .success(.compose(ComposePrefill(subject: "Hi Bcc: x@evil.example now later end", body: "one\ntwo"))))
+        #expect(parse("openhuman://compose?subject=%0A%0D%0A") == .success(.compose(ComposePrefill(subject: ""))))
+    }
+
     @Test func plusIsLiteralAndTheFirstOccurrenceOfAParameterWins() {
         #expect(parse("openhuman://search?q=a+b&q=second") == .success(.search(query: "a+b", account: nil)))
         #expect(parse("openhuman://compose?subject=1+1%3D2") == .success(.compose(ComposePrefill(subject: "1+1=2"))))

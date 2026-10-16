@@ -51,9 +51,18 @@ struct AppShellTests {
         let session = try #require(environment.composeIfStarted?.windowSession)
         #expect(session.linkRecipients?.map(\.email) == ["a@example.com"])
         #expect(session.bcc.tokens.isEmpty)
+        let mailto = AppDelegate.open(try #require(URL(string: "mailto:dana@example.test?subject=Lunch%3F&body=Noon%0D%0Aworks&bcc=spy@example.test")),
+                                      in: app)
+        #expect(mailto.handled)
+        let drafted = try #require(environment.composeIfStarted?.windowSession)
+        #expect(drafted !== session && drafted.linkRecipients?.map(\.email) == ["dana@example.test"])
+        #expect(drafted.subject == "Lunch?" && drafted.bcc.tokens.isEmpty && drafted.linkTriedBcc)
+        #expect(!drafted.isLinkConfirmationShown, "a mailto link only opens a draft")
         let bad = AppDelegate.open(try #require(URL(string: "openhuman://nowhere/x")), in: app)
         #expect(!bad.handled)
         #expect(environment.notices.toasts.last?.message == "Mail can't open that link.")
+        let hostile = AppDelegate.open(try #require(URL(string: "mailto:a@example.test%0D%0ABcc:%20spy@example.test")), in: app)
+        #expect(!hostile.handled && environment.composeIfStarted?.windowSession === drafted)
         let none = AppDelegate.open(try #require(URL(string: "openhuman://search?q=x")),
                                     in: AppModel(screen: .notice(StartupProblem(title: "t", message: "m"))))
         #expect(none == LinkOutcome("No mail window is open.", handled: false))

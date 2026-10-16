@@ -1,0 +1,14 @@
+{
+  "id": "updates.check",
+  "area": "About",
+  "title": "Check for updates only when asked",
+  "steps": [
+    "Choose OpenHuman Mail › Check for Updates…",
+    "Read the sheet, then close it",
+    "Open Settings › General and press Check Now under Updates",
+    "Press Command-K and type update"
+  ],
+  "expected": "The sheet says the app is up to date, that a newer version is available with Download (which opens the release page in the browser), or calmly that it couldn't check yet. It says this is an early-development release. Settings shows the same answer under Updates, and the palette lists Check for updates….",
+  "requires": "fake",
+  "addedIn": "2026-10-16"
+}

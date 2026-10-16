@@ -1,4 +1,5 @@
 import Foundation
+import MailRender
 import Observation
 import OpenHumanCore
 import OpenHumanLinks
@@ -44,9 +45,14 @@ public final class DeepLinkRouter {
 
     public var queuedCount: Int { queue.count }
 
+    nonisolated public static func parse(_ url: URL) -> Swift.Result<MailLink, MailLinkError> {
+        guard url.scheme?.lowercased() == "mailto" else { return MailLinkParser.parse(url) }
+        return MailtoLink.parse(url).map(MailLink.compose)
+    }
+
     @discardableResult
     public func handle(_ url: URL, receivedAt: Date = Date()) -> Result {
-        let parsed = MailLinkParser.parse(url)
+        let parsed = Self.parse(url)
         received.removeAll { receivedAt.timeIntervalSince($0) >= limits.window }
         let overLimit = received.count >= limits.maxLinks
         if !overLimit { received.append(receivedAt) }

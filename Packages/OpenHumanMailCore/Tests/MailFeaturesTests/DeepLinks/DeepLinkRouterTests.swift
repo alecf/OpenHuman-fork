@@ -108,6 +108,52 @@ import Testing
         #expect(f.recorder.calls.filter { Self.mutations.contains($0) }.isEmpty)
     }
 
+    @Test func aMailtoLinkFromTheSystemOpensADraftThatAsksBeforeTheFirstSend() async throws {
+        let f = ComposeFixture()
+        await f.loaded()
+        let links = DeepLinkRouter(router: { f.router })
+        let raw = "mailto:dana@example.test,lee@example.test?cc=kai@example.test&subject=Lunch%3F&body=Noon%0D%0Aworks"
+            + "&bcc=spy@evil.example"
+        guard case .followed(let outcome) = links.handle(url(raw), receivedAt: t0) else { Issue.record("not followed"); return }
+        #expect(outcome.handled)
+        let session = try #require(f.compose.windowSession)
+        #expect(session.linkRecipients?.map(\.email) == ["dana@example.test", "lee@example.test", "kai@example.test"])
+        #expect(session.subject == "Lunch?" && session.bcc.tokens.isEmpty && session.linkTriedBcc)
+        #expect(session.linkBanner?.contains("dana@example.test, lee@example.test, kai@example.test") == true)
+        await session.settle()
+        #expect(f.recorder.calls.filter { Self.mutations.contains($0) }.isEmpty, "\(f.recorder.calls)")
+        #expect(await f.run(.send, in: session))
+        #expect(session.isLinkConfirmationShown && !f.recorder.calls.contains("send"), "never sent by the link itself")
+    }
+
+    @Test func hostileOrEmptyMailtoLinksOpenNothing() async throws {
+        let f = ComposeFixture()
+        await f.loaded()
+        let links = DeepLinkRouter(limits: .init(maxLinks: 100), router: { f.router })
+        let hostile = [
+            "mailto:a@example.test%0D%0ABcc:%20spy@evil.example",
+            "mailto:?to=a@example.test%0ABcc:spy@evil.example",
+            "mailto:?cc=a@example.test%0D%0AX-Header:1",
+            "mailto:?bcc=spy@evil.example",
+            "mailto:?unknown=1",
+            "mailto:a@example.test?body=" + String(repeating: "x", count: 33_000),
+        ]
+        for raw in hostile {
+            #expect(links.handle(url(raw), receivedAt: t0) == .invalid, "\(raw.prefix(60))")
+        }
+        #expect(f.compose.windowSession == nil)
+        #expect(f.toasts.last == DeepLinkRouter.invalidText)
+        #expect(f.recorder.calls.filter { Self.mutations.contains($0) }.isEmpty)
+    }
+
+    @Test func mailtoAndAppLinksParseThroughOneEntry() {
+        #expect(DeepLinkRouter.parse(url("MAILTO:dana@example.test")) == .success(.compose(ComposePrefill(to: ["dana@example.test"]))))
+        #expect(DeepLinkRouter.parse(url("openhuman://search?q=x")) == .success(.search(query: "x", account: nil)))
+        #expect(DeepLinkRouter.parse(url("https://example.test")) == .failure(.wrongScheme))
+        #expect(DeepLinkRouter.parse(url("mailto:?subject=Hi%0D%0ABcc:%20spy@evil.example"))
+                == .success(.compose(ComposePrefill(subject: "Hi Bcc: spy@evil.example"))), "a subject stays one line")
+    }
+
     @Test func draftLinksOpenTheComposerByLocalIDOrGmailID() async throws {
         let f = ComposeFixture()
         await f.loaded()
