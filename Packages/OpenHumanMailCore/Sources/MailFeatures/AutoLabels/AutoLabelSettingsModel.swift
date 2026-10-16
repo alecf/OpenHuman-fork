@@ -44,26 +44,26 @@ public final class AutoLabelSettingsModel {
     public static let categories = AutoLabelCategory.allCases.map(\.title)
 
     public static let enabledNote = String(localized: """
-        Sorts new mail in your inbox into Respond, Meeting, Invoice, Travel, Pitch, Social, News and Marketing with \
-        Apple's on-device model. It runs on this Mac; no email text leaves it. Conversations where you sent the last \
-        message are marked Waiting.
+        Apple's on-device model sorts new inbox mail into Respond, Meeting, Invoice, Travel, Pitch, Social, News and \
+        Marketing. It runs on this Mac, and no email text leaves it. If you sent the last message, the conversation is \
+        marked Waiting.
         """)
     public static let applyNote = String(localized: """
-        Adds an “OpenHuman/<label>” label in Gmail, so your other Macs and a fresh install see the same labels. \
-        Only while Mail may change your mailbox; your own labels are never touched.
+        Adds an “OpenHuman/<label>” label in Gmail, so your other Macs and a new install show the same labels. Mail \
+        never changes your own labels.
         """)
     public static let showNote = String(localized: """
-        New “OpenHuman/<label>” labels show in Gmail's label list and message list. Turn off to create new ones hidden. \
-        Labels Gmail already has keep how they show; change those in Gmail › Settings › Labels.
+        New “OpenHuman/<label>” labels appear in Gmail's label list and message list. Turn this off to hide new ones. \
+        Labels already in Gmail keep their setting; change it in Gmail › Settings › Labels.
         """)
-    public static let classifyNote = String(localized: "Sorts the inbox's last 14 days now.")
+    public static let classifyNote = String(localized: "Sorts the last 14 days of your inbox now.")
     public static let resetNote = String(localized: """
-        Takes Mail's auto labels off your conversations (Undo brings them back) and starts again with new mail. The \
-        labels themselves stay in Gmail, empty.
+        Takes Mail's auto labels off your conversations and starts again with new mail. Undo puts them back. The labels \
+        stay in Gmail, empty.
         """)
     public static let placementNote = String(localized: """
-        An importance rule for each label: “Other” keeps it out of Important, “Important” keeps it in. Your own rules \
-        for a sender, domain, Gmail label or word always win.
+        Each label can change importance: “Important” keeps its mail in Important, and “Other” keeps it out. Your own \
+        rules for a sender, domain, Gmail label or word always win.
         """)
 
     public func start() {

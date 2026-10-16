@@ -16,8 +16,8 @@ import Testing
 @MainActor
 @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["OH_SNAPSHOT_DIR"] != nil))
 struct RenderSweepSettingsTests {
-    static let windowSize = NSSize(width: 760, height: 560)
-    static let fullHeightSize = NSSize(width: 760, height: 2400)
+    static let windowSize = NSSize(width: SettingsMetrics.windowWidth, height: SettingsMetrics.windowHeight)
+    static let fullHeightSize = NSSize(width: SettingsMetrics.windowWidth, height: 2400)
     static let fullHeightPages: Set<String> = ["ai", "advanced", "platform", "general", "sidebar"]
 
     @Test func refusesAnOutputFolderInsideAGitWorkTree() throws {

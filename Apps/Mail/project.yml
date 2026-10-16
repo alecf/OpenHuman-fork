@@ -56,6 +56,8 @@ targets:
             NSSendTypes: [public.utf8-plain-text]
         OHGitCommit: $(OH_GIT_COMMIT)
         OHReleaseChannel: $(OH_RELEASE_CHANNEL)
+        # Used only once the signature grants the group; ad hoc and CI builds keep the default group
+        OHKeychainAccessGroup: $(AppIdentifierPrefix)dev.openhuman.shared
     postBuildScripts:
       - name: Stamp git commit
         basedOnDependencyAnalysis: false

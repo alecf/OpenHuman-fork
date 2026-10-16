@@ -1,12 +1,11 @@
 import MailFeatures
 import MailModel
+import MailTheme
 import SwiftUI
 
 struct CleanupRulesSection: View {
     let model: CleanupRulesModel
     let canEdit: Bool
-    @State private var draft = ""
-    @State private var draftChoice: ArchiveSuggestionOverride = .never
 
     var body: some View {
         SettingsSection(CleanupRulesModel.sectionTitle, footnote: CleanupRulesModel.note) {
@@ -27,23 +26,39 @@ struct CleanupRulesSection: View {
                 }
                 .disabled(!canEdit)
             }
-            SettingsRow("Add a sender or domain", status: model.addError, statusTone: .danger) {
-                HStack(spacing: 8) {
-                    TextField("Add a sender or domain", text: $draft, prompt: Text("dana@example.com or example.com"))
-                        .labelsHidden()
-                        .frame(minWidth: 200)
-                        .onSubmit(add)
-                    Picker("Choice", selection: $draftChoice) {
-                        ForEach([ArchiveSuggestionOverride.always, .never], id: \.self) {
-                            Text(CleanupRulesModel.title($0)).tag($0)
-                        }
-                    }
+            CleanupAddRow(model: model)
+                .disabled(!canEdit)
+        }
+    }
+}
+
+struct CleanupAddRow: View {
+    static let title = "Add a sender or domain"
+    static let prompt = "dana@example.com or example.com"
+
+    let model: CleanupRulesModel
+    @State private var draft = ""
+    @State private var draftChoice: ArchiveSuggestionOverride = .never
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        SettingsRow(Self.title, status: model.addError, statusTone: .danger, stacked: true) {
+            HStack(spacing: theme.space3) {
+                TextField(Self.title, text: $draft, prompt: Text(verbatim: Self.prompt).settingsPrompt(theme))
                     .labelsHidden()
-                    Button("Add", action: add)
-                        .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .settingsTextField()
+                    .frame(maxWidth: .infinity)
+                    .onSubmit(add)
+                Picker("Choice", selection: $draftChoice) {
+                    ForEach([ArchiveSuggestionOverride.always, .never], id: \.self) {
+                        Text(CleanupRulesModel.title($0)).tag($0)
+                    }
                 }
+                .labelsHidden()
+                .fixedSize()
+                Button("Add", action: add)
+                    .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            .disabled(!canEdit)
         }
     }
 

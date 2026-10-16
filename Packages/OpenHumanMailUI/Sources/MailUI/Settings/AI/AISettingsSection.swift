@@ -154,11 +154,7 @@ public struct AISettingsSection: View {
 
     private func personalRow(_ title: String, prompt: String, text: Binding<String>, identifier: String) -> some View {
         SettingsRow(title, alignment: .firstTextBaseline, labelsControl: true) {
-            TextField(title, text: text, prompt: Text(prompt), axis: .vertical)
-                .lineLimit(2...5)
-                .labelsHidden()
-                .settingsTextField()
-                .frame(maxWidth: 320)
+            SettingsTextArea(title: title, prompt: prompt, text: text)
                 .accessibilityIdentifier(identifier)
         }
     }

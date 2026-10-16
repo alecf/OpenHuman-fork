@@ -10,6 +10,8 @@ import Testing
 @testable import MailUIMac
 
 extension RenderSweepTests {
+    static let settingsPageWidth = SettingsMetrics.windowWidth - SettingsMetrics.sidebarWidth - 1
+
     @Test(arguments: SweepTheme.builtIns)
     func autoLabelsAndPersonalization(_ theme: SweepTheme) async throws {
         let center = SweepOverlayFixture.aiCenter()
@@ -20,14 +22,20 @@ extension RenderSweepTests {
 
         let labels = sweepStandaloneWindow(SettingsPageScaffold(title: "Auto labels") {
             AutoLabelsSection(environment: environment)
-        }, store: store, size: NSSize(width: 760, height: 1400))
+        }, store: store, size: NSSize(width: Self.settingsPageWidth, height: 1400))
         defer { labels.orderOut(nil) }
         try await sweepShoot(labels, screen: "settings-auto-labels", theme: theme, settle: .milliseconds(700))
 
         let ai = sweepStandaloneWindow(SettingsPageScaffold(title: "AI") {
             AISettingsSection(center: center, environment: environment, listsUnavailableModels: false)
-        }, store: store, size: NSSize(width: 760, height: 2000))
+        }, store: store, size: NSSize(width: Self.settingsPageWidth, height: 2000))
         defer { ai.orderOut(nil) }
         try await sweepShoot(ai, screen: "settings-personalization", theme: theme, settle: .milliseconds(700))
+
+        let cleanup = sweepStandaloneWindow(SettingsPageScaffold(title: "General") {
+            CleanupRulesSection(model: CleanupRulesModel(settings: environment.settings), canEdit: true)
+        }, store: store, size: NSSize(width: Self.settingsPageWidth, height: 400))
+        defer { cleanup.orderOut(nil) }
+        try await sweepShoot(cleanup, screen: "settings-cleanup-rules", theme: theme, settle: .milliseconds(700))
     }
 }

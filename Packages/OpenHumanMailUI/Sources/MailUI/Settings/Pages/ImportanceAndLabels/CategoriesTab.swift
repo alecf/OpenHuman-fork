@@ -10,17 +10,17 @@ struct CategoriesTab: View {
 
     var body: some View {
         SettingsSectionStack {
-            SettingsSection("Categories", footnote: "One label per conversation. Mail only ever touches its own "
-                            + "OpenHuman labels in Gmail; it never renames or deletes one.") {
+            SettingsSection("Categories", footnote: "Each conversation gets one label. In Gmail, Mail changes only its own "
+                            + "OpenHuman labels, and it never renames or deletes them.") {
                 ForEach(AutoLabelCategory.allCases, id: \.self) { category in
                     SettingsRow(category.title, detail: Self.meaning(category),
                                 status: OHGmailLabels.autoLabel(category.title).map { "In Gmail: \($0)" })
                 }
             }
             SettingsSection("Auto labels") {
-                SettingsRow("Switches and placement",
-                            detail: "Auto labels on or off, Also apply as Gmail labels, Show in Gmail, Classify recent mail, "
-                                + "placement in Important, and Superhuman labels.") {
+                SettingsRow("Auto label settings",
+                            detail: "Turn auto labels on or off, add them in Gmail and choose how each one affects Important. "
+                                + "They're on the General page, with Superhuman labels.") {
                     Button("Open General") { environment?.settingsNavigator.open(SettingsPageID.general.rawValue) }
                         .disabled(environment == nil)
                 }

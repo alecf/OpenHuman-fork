@@ -138,6 +138,61 @@ struct SettingsLayoutTests {
         #expect(compactHeight < SettingsMetrics.rowMinHeight, "list-like sections use the 28 pt row")
     }
 
+    @Test func theCleanupAddRowKeepsItsTitleOnOneLineAtThePageWidth() {
+        let theme = ResolvedTheme.light
+        let rowWidth = pageWidth - 2 * theme.space8 - 2 * theme.space4
+        let model = CleanupRulesModel(settings: nil)
+        func fitted(_ width: CGFloat) -> CGSize {
+            NSHostingController(rootView: CleanupAddRow(model: model).environment(\.theme, theme))
+                .sizeThatFits(in: CGSize(width: width, height: 1000))
+        }
+        let atPage = fitted(rowWidth)
+        let wide = fitted(2000)
+        #expect(atPage.width <= rowWidth + 0.5, "the field, menu and button fit the row (\(atPage.width) of \(rowWidth))")
+        #expect(abs(atPage.height - wide.height) < 0.5,
+                "“\(CleanupAddRow.title)” wraps at the page width: \(atPage.height) pt tall, \(wide.height) pt with room")
+    }
+
+    @Test func thePersonalWritingFieldsShareOneWidthWhateverTheyHold() {
+        let theme = ResolvedTheme.light
+        func width(_ prompt: String, _ text: String) -> CGFloat {
+            let field = SettingsTextArea(title: "Field", prompt: prompt, text: .constant(text))
+            return NSHostingController(rootView: field.environment(\.theme, theme))
+                .sizeThatFits(in: CGSize(width: 1000, height: 1000)).width
+        }
+        let about = width(AISettingsPageModel.aboutMePrompt, "")
+        #expect(about == SettingsTextArea.width)
+        #expect(width(AISettingsPageModel.writingInstructionsPrompt, "") == about, "the two fields line up")
+        #expect(width("", String(repeating: "Short and warm, first names, no sign-off. ", count: 8)) == about,
+                "typing doesn't widen the field")
+        let rowWidth = pageWidth - 2 * theme.space8 - 2 * theme.space4
+        for (title, prompt) in [(AISettingsPageModel.aboutMeTitle, AISettingsPageModel.aboutMePrompt),
+                                (AISettingsPageModel.writingInstructionsTitle, AISettingsPageModel.writingInstructionsPrompt)] {
+            let row = SettingsRow(title, alignment: .firstTextBaseline, labelsControl: true) {
+                SettingsTextArea(title: title, prompt: prompt, text: .constant(""))
+            }
+            let fitted = NSHostingController(rootView: row.environment(\.theme, theme))
+                .sizeThatFits(in: CGSize(width: rowWidth, height: 1000))
+            #expect(fitted.width <= rowWidth + 0.5, "\(title) fits the row (\(fitted.width) of \(rowWidth))")
+        }
+    }
+
+    @Test func everyPageTitleFitsTheSidebarSelectedOrNot() {
+        let theme = ResolvedTheme.light
+        let pages = SettingsShellModel(environment: environment()).pages
+        #expect(pages.contains { $0.id == ImportanceSettingsModel.pageID }, "the longest title is listed")
+        let room = SettingsMetrics.sidebarWidth - 2 * theme.space3
+        for entry in pages {
+            for selected in [false, true] {
+                let row = SettingsSidebarRow(entry: entry, isSelected: selected, showsCursor: false) {}
+                    .fixedSize()
+                    .environment(\.theme, theme)
+                let needed = NSHostingController(rootView: row).sizeThatFits(in: CGSize(width: 1000, height: 100)).width
+                #expect(needed <= room, "“\(entry.title)” (\(selected ? "selected" : "not selected")) needs \(needed) pt of \(room)")
+            }
+        }
+    }
+
     @Test(arguments: [("light", ResolvedTheme.light), ("dark", ResolvedTheme.dark)])
     func aSettingsFieldsPlaceholderIsTertiary(_ name: String, _ theme: ResolvedTheme) throws {
         let field = TextField("Search", text: .constant(""), prompt: Text("Search shortcuts").settingsPrompt(theme))
@@ -254,7 +309,7 @@ struct SettingsLayoutTests {
         try await until("the importance rules") { importance.hasLoaded }
         let rules = try #require(env.importance)
         let account = try #require(importance.account)
-        let sender = "someone.with.a.long.name@mail.example-company.com"
+        let sender = "someone.with.a.long.name@mail.example.com"
         for change in [ImportanceChange(kind: .neverDomain, account: account, value: "example-company.com"),
                        ImportanceChange(kind: .alwaysSender, account: account, value: sender),
                        ImportanceChange(kind: .label, account: account, value: "Clients/Partners and suppliers"),
