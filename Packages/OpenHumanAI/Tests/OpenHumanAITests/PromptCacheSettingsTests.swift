@@ -1,4 +1,5 @@
 import Foundation
+import OpenHumanCore
 import Synchronization
 import Testing
 
@@ -253,13 +254,13 @@ import Testing
     }
 
     @Test func storePersistsInItsSuite() throws {
-        let suite = "dev.openhuman.mail.ai.tests.\(UUID().uuidString)"
-        defer { UserDefaults().removePersistentDomain(forName: suite) }
-        let store = AISettingsStore(suiteName: suite)
+        let suite = ScopedDefaults("dev.openhuman.mail.ai.tests")
+        defer { suite.cleanup() }
+        let store = AISettingsStore(suiteName: suite.name)
         #expect(store.load() == AISettings())
         let settings = AISettings(draftReplies: .off, onDeviceOnlyAccounts: ["work"])
         try store.save(settings)
-        #expect(AISettingsStore(suiteName: suite).load() == settings)
+        #expect(AISettingsStore(suiteName: suite.name).load() == settings)
         store.reset()
         #expect(store.load() == AISettings())
         #expect(AISettingsStore.suiteName == "dev.openhuman.mail.ai")

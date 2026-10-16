@@ -45,7 +45,7 @@ final class AutoLabelFixture {
         let ai = AICenter.make(registry: registry, settings: AISettingsBox(store: InMemoryAISettingsStore(aiSettings)))
         env = AppEnvironment(data: store, commands: recorder, accounts: store, settings: store, isFake: !isLiveAccount,
                              importance: rules,
-                             systemPreferences: SystemPreferences(defaults: UserDefaults(suiteName: "openhuman.test.\(UUID().uuidString)") ?? .standard),
+                             systemPreferences: SystemPreferences(defaults: ScopedDefaults("openhuman.test.autolabels")),
                              onboardingProgress: InMemoryOnboardingProgress(), ai: ai, isLiveAccount: isLiveAccount,
                              keymapStore: InMemoryKeymapStore(), autoLabelStore: index)
         center = env.autoLabels!

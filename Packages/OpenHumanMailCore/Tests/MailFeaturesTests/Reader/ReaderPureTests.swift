@@ -160,9 +160,8 @@ struct ReaderPureTests {
     }
 
     @Test func zoomStepsAndPersistence() throws {
-        let suite = "dev.openhuman.mail.tests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaults = ScopedDefaults("dev.openhuman.mail.tests")
+        defer { defaults.cleanup() }
         let preferences = ReaderPreferences(defaults: defaults)
         #expect(preferences.textZoom == 1)
         preferences.zoomIn()

@@ -262,7 +262,8 @@ struct SettingsLayoutTests {
     }
 
     @Test func advancedListsOnlyTheModulesThatNeedARestart() throws {
-        let defaults = try #require(UserDefaults(suiteName: "settings-layout-tests-\(UUID().uuidString)"))
+        let defaults = ScopedDefaults("openhuman.test.settings-layout")
+        defer { defaults.cleanup() }
         let model = FeaturesSettingsModel(modules: ModuleList.all, registered: [], defaults: defaults)
         let ids = AdvancedSettingsPage.restartRows(model.rows).map(\.id)
         #expect(!ids.isEmpty)
@@ -273,7 +274,8 @@ struct SettingsLayoutTests {
     }
 
     @Test func aPublicBuildListsOnlyTheUsersOwnFeatureSwitches() throws {
-        let defaults = try #require(UserDefaults(suiteName: "settings-layout-tests-\(UUID().uuidString)"))
+        let defaults = ScopedDefaults("openhuman.test.settings-layout")
+        defer { defaults.cleanup() }
         let model = FeaturesSettingsModel(modules: ModuleList.all, registered: [], defaults: defaults)
         let developer = AdvancedSettingsPage.featureRows(model.rows, developer: true).map(\.id)
         #expect(developer == AdvancedSettingsPage.restartRows(model.rows).map(\.id))

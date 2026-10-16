@@ -11,9 +11,9 @@ import Testing
 @Suite(.serialized)
 struct SpotlightIndexerTests {
     private let sender = EmailAddress(name: "Ada Sender", email: "ada@sender.example")
+    private let defaults = ScopedDefaults("openhuman.test.spotlight")
 
     private func make(_ f: SystemFixture, batch: Int = SpotlightIndexer.defaultBatchSize) -> SpotlightIndexer {
-        let defaults = UserDefaults(suiteName: "openhuman.test.spotlight.\(UUID().uuidString)")!
         let indexer = SpotlightIndexer(data: f.store, settings: f.store, index: f.spotlight, defaults: defaults)
         indexer.debounce = .zero
         indexer.pauseInterval = .milliseconds(5)
@@ -34,6 +34,7 @@ struct SpotlightIndexerTests {
     }
 
     @Test func theDefaultIsMetadataOnlyAndNeverCarriesSubjectSnippetOrBody() async throws {
+        defer { defaults.cleanup() }
         let f = SystemFixture()
         f.store.deliverMessage(account: f.account, from: sender, subject: "ZZSUBJECT quarterly", text: "ZZBODY secret numbers", important: true)
         _ = try await started(f)
@@ -50,6 +51,7 @@ struct SpotlightIndexerTests {
     }
 
     @Test func labelsAndCategoryArePartOfTheMetadata() async throws {
+        defer { defaults.cleanup() }
         let f = SystemFixture(corpus: .rich(threadCount: 60, now: fixedNow))
         let indexer = make(f)
         indexer.start()
@@ -58,6 +60,7 @@ struct SpotlightIndexerTests {
     }
 
     @Test func subjectsAndSnippetsGoInOnlyWhenTheUserOptsInAndLeaveWhenTheyOptOut() async throws {
+        defer { defaults.cleanup() }
         let f = SystemFixture()
         f.store.deliverMessage(account: f.account, from: sender, subject: "ZZSUBJECT quarterly", text: "ZZBODY secret numbers")
         let indexer = try await started(f)
@@ -74,6 +77,7 @@ struct SpotlightIndexerTests {
     }
 
     @Test func newChangedAndGoneThreadsFollowTheStore() async throws {
+        defer { defaults.cleanup() }
         let f = SystemFixture()
         let indexer = try await started(f)
         let before = f.spotlight.items.count
@@ -91,6 +95,7 @@ struct SpotlightIndexerTests {
     }
 
     @Test func removingAnAccountDeletesItsWholeDomain() async throws {
+        defer { defaults.cleanup() }
         let f = SystemFixture(corpus: .rich(threadCount: 30, now: fixedNow))
         let indexer = make(f)
         indexer.start()
@@ -105,6 +110,7 @@ struct SpotlightIndexerTests {
     }
 
     @Test func batchesAreBounded() async throws {
+        defer { defaults.cleanup() }
         let f = SystemFixture(corpus: .make(threadCount: 25, now: fixedNow))
         _ = try await started(f, batch: 4)
         #expect(f.spotlight.batchSizes.allSatisfy { $0 <= 4 })
@@ -113,6 +119,7 @@ struct SpotlightIndexerTests {
     }
 
     @Test func theWorkerWaitsWhileTheFirstBackfillIsHeavyThenCatchesUp() async throws {
+        defer { defaults.cleanup() }
         let f = SystemFixture()
         let indexer = make(f)
         indexer.setBackfillBusy(true)
@@ -127,6 +134,7 @@ struct SpotlightIndexerTests {
     }
 
     @Test func indexingNeverChangesMail() async throws {
+        defer { defaults.cleanup() }
         let f = SystemFixture(options: .init(remoteAck: .immediate))
         _ = try await started(f)
         #expect(!f.spotlight.items.isEmpty)
@@ -134,6 +142,7 @@ struct SpotlightIndexerTests {
     }
 
     @Test func rebuildDeletesEverythingAndIndexesAgainWhileRemoveAllEmptiesAndStops() async throws {
+        defer { defaults.cleanup() }
         let f = SystemFixture()
         let indexer = try await started(f)
         let count = f.spotlight.items.count
@@ -148,8 +157,8 @@ struct SpotlightIndexerTests {
     }
 
     @Test func aThreadThatLeftWhileMailWasClosedIsRemovedOnTheNextLaunch() async throws {
+        defer { defaults.cleanup() }
         let f = SystemFixture()
-        let defaults = UserDefaults(suiteName: "openhuman.test.spotlight.\(UUID().uuidString)")!
         let ghost = ThreadKey(account: f.account, rowID: 9999, gmailThreadID: GmailThreadID("ghost"))
         try await f.spotlight.index([SpotlightItem(identifier: SpotlightIdentifier.make(ghost), domain: SpotlightIdentifier.domain(f.account),
                                                    title: "Mail from Old", summary: "Mail", authorName: "Old", date: fixedNow,
@@ -162,6 +171,7 @@ struct SpotlightIndexerTests {
     }
 
     @Test func aFailingIndexIsReportedAndTriedAgainOnTheNextChange() async throws {
+        defer { defaults.cleanup() }
         let f = SystemFixture()
         f.spotlight.failing = true
         let indexer = make(f)

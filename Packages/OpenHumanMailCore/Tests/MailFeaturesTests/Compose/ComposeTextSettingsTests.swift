@@ -11,9 +11,7 @@ struct ComposeTextSettingsTests {
     static let personal = Account(id: AccountID(2), email: "robin@example.org", displayName: "Personal", alias: "Personal",
                                   health: .active)
 
-    func suite() -> UserDefaults {
-        UserDefaults(suiteName: "openhuman.test.compose-text.\(UUID().uuidString)")!
-    }
+    func suite() -> ScopedDefaults { ScopedDefaults("openhuman.test.compose-text") }
 
     @Test func defaultsFollowMacOSWithGrammarAndWritingToolsOff() {
         let settings = ComposeTextSettings(defaults: suite(), system: FakeSystemTextSettings())
@@ -29,6 +27,7 @@ struct ComposeTextSettingsTests {
 
     @Test func automaticListsCanBeTurnedOffAndStayOff() {
         let defaults = suite()
+        defer { defaults.cleanup() }
         let a = ComposeTextSettings(defaults: defaults, system: FakeSystemTextSettings())
         a.autoLists = false
         #expect(!a.flags(for: Self.work).autoLists)
@@ -60,6 +59,7 @@ struct ComposeTextSettingsTests {
 
     @Test func choicesPersistInTheirSuite() {
         let defaults = suite()
+        defer { defaults.cleanup() }
         let a = ComposeTextSettings(defaults: defaults, system: FakeSystemTextSettings())
         a.autocorrect = .off
         a.continuousSpelling = false

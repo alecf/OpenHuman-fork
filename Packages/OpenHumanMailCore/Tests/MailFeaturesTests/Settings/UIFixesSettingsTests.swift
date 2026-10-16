@@ -3,19 +3,15 @@ import MailActions
 import MailModel
 import OpenHumanAI
 import OpenHumanAITesting
+import OpenHumanCore
 import Testing
 @testable import MailFeatures
 
 @MainActor
 struct UIFixesSettingsTests {
-    private func scratch() throws -> (UserDefaults, String) {
-        let name = "ui-fixes-settings-\(UUID().uuidString)"
-        return (try #require(UserDefaults(suiteName: name)), name)
-    }
-
     @Test func advancedNamesEveryWholeFeatureSwitchApartFromItsEverydaySwitch() throws {
-        let (defaults, name) = try scratch()
-        defer { defaults.removePersistentDomain(forName: name) }
+        let defaults = ScopedDefaults("openhuman.test.ui-fixes-settings")
+        defer { defaults.cleanup() }
         let rows = FeaturesSettingsModel(modules: ModuleList.all, registered: [], defaults: defaults).rows
         let everyday: Set<String> = ["Snoozing", "Send later", "Reminders", "Open at login", "Dock badge", "Notifications"]
         for row in rows {
@@ -31,8 +27,8 @@ struct UIFixesSettingsTests {
     }
 
     @Test func developerOptionsAreOffByDefaultAndOnlyOfferedInADevToolsBuild() throws {
-        let (defaults, name) = try scratch()
-        defer { defaults.removePersistentDomain(forName: name) }
+        let defaults = ScopedDefaults("openhuman.test.ui-fixes-settings")
+        defer { defaults.cleanup() }
         for availability in [DevFeedbackAvailability.off, .devTools] {
             let options = DeveloperOptions(devFeedback: availability, defaults: defaults)
             #expect(!options.isOn && !options.showsDeveloperItems, "\(availability)")

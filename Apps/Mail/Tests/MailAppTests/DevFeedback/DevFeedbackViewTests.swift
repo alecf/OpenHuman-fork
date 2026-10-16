@@ -2,6 +2,7 @@ import AppKit
 import MailFakes
 import MailFeatures
 import MailUI
+import OpenHumanCore
 import OpenHumanLinks
 import SwiftUI
 import Testing
@@ -11,6 +12,7 @@ import Testing
 @MainActor
 @Suite(.serialized) struct DevFeedbackViewTests {
     let support = FileManager.default.temporaryDirectory.appendingPathComponent("oh-devfeedback-views-\(UUID().uuidString)", isDirectory: true)
+    let defaults = ScopedDefaults("openhuman.test.devfeedback.views")
 
     func render(_ view: some View, size: NSSize, name: String) throws {
         let hosting = NSHostingView(rootView: view.frame(width: size.width, height: size.height))
@@ -31,9 +33,6 @@ import Testing
     }
 
     func makeCenter(bundled: URL?) throws -> DevFeedbackCenter {
-        let suite = "dev.openhuman.tests.devfeedback.views"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
         let center = DevFeedbackCenter(availability: .devTools, settings: DevFeedbackSettings(defaults: defaults),
                                        paths: DevFeedbackPaths(support: support), bundledChecklist: bundled)
         return center
@@ -64,7 +63,7 @@ import Testing
     }
 
     @Test func checklistPanelRenders() throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         let center = try makeCenter(bundled: Bundle.main.url(forResource: "dev-test-checklist", withExtension: "json"))
         center.checklist.record(.worked, for: "inbox.jk")
         center.checklist.record(.didNotWork, for: "block.sender-cleanup-undo")
@@ -77,7 +76,7 @@ import Testing
     }
 
     @Test func hostileChecklistRendersAsPlainText() throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         let file = support.appendingPathComponent("hostile.json")
         let hostile: [String: Any] = ["items": [
@@ -97,7 +96,7 @@ import Testing
     }
 
     @Test func feedbackSheetRendersBeforeAndAfterSaving() async throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         let center = try makeCenter(bundled: Bundle.main.url(forResource: "dev-test-checklist", withExtension: "json"))
         let app = AppModel(screen: .mail(.fake(corpus: .make(threadCount: 10))))
         let host = AppDevFeedbackHost(availability: .devTools, arguments: ["-UseFakeData"], environment: [:],
@@ -120,7 +119,7 @@ import Testing
     }
 
     @Test func unavailableDeveloperFeedbackShowsNothingInSettings() throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         let center = try makeCenter(bundled: nil)
         func height(_ availability: DevFeedbackAvailability) -> CGFloat {
             let view = DevFeedbackSettingsView(settings: center.settings, availability: availability,
@@ -131,11 +130,10 @@ import Testing
         }
         #expect(height(.off) < 1, "nothing at all")
         #expect(height(.devTools) > 40, "the developer rows")
-        let suite = "developer-options-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let optionsDefaults = ScopedDefaults("openhuman.test.developer-options")
+        defer { optionsDefaults.cleanup() }
         func options(_ availability: DevFeedbackAvailability) -> DeveloperOptions {
-            DeveloperOptions(devFeedback: availability, defaults: defaults)
+            DeveloperOptions(devFeedback: availability, defaults: optionsDefaults)
         }
         #expect(SettingsRoot.showsDeveloperItems(options(.off)) == false)
         #expect(SettingsRoot.showsDeveloperItems(options(.devTools)) == false, "off by default in a dev-tools build too")

@@ -11,6 +11,9 @@ let package = Package(
         .library(name: "OpenHumanAIModelStore", targets: ["OpenHumanAIModelStore"]),
         .library(name: "OpenHumanAIApple", targets: ["OpenHumanAIApple"]),
     ],
+    dependencies: [
+        .package(path: "../OpenHumanCore"),
+    ],
     targets: [
         .target(name: "OpenHumanAI", resources: [.copy("Prompts")]),
         .target(name: "OpenHumanAITesting", dependencies: ["OpenHumanAI"]),
@@ -19,7 +22,8 @@ let package = Package(
         .target(name: "OpenHumanAIApple", dependencies: [
             "OpenHumanAI", .target(name: "OpenHumanAIAgentCLI", condition: .when(platforms: [.macOS])), "OpenHumanAIModelStore",
         ]),
-        .testTarget(name: "OpenHumanAITests", dependencies: ["OpenHumanAI", "OpenHumanAITesting"]),
+        .testTarget(name: "OpenHumanAITests", dependencies: ["OpenHumanAI", "OpenHumanAITesting",
+                                                            .product(name: "OpenHumanCore", package: "OpenHumanCore")]),
         .testTarget(
             name: "OpenHumanAIAgentCLITests",
             dependencies: ["OpenHumanAIAgentCLI", "OpenHumanAITesting"],

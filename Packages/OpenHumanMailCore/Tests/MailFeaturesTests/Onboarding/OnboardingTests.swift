@@ -246,11 +246,11 @@ struct WelcomeGuideCenterTests {
     }
 
     @Test func progressIsStoredAsOneJSONValueInAGivenSuite() {
-        let (_, name) = scratchDefaults()
-        defer { UserDefaults(suiteName: name)?.removePersistentDomain(forName: name) }
-        let store = UserDefaultsOnboardingProgress(suite: name)
+        let suite = ScopedDefaults("openhuman.test.settings")
+        defer { suite.cleanup() }
+        let store = UserDefaultsOnboardingProgress(suite: suite.name)
         #expect(store.load() == OnboardingProgress())
         store.save(OnboardingProgress(step: .ai, completed: false, skipped: [.keys], aiAnswered: true, shown: true))
-        #expect(UserDefaultsOnboardingProgress(suite: name).load() == OnboardingProgress(step: .ai, skipped: [.keys], aiAnswered: true, shown: true))
+        #expect(UserDefaultsOnboardingProgress(suite: suite.name).load() == OnboardingProgress(step: .ai, skipped: [.keys], aiAnswered: true, shown: true))
     }
 }

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import OpenHumanCore
 import Testing
 @testable import OpenHumanMail
 
@@ -10,10 +11,7 @@ private final class FakeSwapper: AppIconSwapping {
     func restoreBundleIcon() { calls.append("restore") }
 }
 
-private func freshDefaults() -> UserDefaults {
-    let defaults = UserDefaults(suiteName: "dev.openhuman.mail.tests.icon.\(UUID().uuidString)")!
-    return defaults
-}
+private func freshDefaults() -> ScopedDefaults { ScopedDefaults("dev.openhuman.mail.tests.icon") }
 
 @MainActor
 @Suite struct AppIconTests {
@@ -72,6 +70,7 @@ private func freshDefaults() -> UserDefaults {
 
     @Test func settingOffSetsNothingAtLaunch() {
         let defaults = freshDefaults()
+        defer { defaults.cleanup() }
         defaults.set(false, forKey: AppIconController.settingKey)
         let swapper = FakeSwapper()
         AppIconController(swapper: swapper, defaults: defaults, underTest: false).applyAtLaunch()
@@ -80,6 +79,7 @@ private func freshDefaults() -> UserDefaults {
 
     @Test func theSwitchRestoresAndReappliesLive() {
         let defaults = freshDefaults()
+        defer { defaults.cleanup() }
         let swapper = FakeSwapper()
         let controller = AppIconController(swapper: swapper, defaults: defaults, underTest: false)
         controller.setEnabled(false)

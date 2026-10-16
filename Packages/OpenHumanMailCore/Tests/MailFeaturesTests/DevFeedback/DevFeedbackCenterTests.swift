@@ -39,11 +39,9 @@ func contentStrings(_ corpus: FakeCorpus) -> [String] {
     let corpus = FakeCorpus.make(threadCount: 30, now: fixedNow)
     let support = FileManager.default.temporaryDirectory.appendingPathComponent("oh-devfeedback-\(UUID().uuidString)", isDirectory: true)
     let host = FakeDevFeedbackHost()
+    let defaults = ScopedDefaults("openhuman.test.devfeedback.center")
 
     func makeCenter(checklist: [DevChecklistItem] = []) throws -> DevFeedbackCenter {
-        let suite = "dev.openhuman.tests.devfeedback.center"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
         let bundled = support.appendingPathComponent("bundled-checklist.json")
         try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         let items = checklist.map { item -> [String: Any] in
@@ -71,7 +69,7 @@ func contentStrings(_ corpus: FakeCorpus) -> [String] {
     }
 
     @Test func snapshotCapturesStateAndIdsButNoContent() async throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         let center = try makeCenter()
         let window = await openWindow(center)
         window.perform(.nextThread)
@@ -107,7 +105,7 @@ func contentStrings(_ corpus: FakeCorpus) -> [String] {
     }
 
     @Test func sheetDefaultsAttachStateAndLogsButNoContent() async throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         let center = try makeCenter()
         let window = await openWindow(center)
         window.perform(.openThread)
@@ -143,7 +141,7 @@ func contentStrings(_ corpus: FakeCorpus) -> [String] {
     }
 
     @Test func noThreadMeansNoContentBox() async throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         let center = try makeCenter()
         _ = await openWindow(center)
         host.screenshot = nil
@@ -156,7 +154,7 @@ func contentStrings(_ corpus: FakeCorpus) -> [String] {
     }
 
     @Test func submitWritesOneBundleWithNewAnswersAndTheCommands() async throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         let items = [DevChecklistItem(id: "inbox.jk", area: "Inbox", title: "j and k", steps: ["Press j"], expected: "Moves", requires: .fake),
                      DevChecklistItem(id: "status.sync", area: "Status", title: "Sync line", steps: ["Look"], expected: "Shown", requires: .real)]
         let center = try makeCenter(checklist: items)
@@ -207,7 +205,7 @@ func contentStrings(_ corpus: FakeCorpus) -> [String] {
     }
 
     @Test func checklistLinkOpensTheThreadThroughTheWindow() async throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         let target = corpus.threads[4].row.id.gmailThreadID.rawValue
         let link = "openhuman://thread/\(corpus.account.email)/\(target)"
         let center = try makeCenter(checklist: [
@@ -237,7 +235,7 @@ func contentStrings(_ corpus: FakeCorpus) -> [String] {
     }
 
     @Test func pressingGiveFeedbackAgainKeepsTheOpenDraft() async throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         let center = try makeCenter()
         let first = center.beginFeedback()
         first.text = "half-written"
@@ -247,7 +245,7 @@ func contentStrings(_ corpus: FakeCorpus) -> [String] {
     }
 
     @Test func signInScreenSnapshotUsesTheHost() async throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         let center = try makeCenter()
         host.screenName = "signIn/ready"
         let snapshot = await center.snapshot()

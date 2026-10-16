@@ -200,9 +200,8 @@ private struct ConnectedFixFixture {
         let f = try await ConnectedFixFixture.make(connected: [FakeCorpus.me.email])
         let support = FileManager.default.temporaryDirectory.appendingPathComponent("oh-calfix-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: support) }
-        let suite = "dev.openhuman.tests.calfix.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaults = ScopedDefaults("openhuman.test.calfix")
+        defer { defaults.cleanup() }
         let center = DevFeedbackCenter(availability: .devTools, settings: DevFeedbackSettings(defaults: defaults),
                                        paths: DevFeedbackPaths(support: support), bundledChecklist: nil,
                                        now: { at(10, 10, 9) })

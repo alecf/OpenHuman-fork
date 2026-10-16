@@ -48,6 +48,27 @@ class CheckTestPatterns(unittest.TestCase):
         bad, _ = ctp.check(lines("#expect(a.path == FileManager.default.temporaryDirectory.path)", path=helper))
         self.assertEqual(bad, [])
 
+    def test_raw_defaults_suites(self):
+        for t in ['let d = UserDefaults(suiteName: "openhuman.test.\\(UUID().uuidString)")!',
+                  "let d = try #require(UserDefaults(suiteName: suite))",
+                  "let d = name.flatMap(UserDefaults.init(suiteName:)) ?? .standard",
+                  "SystemPreferences(defaults: UserDefaults( suiteName : name) ?? .standard)"]:
+            bad, _ = ctp.check(lines(t))
+            self.assertEqual(len(bad), 1, t)
+            self.assertIn("ScopedDefaults", bad[0])
+
+    def test_defaults_helper_and_escapes_allowed(self):
+        bad, _ = ctp.check(lines('let defaults = ScopedDefaults("openhuman.test.x")', "defer { defaults.cleanup() }",
+                                 "let store = AISettingsStore(suiteName: defaults.name)",
+                                 'let nav = UserDefaultsNavigationStore(scope: "fake", suiteName: defaults.name)',
+                                 "let keys = UserDefaultsKeymapStore(suiteName: defaults.name)",
+                                 "let group = UserDefaults(suiteName: groupID) // defaults-ok: reads the shared group",
+                                 "// UserDefaults(suiteName:) is banned", "let d = UserDefaults.standard"))
+        self.assertEqual(bad, [])
+        helper = "Packages/OpenHumanCore/Tests/OpenHumanCoreTests/ScopedDefaultsTests.swift"
+        bad, _ = ctp.check(lines("let reopened = try #require(UserDefaults(suiteName: first.name))", path=helper))
+        self.assertEqual(bad, [])
+
     def test_only_test_files(self):
         self.assertFalse(ctp.is_test("Packages/P/Sources/P/A.swift"))
         self.assertTrue(ctp.is_test("Apps/Mail/Tests/MailAppTests/A.swift"))

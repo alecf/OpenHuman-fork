@@ -185,9 +185,9 @@ import Testing
     }
 
     @Test func userDefaultsStoreRoundTripsAndIgnoresOtherVersions() throws {
-        let suite = "dev.openhuman.mail.tests.navigation.\(UUID().uuidString)"
-        defer { UserDefaults().removePersistentDomain(forName: suite) }
-        let store = UserDefaultsNavigationStore(scope: "fake", suiteName: suite)
+        let suite = ScopedDefaults("dev.openhuman.mail.tests.navigation")
+        defer { suite.cleanup() }
+        let store = UserDefaultsNavigationStore(scope: "fake", suiteName: suite.name)
         #expect(store.key == "dev.openhuman.mail.navigation.fake")
         #expect(store.load() == nil)
         let key = ThreadKey(account: AccountID(1), rowID: 7, gmailThreadID: GmailThreadID("t7"))
@@ -197,7 +197,7 @@ import Testing
         ])
         store.save(snapshot)
         #expect(store.load() == snapshot)
-        #expect(UserDefaultsNavigationStore(scope: "live", suiteName: suite).load() == nil, "scopes never mix")
+        #expect(UserDefaultsNavigationStore(scope: "live", suiteName: suite.name).load() == nil, "scopes never mix")
         var future = snapshot
         future.version = 99
         store.save(future)

@@ -128,7 +128,7 @@ final class Locked<Value>: @unchecked Sendable {
         let readonly = await h.run(args + ["--readonly"], stdinTTY: true, readLine: "me@example.com")
         #expect(readonly.code == 5)
         #expect(try h.store.setting(.cliReadonlyDefault, scope: .global) == false)
-        let wrong = await h.run(args, stdinTTY: true, readLine: "someone@else.com")
+        let wrong = await h.run(args, stdinTTY: true, readLine: "someone@example.test")
         #expect(wrong.code == 5 && wrong.errorCode == "confirmation_failed")
         let noAnswer = await h.run(args, stdinTTY: true, readLine: nil)
         #expect(noAnswer.code == 5)

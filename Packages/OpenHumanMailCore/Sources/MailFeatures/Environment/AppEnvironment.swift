@@ -1,6 +1,7 @@
 import Foundation
 import MailModel
 import MailTheme
+import OpenHumanCore
 
 @MainActor
 public final class AppEnvironment {
@@ -84,7 +85,7 @@ public final class AppEnvironment {
         self.waiting = waiting
         self.systemPlatform = platform ?? .inert()
         self.systemPreferences = systemPreferences
-            ?? SystemPreferences(defaults: isFake ? (UserDefaults(suiteName: "openhuman.fake.\(UUID().uuidString)") ?? .standard) : .standard)
+            ?? SystemPreferences(defaults: isFake ? AppEnvironment.fakeDefaults() : .standard)
         self.actions = ActionRegistry(recents: RecentActions(store: isFake ? InMemoryRecentActionsStore()
                                                                   : UserDefaultsRecentActionsStore()))
         self.ai = ai
@@ -96,6 +97,9 @@ public final class AppEnvironment {
     }
 
     public let keymapStore: any KeymapStoring
+
+    // Why: fake data never touches real settings
+    static func fakeDefaults() -> UserDefaults { ScopedDefaults("openhuman.fake") }
 
     private let autoLabelStore: (any AutoLabelStoring)?
 
@@ -290,8 +294,7 @@ public final class AppEnvironment {
 
     public var composeText: ComposeTextSettings {
         if let composeTextStorage { return composeTextStorage }
-        let defaults = isFake ? (UserDefaults(suiteName: "openhuman.fake.compose.\(UUID().uuidString)") ?? .standard)
-                              : .standard
+        let defaults = isFake ? AppEnvironment.fakeDefaults() : .standard
         let made = ComposeTextSettings(defaults: defaults, system: systemPlatform.textSettings,
                                        onDeviceOnly: { [weak self] account in self?.ai?.isOnDeviceOnly(account) ?? false })
         composeTextStorage = made

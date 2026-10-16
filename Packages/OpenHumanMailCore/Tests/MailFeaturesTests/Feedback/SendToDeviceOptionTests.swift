@@ -2,16 +2,12 @@ import Foundation
 import MailActions
 import MailFakes
 import MailModel
+import OpenHumanCore
 import Testing
 @testable import MailFeatures
 
 @MainActor
 @Suite struct SendToDeviceOptionTests {
-    private func scratch() throws -> (UserDefaults, String) {
-        let name = "send-to-device-\(UUID().uuidString)"
-        return (try #require(UserDefaults(suiteName: name)), name)
-    }
-
     private func installedCenter() -> (SendFeedbackCenter, () -> Int) {
         let center = SendFeedbackCenter()
         var made = 0
@@ -23,8 +19,8 @@ import Testing
     }
 
     @Test func theOptionIsOffByDefaultInEveryBuild() throws {
-        let (defaults, name) = try scratch()
-        defer { defaults.removePersistentDomain(forName: name) }
+        let defaults = ScopedDefaults("openhuman.test.send-to-device")
+        defer { defaults.cleanup() }
         for availability in [DevFeedbackAvailability.off, .devTools] {
             let options = DeveloperOptions(devFeedback: availability, defaults: defaults)
             #expect(!options.sendToDevice && !options.offersSendToDevice, "\(availability)")
@@ -35,8 +31,8 @@ import Testing
     }
 
     @Test func theOptionIsRememberedWhereOfferedAndIgnoredInAPublicBuild() throws {
-        let (defaults, name) = try scratch()
-        defer { defaults.removePersistentDomain(forName: name) }
+        let defaults = ScopedDefaults("openhuman.test.send-to-device")
+        defer { defaults.cleanup() }
         let devTools = DeveloperOptions(devFeedback: .devTools, defaults: defaults)
         devTools.sendToDevice = true
         #expect(devTools.offersSendToDevice)

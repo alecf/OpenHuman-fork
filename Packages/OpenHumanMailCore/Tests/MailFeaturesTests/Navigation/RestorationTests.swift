@@ -245,9 +245,9 @@ func temporaryStateDirectory() -> URL {
     }
 
     @Test func theLegacyUserDefaultsValueIsReadUntilTheFileExists() throws {
-        let suite = "dev.openhuman.mail.tests.restoration.\(UUID().uuidString)"
-        defer { UserDefaults().removePersistentDomain(forName: suite) }
-        let legacy = UserDefaultsNavigationStore(scope: "fake", suiteName: suite)
+        let suite = ScopedDefaults("dev.openhuman.mail.tests.restoration")
+        defer { suite.cleanup() }
+        let legacy = UserDefaultsNavigationStore(scope: "fake", suiteName: suite.name)
         legacy.save(NavigationSnapshot(activeAccount: AccountID(2), labelSidebarVisible: true))
         let directory = temporaryStateDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

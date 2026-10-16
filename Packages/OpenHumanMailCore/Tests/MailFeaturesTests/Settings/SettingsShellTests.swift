@@ -1,6 +1,7 @@
 import Foundation
 import MailActions
 import MailModel
+import OpenHumanCore
 import Testing
 @testable import MailFeatures
 
@@ -37,8 +38,8 @@ struct SettingsShellTests {
     }
 
     @Test func theLastPageIsRememberedWhenDefaultsAreGivenAndIgnoredForFakeData() {
-        let (defaults, name) = scratchDefaults()
-        defer { defaults.removePersistentDomain(forName: name) }
+        let defaults = ScopedDefaults("openhuman.test.settings")
+        defer { defaults.cleanup() }
         let registry = SettingsFixture().env.modules
         let availability = SettingsAvailability(hasCommands: true, hasSettings: true, hasAccounts: true)
         let first = SettingsShellModel(registry: registry, availability: availability, defaults: defaults)
@@ -64,8 +65,8 @@ struct SettingsShellTests {
 @MainActor
 struct FeaturesAndPlatformTests {
     @Test func everyCompiledInModuleHasASwitchAndTheStoredFlagDecidesTheNextLaunch() {
-        let (defaults, name) = scratchDefaults()
-        defer { defaults.removePersistentDomain(forName: name) }
+        let defaults = ScopedDefaults("openhuman.test.settings")
+        defer { defaults.cleanup() }
         let f = SettingsFixture()
         let model = FeaturesSettingsModel(modules: ModuleList.all, registered: f.env.modules.modules, defaults: defaults)
         #expect(model.rows.count == ModuleList.all.count)
