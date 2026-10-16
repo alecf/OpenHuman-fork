@@ -63,6 +63,7 @@ final class LiveAccountManager: AccountManaging {
         vault = OAuthClientVault(store: dependencies.clientStore, storeDirectory: dependencies.storeDirectory)
         vault.migrateLegacyFiles()
         (dependencies.tokenStore as? SyncedTokenStore)?.migrateLocalSignIns()
+        vault.migrateSyncWanted()
     }
 
     func attach(_ session: SessionLink?) {

@@ -20,7 +20,7 @@ struct AutoLabelsSection: View {
 
     private var autoLabels: some View {
         SettingsSection("Auto labels", footnote: AutoLabelSettingsModel.placementNote) {
-            SettingsRow("Auto labels", detail: AutoLabelSettingsModel.enabledNote, status: model.unavailableText,
+            SettingsRow("Label new mail", detail: AutoLabelSettingsModel.enabledNote, status: model.unavailableText,
                         statusTone: .warning, isOn: binding(model.enabled))
                 .disabled(!model.canUseSwitch)
                 .accessibilityIdentifier("settings.autoLabels.enabled")
@@ -33,16 +33,15 @@ struct AutoLabelsSection: View {
                 .disabled(!model.canUseSwitch || !model.enabled.value)
                 .accessibilityIdentifier("settings.autoLabels.showInGmail")
             SettingsRow("Recent mail", detail: AutoLabelSettingsModel.classifyNote, status: model.statusText) {
-                HStack {
-                    Button("Classify recent mail") { Task { await model.classifyRecent() } }
-                        .disabled(!model.canAct)
-                        .accessibilityIdentifier("settings.autoLabels.classifyRecent")
-                    Button("Reset auto labels") { Task { await model.reset() } }
-                        .disabled(model.isBusy || model.center == nil)
-                        .accessibilityIdentifier("settings.autoLabels.reset")
-                }
+                Button("Classify recent mail") { Task { await model.classifyRecent() } }
+                    .disabled(!model.canAct)
+                    .accessibilityIdentifier("settings.autoLabels.classifyRecent")
             }
-            SettingsRow("Reset", detail: AutoLabelSettingsModel.resetNote)
+            SettingsRow("Start over", detail: AutoLabelSettingsModel.resetNote) {
+                Button("Reset auto labels") { Task { await model.reset() } }
+                    .disabled(model.isBusy || model.center == nil)
+                    .accessibilityIdentifier("settings.autoLabels.reset")
+            }
             ForEach(AutoLabelSettingsModel.categories, id: \.self) { category in
                 SettingsRow(category, selection: placement(category)) {
                     ForEach(AutoLabelSettingsModel.Placement.allCases, id: \.self) { Text($0.title).tag($0) }

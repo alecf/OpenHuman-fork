@@ -13,7 +13,7 @@ Renders the app's main screens and states on sample data into PNGs, with index.j
 only when OH_SNAPSHOT_DIR is set:
   package half  MailUIMacTests/RenderSweepTests          (main window, reader, composer, overlays,
                                                           start-up screens)
-  app half      MailAppTests/RenderSweepSettingsTests    (every Settings page, 760 x 560, as the
+  app half      MailAppTests/RenderSweepSettingsTests    (every Settings page, 780 x 560, as the
                                                           app hosts them)
 The output folder must be outside every git work tree (the script and the suites both refuse
 one inside); never commit the PNGs. Build products go to a temporary folder outside the

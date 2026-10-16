@@ -9,6 +9,7 @@ import OpenHumanGmail
 import OpenHumanGmailApple
 import OpenHumanStore
 import OpenHumanAI
+import Security
 
 @MainActor
 enum CompositionRoot {
@@ -77,14 +78,13 @@ enum CompositionRoot {
             let tokenTransport = URLSessionTransport(userAgent: userAgent)
             let signInBroker = SignInBroker(memory: UserDefaultsSignInBrowserMemory(defaults: .standard))
             SignInPanelController.install(signInBroker)
+            let keychain = keychainStores(environment: environment, directory: location.directory,
+                                          accessGroup: keychainAccessGroup())
             let backend = LiveBackend(
                 store: store,
                 accountDependencies: LiveAccountManager.Dependencies(
                     environment: environment, storeDirectory: location.directory,
-                    clientStore: KeychainClientStore(service: clientKeychainService(environment: environment,
-                                                                                     directory: location.directory)),
-                    tokenStore: syncedTokenStore(service: keychainService(environment: environment,
-                                                                          directory: location.directory)),
+                    clientStore: keychain.client, tokenStore: keychain.tokens,
                     transport: tokenTransport, makeReceiver: { signInBroker.wrap(NWLoopbackReceiver()) },
                     browser: signInBroker,
                     clock: SystemClock(), calendarTokenStore: liveCalendarTokenStore(arguments: arguments)),
@@ -135,9 +135,30 @@ enum CompositionRoot {
         return OHIdentifiers.keychainService + ".home." + stableID(directory.standardizedFileURL.path)
     }
 
-    static func syncedTokenStore(service: String) -> SyncedTokenStore {
-        SyncedTokenStore(local: KeychainTokenStore(service: service), shared: KeychainSharedGrantStore(service: service),
+    static func syncedTokenStore(service: String, accessGroup: String?) -> SyncedTokenStore {
+        SyncedTokenStore(local: KeychainTokenStore(service: service),
+                         shared: KeychainSharedGrantStore(service: service, accessGroup: accessGroup),
                          device: KeychainTokenDeviceStore(tokenService: service))
+    }
+
+    static func keychainStores(environment: [String: String], directory: URL,
+                               accessGroup: String?) -> (client: KeychainClientStore, tokens: SyncedTokenStore) {
+        (KeychainClientStore(service: clientKeychainService(environment: environment, directory: directory),
+                             accessGroup: accessGroup),
+         syncedTokenStore(service: keychainService(environment: environment, directory: directory), accessGroup: accessGroup))
+    }
+
+    // Why: a group the signature doesn't grant refuses every shared write, so it waits for the entitlement
+    static func keychainAccessGroup(info: [String: Any]? = Bundle.main.infoDictionary,
+                                    entitled: [String] = entitledKeychainGroups()) -> String? {
+        guard let group = KeychainSharing.configuredAccessGroup(info), entitled.contains(group) else { return nil }
+        return group
+    }
+
+    static func entitledKeychainGroups() -> [String] {
+        guard let task = SecTaskCreateFromSelf(nil),
+              let value = SecTaskCopyValueForEntitlement(task, "keychain-access-groups" as CFString, nil) else { return [] }
+        return value as? [String] ?? []
     }
 
     static func clientKeychainService(environment: [String: String], directory: URL) -> String {

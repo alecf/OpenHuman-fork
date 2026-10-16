@@ -2,13 +2,13 @@ import MailTheme
 import SwiftUI
 
 public enum SettingsMetrics {
-    public static let sidebarWidth: CGFloat = 180
+    public static let sidebarWidth: CGFloat = 200
     public static let sidebarRowHeight: CGFloat = 28
     public static let sidebarIconSize: CGFloat = 14
     public static let contentMaxWidth: CGFloat = 640
     public static let rowMinHeight: CGFloat = 40
     public static let compactRowMinHeight: CGFloat = 28
-    public static let windowWidth: CGFloat = 760
+    public static let windowWidth: CGFloat = 780
     public static let windowHeight: CGFloat = 560
 }
 
@@ -130,33 +130,52 @@ public struct SettingsRow<Control: View>: View {
     let statusTone: SettingsTone
     let alignment: VerticalAlignment
     let labelsControl: Bool
+    let stacked: Bool
     let control: Control
     @Environment(\.theme) private var theme
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.settingsCompactRows) private var compact
 
     public init(_ title: String, detail: String? = nil, status: String? = nil, statusTone: SettingsTone = .secondary,
-                alignment: VerticalAlignment = .center, labelsControl: Bool = false, @ViewBuilder control: () -> Control) {
+                alignment: VerticalAlignment = .center, labelsControl: Bool = false, stacked: Bool = false,
+                @ViewBuilder control: () -> Control) {
         self.title = title
         self.detail = detail
         self.status = status
         self.statusTone = statusTone
         self.alignment = alignment
         self.labelsControl = labelsControl
+        self.stacked = stacked
         self.control = control()
     }
 
     public var body: some View {
-        HStack(alignment: alignment, spacing: theme.space5) {
-            text
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .modifier(RowTextAccessibility(hidden: labelsControl))
-            control
-                .fixedSize(horizontal: true, vertical: false)
-                .modifier(RowControlAccessibility(label: labelsControl ? title : nil, hint: labelsControl ? spokenDetail : nil))
+        arranged
+            .padding(.vertical, compact ? theme.space2 : theme.space3)
+            .frame(minHeight: compact ? SettingsMetrics.compactRowMinHeight : SettingsMetrics.rowMinHeight)
+    }
+
+    // Why: a wide control beside the title squeezes the title until it wraps a letter per line
+    @ViewBuilder private var arranged: some View {
+        if stacked {
+            VStack(alignment: .leading, spacing: theme.space2) {
+                text
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .modifier(RowTextAccessibility(hidden: labelsControl))
+                control
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .modifier(RowControlAccessibility(label: labelsControl ? title : nil, hint: labelsControl ? spokenDetail : nil))
+            }
+        } else {
+            HStack(alignment: alignment, spacing: theme.space5) {
+                text
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .modifier(RowTextAccessibility(hidden: labelsControl))
+                control
+                    .fixedSize(horizontal: true, vertical: false)
+                    .modifier(RowControlAccessibility(label: labelsControl ? title : nil, hint: labelsControl ? spokenDetail : nil))
+            }
         }
-        .padding(.vertical, compact ? theme.space2 : theme.space3)
-        .frame(minHeight: compact ? SettingsMetrics.compactRowMinHeight : SettingsMetrics.rowMinHeight)
     }
 
     private var text: some View {
@@ -324,6 +343,24 @@ private struct SettingsTextFieldStyle: ViewModifier {
             .background(RoundedRectangle(cornerRadius: theme.radiusSM).fill(theme.bgWindow.color))
             .overlay(RoundedRectangle(cornerRadius: theme.radiusSM)
                 .strokeBorder(theme.borderControl.color, lineWidth: theme.borderWidthControl))
+    }
+}
+
+// Why: a fixed width keeps neighbouring fields aligned and stops one from widening as it is typed in
+struct SettingsTextArea: View {
+    static let width: CGFloat = 320
+
+    let title: String
+    let prompt: String
+    @Binding var text: String
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        TextField(title, text: $text, prompt: Text(verbatim: prompt).settingsPrompt(theme), axis: .vertical)
+            .lineLimit(2...5)
+            .labelsHidden()
+            .settingsTextField()
+            .frame(width: Self.width)
     }
 }
 

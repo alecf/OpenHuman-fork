@@ -143,7 +143,8 @@ private func liveManager(store: MailStore, tokens: any TokenStore, home: URL,
 @MainActor
 @Test func theAppsTokenStoreIsTheSyncedOneOverTheThreeKeychainStores() {
     // Only types are checked: this test host is an app bundle, so calling a store would reach the real Keychain
-    let tokens = CompositionRoot.syncedTokenStore(service: "dev.openhuman.mail.oauth.v1.home.0123456789abcdef")
+    let tokens = CompositionRoot.syncedTokenStore(service: "dev.openhuman.mail.oauth.v1.home.0123456789abcdef",
+                                                  accessGroup: nil)
     #expect(String(describing: type(of: tokens.local)) == "KeychainTokenStore")
     #expect(String(describing: type(of: tokens.shared)) == "KeychainSharedGrantStore")
     #expect(String(describing: type(of: tokens.device)) == "KeychainTokenDeviceStore")

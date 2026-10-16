@@ -892,7 +892,7 @@ public final class AutoLabelCenter {
         await setSince(options.now())
         publishIndex()
         if stayed {
-            lastMessage = String(localized: "Auto labels were cleared on this Mac. The labels in Gmail stay until Mail may change your mailbox.")
+            lastMessage = String(localized: "Auto labels were cleared on this Mac. Mail couldn't remove them in Gmail, so they stay there.")
         } else {
             lastMessage = removedCount == 1 ? String(localized: "Removed auto labels from 1 conversation.")
                 : String(localized: "Removed auto labels from \(removedCount) conversations.")

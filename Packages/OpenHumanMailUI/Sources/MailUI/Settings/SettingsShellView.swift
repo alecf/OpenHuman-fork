@@ -208,7 +208,7 @@ struct SettingsBuildFooter: View {
     }
 }
 
-private struct SettingsSidebarRow: View {
+struct SettingsSidebarRow: View {
     let entry: SettingsPageEntry
     let isSelected: Bool
     let showsCursor: Bool
