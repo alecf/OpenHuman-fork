@@ -1,0 +1,23 @@
+// Build settings shared by every configuration of the iPhone app. The version is the Mac app's.
+#include "../../Mail/Config/Version.xcconfig"
+
+OH_BUNDLE_ID_PREFIX = dev.openhuman
+OH_GIT_COMMIT = unknown
+
+PRODUCT_NAME = OpenHumanMail
+PRODUCT_BUNDLE_IDENTIFIER = $(OH_BUNDLE_ID_PREFIX).mail.ios
+IPHONEOS_DEPLOYMENT_TARGET = 27.0
+TARGETED_DEVICE_FAMILY = 1
+ARCHS = arm64
+SWIFT_VERSION = 6.0
+SWIFT_STRICT_CONCURRENCY = complete
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY[sdk=iphonesimulator*] = -
+CURRENT_PROJECT_VERSION = 1
+GENERATE_INFOPLIST_FILE = NO
+
+COMPILATION_CACHE_ENABLE_CACHING = YES
+COMPILATION_CACHE_CAS_PATH = $(HOME)/Library/Caches/OpenHuman/compilation-cache
+
+// Local overrides go last so they win (a developer's signing team and bundle id prefix for a device install).
+#include? "Local.xcconfig"

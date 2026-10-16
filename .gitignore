@@ -16,11 +16,14 @@ Tools/release/release.env
 
 # Generated Xcode project (XcodeGen) and pinned tools (Tools/bootstrap.sh)
 Apps/Mail/*.xcodeproj
+Apps/MailiOS/*.xcodeproj
 Tools/.bin/
 
 # Secrets, OAuth clients and per-developer config. Never commit these.
 Apps/Mail/Config/Local.xcconfig
 Apps/Mail/Config/Secrets.xcconfig
+Apps/MailiOS/Config/Local.xcconfig
+Apps/MailiOS/Config/Secrets.xcconfig
 oauth-client.json
 client_secret_*.json
 *.local.xcconfig
