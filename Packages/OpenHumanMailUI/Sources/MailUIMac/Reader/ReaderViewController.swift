@@ -690,7 +690,9 @@ public final class ReaderViewController: NSViewController {
         let menu = NSMenu()
         menu.autoenablesItems = false
         let context = actionContext()?.1
-        for (index, section) in moreMenuSections.enumerated() {
+        // Why: availability can change after the last render, so the menu reads it when it opens.
+        let sections = offeredMoreMenu()
+        for (index, section) in sections.enumerated() {
             if index > 0 { menu.addItem(.separator()) }
             for descriptor in section {
                 let availability = availability(descriptor)
@@ -704,7 +706,7 @@ public final class ReaderViewController: NSViewController {
                 menu.addItem(item)
             }
         }
-        MenuShortcutHints(descriptors: moreMenuSections.flatMap { $0 }).apply(to: menu)
+        MenuShortcutHints(descriptors: sections.flatMap { $0 }).apply(to: menu)
         return menu
     }
 
