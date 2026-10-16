@@ -399,7 +399,8 @@ import Testing
             return TriageResult(category: .newsletter, priority: 0, reason: "Weekly digest.")
         }
         let remote = FakeClassifier(id: "cloud.classifier", dataLocation: .thirdParty(vendor: "X"))
-        let features = makeFeatures([llm], classifiers: [remote, classifier], settings: consenting(["cloud.classifier"]))
+        let features = makeFeatures([llm], classifiers: [remote, classifier],
+                                    settings: consenting(["cloud.classifier"], AISettings(classifier: .localModel)))
         let result = try await features.classify(SyntheticThreads.short())
         #expect(result.providerID == "local.embeddings" && result.category == .newsletter)
         #expect(llm.requests.isEmpty)

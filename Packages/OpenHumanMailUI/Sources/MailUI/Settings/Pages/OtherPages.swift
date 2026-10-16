@@ -272,21 +272,6 @@ struct PrivacySettingsPage: View {
 struct AISettingsPage: View {
     let environment: AppEnvironment
     let providers: (() -> AnyView)?
-    @State private var model: AIConnectionsModel?
-    @State private var editing: AIConnectionDraft?
-    @State private var apiKey = ""
-    @Environment(\.theme) private var theme
-
-    static let connectionsNote = "Nothing leaves this Mac until you press Use on a connection and accept: then the text of "
-        + "the email it works on goes to that provider."
-
-    init(environment: AppEnvironment, providers: (() -> AnyView)?) {
-        self.environment = environment
-        self.providers = providers
-        if let port = environment.aiConnections, let secrets = environment.secrets {
-            _model = State(initialValue: AIConnectionsModel(port: port, secrets: secrets))
-        }
-    }
 
     var body: some View {
         SettingsPageScaffold(title: "AI") {
@@ -299,100 +284,8 @@ struct AISettingsPage: View {
             } else {
                 SettingsFootnote("AI isn't available in this mode.")
             }
-            if let model {
-                connections(model)
-            }
-        }
-        .task { await model?.load() }
-        .sheet(item: Binding(get: { model?.consent }, set: { if $0 == nil { model?.decline() } })) { request in
-            consentSheet(request)
         }
     }
-
-    @ViewBuilder
-    private func connections(_ model: AIConnectionsModel) -> some View {
-        SettingsSection("Connections that send email text off this Mac", footnote: Self.connectionsNote) {
-            ForEach(model.connections) { connection in
-                SettingsRow(connection.title,
-                            status: connection.isInUse ? "In use. Email text is sent to this provider." : "Saved. Not in use; nothing is sent.",
-                            statusTone: connection.isInUse ? .warning : .secondary) {
-                    HStack(spacing: theme.space3) {
-                        if connection.isInUse {
-                            Button("Stop using") { Task { await model.stopUsing(connection.id) } }
-                        } else {
-                            Button("Use…") { model.askToUse(connection.id) }
-                        }
-                        Button("Remove", role: .destructive) { Task { await model.remove(connection.id) } }
-                    }
-                }
-            }
-            if let draft = editing {
-                editor(draft, model)
-            } else {
-                SettingsRow("New connection", detail: "Saving stores the settings only. Nothing is sent and nothing is turned on "
-                            + "until you press Use.") {
-                    Button("Add connection…") { editing = AIConnectionDraft(title: "", kind: .agentCLI) }
-                }
-            }
-        }
-        SettingsErrorLine(text: model.errorMessage)
-    }
-
-    private func editor(_ draft: AIConnectionDraft, _ model: AIConnectionsModel) -> some View {
-        VStack(alignment: .leading, spacing: theme.space3) {
-            TextField("Name", text: Binding(get: { editing?.title ?? "" }, set: { editing?.title = $0 }),
-                      prompt: Text("Name").settingsPrompt(theme))
-                .settingsTextField().frame(maxWidth: 320)
-            Picker("Kind", selection: Binding(get: { draft.kind }, set: { editing?.kind = $0 })) {
-                Text("Agent CLI").tag(AIConnectionKind.agentCLI)
-                Text("Private Cloud Compute").tag(AIConnectionKind.privateCloud)
-                Text("API key").tag(AIConnectionKind.apiKey)
-            }
-            .fixedSize()
-            if draft.kind == .apiKey {
-                SecureField("API key (stored in the Keychain)", text: $apiKey,
-                            prompt: Text("API key (stored in the Keychain)").settingsPrompt(theme))
-                    .settingsTextField().frame(maxWidth: 320)
-            }
-            SettingsFootnote("Saving stores the settings only. Nothing is sent and nothing is turned on until you press Use.")
-            HStack(spacing: theme.space3) {
-                Button("Cancel") { editing = nil; apiKey = "" }
-                Button("Save") {
-                    let key = apiKey
-                    Task {
-                        if await model.save(draft, apiKey: key) != nil { editing = nil; apiKey = "" }
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
-        .settingsRowPadding()
-    }
-
-    private func consentSheet(_ request: AIConsentRequest) -> some View {
-        VStack(alignment: .leading, spacing: theme.space4) {
-            Text(request.title).themeFont(theme.typeTitle).foregroundStyle(theme.textPrimary.color)
-            Text(request.headline).themeFont(theme.typeReader).foregroundStyle(theme.textSecondary.color)
-            VStack(alignment: .leading, spacing: theme.space2) {
-                Text("What leaves this Mac").settingsSectionLabel(theme)
-                ForEach(request.leaves, id: \.self) { Label($0, systemImage: "arrow.up.right").themeFont(theme.typeBody) }
-                Text("What stays").settingsSectionLabel(theme).padding(.top, theme.space2)
-                ForEach(request.stays, id: \.self) { Label($0, systemImage: "checkmark").themeFont(theme.typeBody) }
-            }
-            HStack {
-                Spacer()
-                Button("Cancel") { model?.decline() }.keyboardShortcut(.cancelAction)
-                Button("Use \(request.title.dropFirst(4).dropLast())") { Task { await model?.accept() } }
-                    .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(theme.space6)
-        .frame(width: 440)
-    }
-}
-
-extension AIConsentRequest: @retroactive Identifiable {
-    public var id: String { connectionID }
 }
 
 struct SettingsFileDocument: FileDocument {

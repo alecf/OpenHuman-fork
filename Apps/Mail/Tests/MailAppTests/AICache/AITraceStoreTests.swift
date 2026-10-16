@@ -84,6 +84,29 @@ import Testing
         #expect(try await store.recent(limit: 10).isEmpty)
     }
 
+    @Test func queriesFilterInTheFileSoOldRatingsAndHandRequestsAreNotCrowdedOut() async throws {
+        let dir = Self.directory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = try SQLiteAITraceStore(url: dir.appendingPathComponent(SQLiteAITraceStore.fileName))
+        var rated = Self.trace(1, minutesAgo: 120)
+        rated.rating = -1
+        try await store.append(rated, retention: Self.keep, now: Self.day)
+        for index in 2...12 {
+            var background = Self.trace(index, feature: .summarize, minutesAgo: Double(13 - index))
+            background.trigger = .automatic
+            try await store.append(background, retention: Self.keep, now: Self.day)
+        }
+        try await store.append(Self.trace(13, feature: .askInbox, minutesAgo: 30), retention: Self.keep, now: Self.day)
+        #expect(!(try await store.recent(limit: 5)).contains { $0.id == rated.id })
+        #expect(try await store.traces(matching: AITraceQuery(rating: .rated), limit: 5).map(\.id) == [rated.id])
+        #expect(try await store.traces(matching: AITraceQuery(rating: .thumbsDown), limit: 5).map(\.id) == [rated.id])
+        #expect(try await store.traces(matching: AITraceQuery(triggers: [.user]), limit: 5).map(\.id)
+            == [Self.trace(13).id, rated.id])
+        #expect(try await store.traces(matching: AITraceQuery(features: [.rewrite, .askInbox], triggers: [.user]), limit: 1)
+            .map(\.id) == [Self.trace(13).id])
+        #expect(try await store.traces(matching: AITraceQuery(triggers: [.automatic]), limit: 100).count == 11)
+    }
+
     @Test func turningTextOffStoresNoText() async throws {
         let dir = Self.directory()
         defer { try? FileManager.default.removeItem(at: dir) }

@@ -83,11 +83,36 @@ public struct AITraceRetention: Sendable, Hashable {
     }
 }
 
+public struct AITraceQuery: Sendable, Hashable {
+    public enum Rating: Sendable, Hashable { case rated, thumbsDown }
+
+    public var features: Set<AIFeature>?
+    public var triggers: Set<AITrigger>?
+    public var rating: Rating?
+
+    public init(features: Set<AIFeature>? = nil, triggers: Set<AITrigger>? = nil, rating: Rating? = nil) {
+        self.features = features
+        self.triggers = triggers
+        self.rating = rating
+    }
+
+    public func matches(_ trace: AITraceRecord) -> Bool {
+        if let features, !features.contains(trace.feature) { return false }
+        if let triggers, !triggers.contains(trace.trigger) { return false }
+        switch rating {
+        case nil: return true
+        case .rated: return (trace.rating ?? 0) != 0
+        case .thumbsDown: return (trace.rating ?? 0) < 0
+        }
+    }
+}
+
 public protocol AITraceStore: Sendable {
     func append(_ trace: AITraceRecord, retention: AITraceRetention, now: Date) async throws
     func amend(_ id: UUID, finalText: String?, steps: [AITraceStep]) async throws
     func setRating(_ id: UUID, rating: Int?) async throws
     func recent(limit: Int) async throws -> [AITraceRecord]
+    func traces(matching query: AITraceQuery, limit: Int) async throws -> [AITraceRecord]
     func trace(_ id: UUID) async throws -> AITraceRecord?
     func delete(_ id: UUID) async throws
     func deleteAll() async throws
@@ -148,6 +173,10 @@ public actor InMemoryAITraceStore: AITraceStore {
 
     public func recent(limit: Int) async throws -> [AITraceRecord] {
         Array(traces.sorted { $0.createdAt > $1.createdAt }.prefix(max(0, limit)))
+    }
+
+    public func traces(matching query: AITraceQuery, limit: Int) async throws -> [AITraceRecord] {
+        Array(traces.sorted { $0.createdAt > $1.createdAt }.filter(query.matches).prefix(max(0, limit)))
     }
 
     public func trace(_ id: UUID) async throws -> AITraceRecord? { traces.first { $0.id == id } }

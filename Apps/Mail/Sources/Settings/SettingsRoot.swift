@@ -47,18 +47,8 @@ struct SettingsRoot: View {
             },
             advancedExtras: { AnyView(advanced) },
             aiProviders: environment.ai.map { center in {
-                AnyView(AISettingsTabs(prompts: PromptServices.current.map {
-                    PromptsSettingsModel(registry: $0, tester: Self.promptTester(center))
-                }, activity: AIActivityModel(center: center), navigator: environment.settingsNavigator) {
-                    SettingsSectionStack {
-                        AISettingsSection(center: center, environment: environment,
-                                          listsUnavailableModels: Self.showsDeveloperItems(developerOptions))
-                        ClassifierSettingsSection(center: center, port: ClassifierServices.current, environment: environment)
-                        if modules.contains(.smartSearch), let semantic = SemanticServices.current {
-                            SmartSearchIndexSettingsView(services: semantic)
-                        }
-                    }
-                })
+                AISettingsPageContent.view(center: center, environment: environment,
+                                           showsDeveloperItems: Self.showsDeveloperItems(developerOptions))
             } },
             printText: { PrintCheatSheet.print($0) },
             showsDeveloperItems: Self.showsDeveloperItems(developerOptions),

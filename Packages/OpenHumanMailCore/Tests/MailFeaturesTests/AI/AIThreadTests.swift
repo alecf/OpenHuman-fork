@@ -398,9 +398,7 @@ import Testing
         page.summarizeOnOpen = false
         page.draftReplies = .off
         #expect(!f.center.settings.autoSummarizeOnOpen && f.center.settings.draftReplies == .off)
-        #expect(!page.offersAgentQuickReplies)
-        page.agentQuickReplies = true
-        #expect(!f.center.settings.agentCLIAutoQuickReplies, "only after an agent CLI has consent")
+        #expect(page.providers.allSatisfy { $0.action == nil }, "nothing here leaves the Mac, so nothing asks for your OK")
         #expect(page.accounts.count == 2)
         let work = try #require(page.accounts.first)
         page.setOnDeviceOnly(true, account: work.id)

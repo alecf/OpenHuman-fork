@@ -239,6 +239,25 @@ private func textFields(_ trace: AITraceRecord) -> [String] {
         #expect(try await store.recent(limit: 10).isEmpty)
     }
 
+    @Test func queriesFilterByFeatureTriggerAndRatingBeforeTheLimit() async throws {
+        var background = trace(1, feature: .summarize, minutesAgo: 1)
+        background.trigger = .automatic
+        var oldRated = trace(2, minutesAgo: 90)
+        oldRated.rating = -1
+        var liked = trace(3, minutesAgo: 60)
+        liked.rating = 1
+        let store = InMemoryAITraceStore([background, oldRated, liked, trace(4, feature: .askInbox, minutesAgo: 2)])
+        let asked = try await store.traces(matching: AITraceQuery(triggers: [.user]), limit: 10)
+        #expect(asked.map(\.id) == [trace(4).id, trace(3).id, trace(2).id])
+        let cmdJ = try await store.traces(matching: AITraceQuery(features: [.askInbox]), limit: 10)
+        #expect(cmdJ.map(\.id) == [trace(4).id])
+        let rated = try await store.traces(matching: AITraceQuery(rating: .rated), limit: 1)
+        #expect(rated.map(\.id) == [trace(3).id], "the limit applies after the filter")
+        let down = try await store.traces(matching: AITraceQuery(rating: .thumbsDown), limit: 10)
+        #expect(down.map(\.id) == [trace(2).id])
+        #expect(try await store.traces(matching: AITraceQuery(), limit: 10).count == 4)
+    }
+
     @Test func traceSettingsDecodeTolerantlyAndDefaultToKeepingText() throws {
         let older = try JSONDecoder().decode(AISettings.self, from: Data(#"{"pccEnabled":true}"#.utf8))
         #expect(older.traces == AITraceSettings())

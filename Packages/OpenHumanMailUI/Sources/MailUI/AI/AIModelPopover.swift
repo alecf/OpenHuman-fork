@@ -7,23 +7,30 @@ struct AIComposerModelButton: View {
     let model: AIComposerModel
     let badge: AIProviderBadge
     @State private var open = false
-    @Environment(\.theme) private var theme
 
     var body: some View {
         Button { open.toggle() } label: {
-            HStack(spacing: 3) {
-                AIProviderBadgeView(badge: badge, short: true)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .semibold))
-                    .foregroundStyle(theme.textTertiary.color)
-            }
-            .contentShape(Rectangle())
+            AIComposerModelBadgeLabel(badge: badge).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(String(localized: "The model behind this answer: change it, run again or see the trace"))
         .accessibilityLabel(String(localized: "Model for this answer"))
         .accessibilityIdentifier("composer.ai.model")
         .popover(isPresented: $open, arrowEdge: .bottom) { AIComposerModelPopover(model: model) }
+    }
+}
+
+struct AIComposerModelBadgeLabel: View {
+    let badge: AIProviderBadge
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        HStack(spacing: 3) {
+            AIProviderBadgeView(badge: badge, short: true)
+            Image(systemName: "chevron.down")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(theme.textTertiary.color)
+        }
     }
 }
 
@@ -109,6 +116,23 @@ struct AIModelPopoverContent: View {
                         .foregroundStyle(theme.textSecondary.color)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("composer.ai.modelWhy")
+                    if let only = choice.onlyChoiceText {
+                        Text(verbatim: only)
+                            .themeFont(theme.typeMeta)
+                            .foregroundStyle(theme.textSecondary.color)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let note = choice.note {
+                        Text(verbatim: note)
+                            .themeFont(theme.typeMeta)
+                            .foregroundStyle(theme.textWarning.color)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(verbatim: AIModelChoiceModel.futureRewrites)
+                        .themeFont(theme.typeMeta)
+                        .foregroundStyle(theme.textSecondary.color)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("composer.ai.modelScope")
                 }
                 Divider()
             }
@@ -148,9 +172,9 @@ struct AIModelOptionRow: View {
                         if option.isDefault { AIDefaultTag() }
                     }
                     if let status = option.status {
-                        Text(verbatim: status)
+                        Text(verbatim: option.isEnabled ? status : status + Self.placeHint(status))
                             .themeFont(theme.typeMeta)
-                            .foregroundStyle(theme.textWarning.color)
+                            .foregroundStyle((option.isEnabled ? theme.textWarning : theme.textTertiary).color)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -163,14 +187,21 @@ struct AIModelOptionRow: View {
             .padding(.horizontal, theme.space2)
             .padding(.vertical, theme.space2)
             .background(RoundedRectangle(cornerRadius: theme.radiusSM)
-                .fill(hovered ? theme.bgRowHover.color : Color.clear))
+                .fill(hovered && option.isEnabled ? theme.bgRowHover.color : Color.clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(!option.isEnabled)
+        .opacity(option.isEnabled ? 1 : 0.6)
         .onHover { hovered = $0 }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(chosen ? .isSelected : [])
         .accessibilityIdentifier("ai.model.option.\(option.id.rawValue)")
+    }
+
+    static func placeHint(_ status: String) -> String {
+        status == String(localized: "needs your OK") || status == String(localized: "not downloaded")
+            ? " " + String(localized: "in Settings › AI") : ""
     }
 }
 
@@ -180,10 +211,11 @@ struct AIDefaultTag: View {
     var body: some View {
         Text("Default")
             .themeFont(theme.typeCaption)
-            .foregroundStyle(theme.textSecondary.color)
-            .padding(.horizontal, 5)
+            .foregroundStyle(theme.accentText.color)
+            .padding(.horizontal, 6)
             .padding(.vertical, 1)
-            .background(Capsule().fill(theme.bgRowSelected.color))
+            .background(Capsule().fill(theme.accentSubtle.color))
+            .overlay(Capsule().strokeBorder(theme.accentText.color.opacity(0.35), lineWidth: theme.borderWidthHairline))
             .accessibilityLabel(String(localized: "Mail's default"))
     }
 }

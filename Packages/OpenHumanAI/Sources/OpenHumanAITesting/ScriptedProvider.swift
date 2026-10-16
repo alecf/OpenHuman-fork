@@ -69,7 +69,7 @@ public struct FakeClassifier: AIClassificationProvider {
     private let label: @Sendable (ClassificationInput) throws -> AutoLabelCategory?
 
     public init(
-        id: AIProviderID = "local.classifier", displayName: String = "Fake classifier",
+        id: AIProviderID = "fake.classifier", displayName: String = "Fake classifier",
         dataLocation: AIDataLocation = .onDevice, availability: AIAvailability = .available,
         modelVersion: String? = "classifier-1",
         result: @escaping @Sendable (ClassificationInput) throws -> TriageResult = { _ in

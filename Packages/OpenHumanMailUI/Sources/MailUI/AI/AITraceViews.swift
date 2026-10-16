@@ -30,22 +30,69 @@ struct AITraceFactsView: View {
 
 struct AITraceTextBlock: View {
     let section: AITraceDetail.Section
+    var expandedHeight: CGFloat = AITraceMetrics.expandedHeight
+    @State private var expanded = false
+    @State private var copied = false
     @Environment(\.theme) private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.space2) {
-            Text(verbatim: section.title).settingsSectionLabel(theme)
-            Text(verbatim: section.text)
-                .themeFont(section.id == "steps" || section.id == "text" ? theme.typeBody : theme.typeMono)
-                .foregroundStyle((section.id == "error" ? theme.textDanger : theme.textPrimary).color)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(theme.space3)
-                .background(RoundedRectangle(cornerRadius: theme.radiusSM).fill(theme.bgSunken.color))
+            HStack(alignment: .firstTextBaseline, spacing: theme.space3) {
+                Text(verbatim: section.title).settingsSectionLabel(theme)
+                Spacer(minLength: theme.space2)
+                if section.collapses {
+                    Button(expanded ? String(localized: "Show less")
+                                    : String(localized: "Show all (\(section.lineCount) lines)")) { expanded.toggle() }
+                        .buttonStyle(.plain)
+                        .themeFont(theme.typeMeta)
+                        .foregroundStyle(theme.textLink.color)
+                        .accessibilityIdentifier("ai.trace.section.\(section.id).showAll")
+                }
+                if !section.isPlainText {
+                    Button(copied ? String(localized: "Copied") : String(localized: "Copy")) { copy() }
+                        .buttonStyle(.plain)
+                        .themeFont(theme.typeMeta)
+                        .foregroundStyle(theme.textLink.color)
+                        .accessibilityIdentifier("ai.trace.section.\(section.id).copy")
+                }
+            }
+            textBox
         }
         .accessibilityIdentifier("ai.trace.section.\(section.id)")
     }
+
+    @ViewBuilder private var textBox: some View {
+        if section.collapses, expanded {
+            ScrollView(.vertical) { text }
+                .frame(maxHeight: expandedHeight)
+                .background(RoundedRectangle(cornerRadius: theme.radiusSM).fill(theme.bgSunken.color))
+        } else {
+            text
+                .lineLimit(section.collapses ? AITraceDetail.Section.collapsedLines : nil)
+                .background(RoundedRectangle(cornerRadius: theme.radiusSM).fill(theme.bgSunken.color))
+        }
+    }
+
+    private var text: some View {
+        Text(verbatim: section.text)
+            .themeFont(section.isPlainText ? theme.typeBody : theme.typeMono)
+            .foregroundStyle((section.id == "error" ? theme.textDanger : theme.textPrimary).color)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: !section.collapses || expanded)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(theme.space3)
+    }
+
+    private func copy() {
+        #if canImport(AppKit)
+        AISystemPasteboard().copy(section.text)
+        #endif
+        copied = true
+    }
+}
+
+enum AITraceMetrics {
+    static let expandedHeight: CGFloat = 360
 }
 
 public struct AITraceDetailView: View {
@@ -53,13 +100,16 @@ public struct AITraceDetailView: View {
     var backTitle: String?
     var back: (() -> Void)?
     var delete: (() -> Void)?
+    var editPrompt: ((String) -> Void)?
     @Environment(\.theme) private var theme
 
-    public init(detail: AITraceDetail, backTitle: String? = nil, back: (() -> Void)? = nil, delete: (() -> Void)? = nil) {
+    public init(detail: AITraceDetail, backTitle: String? = nil, back: (() -> Void)? = nil, delete: (() -> Void)? = nil,
+                editPrompt: ((String) -> Void)? = nil) {
         self.detail = detail
         self.backTitle = backTitle
         self.back = back
         self.delete = delete
+        self.editPrompt = editPrompt
     }
 
     public var body: some View {
@@ -84,11 +134,17 @@ public struct AITraceDetailView: View {
             }
             AITraceFactsView(facts: detail.facts)
             ForEach(detail.sections) { section in AITraceTextBlock(section: section) }
-            if let delete {
-                HStack {
+            if delete != nil || (editPrompt != nil && detail.promptName != nil) {
+                HStack(spacing: theme.space3) {
+                    if let editPrompt, let name = detail.promptName {
+                        Button(String(localized: "Edit prompt")) { editPrompt(name) }
+                            .accessibilityIdentifier("ai.trace.editPrompt")
+                    }
                     Spacer(minLength: 0)
-                    Button(String(localized: "Delete this trace"), role: .destructive, action: delete)
-                        .accessibilityIdentifier("ai.trace.delete")
+                    if let delete {
+                        Button(String(localized: "Delete this trace"), role: .destructive, action: delete)
+                            .accessibilityIdentifier("ai.trace.delete")
+                    }
                 }
             }
         }
@@ -116,7 +172,7 @@ public struct AIWhyThisContent: View {
                 Spacer(minLength: theme.space3)
                 AIProviderBadgeView(badge: detail.badge, short: true)
             }
-            AITraceFactsView(facts: detail.facts, labelWidth: 96)
+            AITraceFactsView(facts: detail.whyThisFacts, labelWidth: 96)
             Divider()
             AIPopoverRowButton(title: String(localized: "View trace"), symbol: "doc.text.magnifyingglass",
                                detail: String(localized: "Prompt, email text and answer as sent"),

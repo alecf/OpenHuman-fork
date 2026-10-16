@@ -37,7 +37,7 @@ struct SystemModelTriageGenerator: TriageGenerating {
 }
 
 public struct AppleSystemClassifier: AIClassificationProvider {
-    public static let providerID: AIProviderID = "apple.system.classifier"
+    public static let providerID: AIProviderID = .appleSystemClassifier
 
     private let source: SystemModelSource
     private let generator: any TriageGenerating

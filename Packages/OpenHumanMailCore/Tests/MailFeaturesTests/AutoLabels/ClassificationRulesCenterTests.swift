@@ -29,7 +29,7 @@ import Testing
         let first = await decisions(f)
         let fresh = try await f.index.entries(account: F.work).count + f.index.entries(account: F.personal).count
         #expect(sorted > 0 && first.count == fresh && fresh > 0)
-        #expect(first.contains { $0.decidedBy == "model" && $0.providerID == "local.autolabels" && $0.modelID == "classifier-1"
+        #expect(first.contains { $0.decidedBy == "model" && $0.providerID == "fake.autolabels" && $0.modelID == "classifier-1"
             && $0.promptID == "autolabel.classify" && $0.modelOutput == "Marketing" })
         #expect(first.contains { $0.decidedBy == "rule" && $0.ruleID == DefaultRules.waiting && $0.outputLabel == "waiting" })
         #expect(first.allSatisfy { $0.appliedState == .localOnly && $0.ruleSetVersion == 1 })

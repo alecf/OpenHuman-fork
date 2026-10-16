@@ -231,9 +231,10 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
     private let local = FakeClassifier(id: "local.qwen3-1.7b-4bit.classifier", displayName: "Downloaded")
     private let cloud = FakeClassifier(id: "agent.claude.classifier", dataLocation: .thirdParty(vendor: "Test"))
 
-    @Test func automaticTriesAppleFirstAndTheDownloadedModelOnlyAfter() {
-        let ids = ClassifierSelection.ordered([local, cloud, apple], preference: .automatic).map(\.id.rawValue)
-        #expect(ids == ["apple.system.classifier", "local.qwen3-1.7b-4bit.classifier"])
+    @Test func applesModelIsTheDefaultAndTheDownloadedModelIsNeverTriedAfterIt() {
+        let ids = ClassifierSelection.ordered([local, cloud, apple], preference: AISettings().classifier).map(\.id.rawValue)
+        #expect(ids == ["apple.system.classifier"])
+        #expect(ClassifierPreference.allCases == [.appleModel, .localModel])
     }
 
     @Test func aPickIsAPick() {
@@ -243,12 +244,9 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
         #expect(!ClassifierSelection.allows(apple, preference: .localModel))
     }
 
-    @Test func theRegistryOffersTheDownloadedModelForClassifyAfterAppleAndHonoursThePick() async {
+    @Test func theRegistryOffersOnlyTheChosenClassifier() async {
         let registry = ProviderRegistry(classifiers: [apple, local])
         var settings = AISettings()
-        let automatic = await registry.candidates(for: .classify, settings: settings).map(\.id)
-        #expect(automatic == [apple.id, local.id])
-        settings.classifier = .appleModel
         #expect(await registry.candidates(for: .classify, settings: settings).map(\.id) == [apple.id])
         settings.classifier = .localModel
         #expect(await registry.candidates(for: .classify, settings: settings).map(\.id) == [local.id])
@@ -256,7 +254,9 @@ func sampleClassificationInput(subject: String = "Spring sale", body: String = "
 
     @Test func theSettingsDecodeWithoutTheNewKeys() throws {
         let decoded = try JSONDecoder().decode(AISettings.self, from: Data(#"{"enabled":true}"#.utf8))
-        #expect(decoded.classifier == .automatic)
+        #expect(decoded.classifier == .appleModel)
+        let stored = try JSONDecoder().decode(AISettings.self, from: Data(#"{"classifier":"automatic"}"#.utf8))
+        #expect(stored.classifier == .appleModel, "an old Automatic choice reads as Apple's model")
         #expect(decoded.localClassifierInLowPowerMode == false)
         #expect(decoded.modelsDirectory == nil)
     }

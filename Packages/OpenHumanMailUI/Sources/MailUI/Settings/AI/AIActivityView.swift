@@ -5,32 +5,35 @@ import SwiftUI
 
 public struct AIActivityView: View {
     @Bindable var model: AIActivityModel
+    var editPrompt: ((String) -> Void)?
     @State private var confirmsClear = false
     @Environment(\.theme) private var theme
 
-    public init(model: AIActivityModel) {
+    public init(model: AIActivityModel, editPrompt: ((String) -> Void)? = nil) {
         self.model = model
+        self.editPrompt = editPrompt
     }
 
     public var body: some View {
         Group {
             if let detail = model.detail {
-                AITraceDetailView(detail: detail, backTitle: model.page.title, back: { model.closeDetail() },
-                                  delete: { Task { await model.delete(detail.id) } })
+                AITraceDetailView(detail: detail, backTitle: model.backTitle, back: { model.closeDetail() },
+                                  delete: { Task { await model.delete(detail.id) } }, editPrompt: editPrompt)
             } else {
                 SettingsSectionStack {
                     list
                     retention
+                    cache
                     SettingsErrorLine(text: model.error)
                 }
             }
         }
-        .task { await model.refresh() }
+        .task(id: model.reloadKey) { await model.refresh() }
         .accessibilityIdentifier("settings.ai.activity")
     }
 
     private var list: some View {
-        VStack(alignment: .leading, spacing: theme.space4) {
+        VStack(alignment: .leading, spacing: theme.space3) {
             HStack(spacing: theme.space4) {
                 Picker(String(localized: "Show"), selection: $model.page) {
                     ForEach(AIActivityModel.Page.allCases, id: \.self) { page in Text(page.title).tag(page) }
@@ -39,27 +42,39 @@ public struct AIActivityView: View {
                 .labelsHidden()
                 .fixedSize()
                 .accessibilityIdentifier("settings.ai.activity.page")
-                if model.page == .feedback {
+                Spacer(minLength: theme.space3)
+                switch model.page {
+                case .requests:
+                    Picker(String(localized: "Show"), selection: $model.filter) {
+                        ForEach(AIActivityModel.Filter.allCases, id: \.self) { filter in Text(filter.title).tag(filter) }
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    .accessibilityIdentifier("settings.ai.activity.filter")
+                case .feedback:
                     Toggle(String(localized: "Thumbs down only"), isOn: $model.onlyThumbsDown)
                         .ohCheckboxToggleStyle()
                         .themeFont(theme.typeBody)
+                        .fixedSize()
                         .accessibilityIdentifier("settings.ai.activity.thumbsDown")
                 }
-                Spacer(minLength: theme.space3)
-                Text(verbatim: model.summary)
-                    .themeFont(theme.typeMeta)
-                    .foregroundStyle(theme.textSecondary.color)
             }
+            Text(verbatim: model.summary)
+                .themeFont(theme.typeMeta)
+                .foregroundStyle(theme.textSecondary.color)
+                .accessibilityIdentifier("settings.ai.activity.summary")
             SettingsSection(footnote: AIActivityModel.note, compact: true) {
                 let rows = model.rows
                 if rows.isEmpty {
                     Text(verbatim: model.emptyText)
                         .themeFont(theme.typeBody)
                         .foregroundStyle(theme.textSecondary.color)
+                        .fixedSize(horizontal: false, vertical: true)
                         .settingsRowPadding()
+                        .accessibilityIdentifier("settings.ai.activity.empty")
                 } else {
                     ForEach(rows) { row in
-                        AIActivityRowView(row: row) { Task { await model.open(row.id) } }
+                        AIActivityRowView(row: row, showsSnippet: model.showsSnippets) { Task { await model.open(row.id) } }
                     }
                 }
             }
@@ -101,21 +116,27 @@ public struct AIActivityView: View {
                 .accessibilityIdentifier("settings.ai.activity.features")
             }
             .disabled(!model.keepsTraces)
-            HStack(spacing: theme.space3) {
-                Spacer(minLength: 0)
-                Button(String(localized: "Clear AI cache")) { Task { await model.clearCache() } }
-                    .help(String(localized: "Drops saved summaries and replies, so the next ones are written again."))
-                Button(String(localized: "Clear all traces…")) { confirmsClear = true }
-                    .disabled(model.traces.isEmpty)
+            SettingsRow(String(localized: "Clear all traces"),
+                        detail: String(localized: "Deletes every trace and rating on this Mac.")) {
+                Button(String(localized: "Clear…")) { confirmsClear = true }
+                    .disabled(!model.keepsAny)
                     .accessibilityIdentifier("settings.ai.activity.clearAll")
             }
-            .settingsRowPadding()
         }
         .confirmationDialog(AIActivityModel.clearConfirmTitle, isPresented: $confirmsClear) {
             Button(String(localized: "Clear All Traces"), role: .destructive) { Task { await model.clearAll() } }
             Button(String(localized: "Cancel"), role: .cancel) {}
         } message: {
             Text(AIActivityModel.clearConfirmDetail)
+        }
+    }
+
+    private var cache: some View {
+        SettingsSection(AIActivityModel.cacheTitle) {
+            SettingsRow(String(localized: "Clear AI cache"), detail: AIActivityModel.cacheDetail) {
+                Button(String(localized: "Clear")) { Task { await model.clearCache() } }
+                    .accessibilityIdentifier("settings.ai.activity.clearCache")
+            }
         }
     }
 
@@ -126,6 +147,7 @@ public struct AIActivityView: View {
 
 struct AIActivityRowView: View {
     let row: AIActivityModel.Row
+    var showsSnippet = false
     let open: () -> Void
     @Environment(\.theme) private var theme
     @State private var hovered = false
@@ -140,35 +162,14 @@ struct AIActivityRowView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(verbatim: row.feature)
                         .themeFont(theme.typeBody)
-                        .foregroundStyle((row.failed ? theme.textDanger : theme.textPrimary).color)
+                        .foregroundStyle(theme.textPrimary.color)
                         .lineLimit(1)
-                    Text(verbatim: [row.model, row.numbers].filter { !$0.isEmpty }.joined(separator: " · "))
+                    subtitle
                         .themeFont(theme.typeMeta)
                         .foregroundStyle(theme.textSecondary.color)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
                 }
                 Spacer(minLength: theme.space3)
-                if row.cacheHit {
-                    Text("Saved")
-                        .themeFont(theme.typeCaption)
-                        .foregroundStyle(theme.textTertiary.color)
-                        .help(String(localized: "A saved answer was reused; the model didn't run"))
-                }
-                if let rating = row.rating, rating != 0 {
-                    Image(systemName: rating > 0 ? "hand.thumbsup.fill" : "hand.thumbsdown.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(theme.textSecondary.color)
-                        .accessibilityLabel(AITraceWording.rating(rating) ?? "")
-                }
-                Image(systemName: row.badge.symbol)
-                    .font(.system(size: 10))
-                    .foregroundStyle((row.badge.leavesMac ? theme.textWarning : theme.textTertiary).color)
-                    .help(row.badge.title)
-                    .accessibilityLabel(row.badge.title)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(theme.textTertiary.color)
+                marks
             }
             .padding(.vertical, theme.space2)
             .padding(.horizontal, theme.space1)
@@ -183,39 +184,52 @@ struct AIActivityRowView: View {
         .accessibilityHint(String(localized: "Opens the full trace"))
         .accessibilityIdentifier("settings.ai.activity.row")
     }
-}
 
-public struct AIFeatureModelsSection: View {
-    @State private var choices: [AIModelChoiceModel]
-
-    public static let features: [AIFeature] = [.rewrite, .askInbox, .replyOptions, .summarize]
-
-    public init(center: AICenter) {
-        _choices = State(initialValue: Self.features.map { AIModelChoiceModel(center: center, feature: $0, accountKey: nil) })
-    }
-
-    public var body: some View {
-        let shown = choices.filter { !$0.options.isEmpty }
-        VStack(alignment: .leading, spacing: 0) {
-            if !shown.isEmpty { section(shown) }
-        }
-        .task { for choice in choices { await choice.refresh() } }
-    }
-
-    private func section(_ shown: [AIModelChoiceModel]) -> some View {
-        SettingsSection(String(localized: "Model for each feature"), footnote: Self.footnote) {
-            ForEach(shown, id: \.feature) { choice in
-                SettingsRow(AITraceWording.feature(choice.feature), detail: choice.why,
-                            selection: Binding(get: { choice.chosen ?? "" },
-                                               set: { id in Task { await choice.choose(id) } })) {
-                    ForEach(choice.options) { option in
-                        Text(option.isDefault ? String(localized: "\(option.name) (default)") : option.name).tag(option.id)
-                    }
+    @ViewBuilder private var subtitle: some View {
+        if showsSnippet, let snippet = row.snippet {
+            Text(verbatim: "“\(snippet)”").lineLimit(1).truncationMode(.tail)
+        } else if row.numbers.isEmpty {
+            Text(verbatim: row.model).lineLimit(1).truncationMode(.tail)
+        } else {
+            ViewThatFits(in: .horizontal) {
+                Text(verbatim: row.model + " · " + row.numbers).lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(verbatim: row.model).lineLimit(1).truncationMode(.tail)
+                    Text(verbatim: row.numbers).lineLimit(1).truncationMode(.tail)
                 }
-                .accessibilityIdentifier("settings.ai.model.\(choice.feature.rawValue)")
             }
         }
     }
 
-    static let footnote = String(localized: "Each feature uses only the model chosen here. If that model isn't ready, Mail says why and doesn't try another. One-line summaries, triage, search and follow-up checks always run on this Mac.")
+    private var marks: some View {
+        HStack(spacing: theme.space3) {
+            if row.failed {
+                Text("Failed")
+                    .themeFont(theme.typeCaption)
+                    .foregroundStyle(theme.textDanger.color)
+                    .accessibilityIdentifier("settings.ai.activity.failed")
+            }
+            if row.cacheHit {
+                Text("From cache")
+                    .themeFont(theme.typeCaption)
+                    .foregroundStyle(theme.textTertiary.color)
+                    .help(String(localized: "A saved answer was reused; the model didn't run"))
+            }
+            if let rating = row.rating, rating != 0 {
+                Image(systemName: rating > 0 ? "hand.thumbsup.fill" : "hand.thumbsdown.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(theme.textSecondary.color)
+                    .accessibilityLabel(AITraceWording.rating(rating) ?? "")
+            }
+            Image(systemName: row.badge.symbol)
+                .font(.system(size: 10))
+                .foregroundStyle((row.badge.leavesMac ? theme.textWarning : theme.textTertiary).color)
+                .help(row.badge.title)
+                .accessibilityLabel(row.badge.title)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(theme.textTertiary.color)
+        }
+        .fixedSize()
+    }
 }

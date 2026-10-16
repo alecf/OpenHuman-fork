@@ -32,8 +32,9 @@ public final class ClassifierSettingsModel {
     @ObservationIgnored public var onChange: (@MainActor () async -> Void)?
     @ObservationIgnored private var downloadTask: Task<Void, Never>?
 
-    public static let title = "Classifier"
-    public static let footnote = "Sorts mail into auto labels on this Mac. Email text never leaves this Mac."
+    public static let title = "Downloaded model"
+    public static let footnote = "A model you can download for triage and auto labels instead of Apple's. It runs on this Mac; "
+        + "email text never leaves it. Choose it under Model for each feature."
     public static let lowPowerTitle = "Also in Low Power Mode"
     public static let lowPowerDetail = "Off: the downloaded model pauses in Low Power Mode and while the Mac is hot."
 
@@ -55,16 +56,6 @@ public final class ClassifierSettingsModel {
     public var allowLowPower: Bool {
         get { center.settings.localClassifierInLowPowerMode }
         set { change { $0.localClassifierInLowPowerMode = newValue } }
-    }
-
-    public var choices: [ClassifierPreference] { ClassifierPreference.allCases }
-
-    public static func title(for preference: ClassifierPreference) -> String {
-        switch preference {
-        case .automatic: "Automatic (Apple's model; the downloaded model when Apple's isn't available)"
-        case .appleModel: "Apple's on-device model only"
-        case .localModel: "The downloaded model only"
-        }
     }
 
     public var downloadTitle: String {
@@ -100,7 +91,8 @@ public final class ClassifierSettingsModel {
             let percent = total > 0 ? Int((Double(done) / Double(total) * 100).rounded(.down)) : 0
             return "Downloading… \(percent)%"
         case .verifying: return "Checking the download…"
-        case .ready: return "Downloaded. Used \(preference == .appleModel ? "only if you pick it above" : "when needed")."
+        case .ready: return preference == .localModel ? "Downloaded. Used for triage and auto labels."
+            : "Downloaded. Not used until you choose it for Triage and auto labels."
         case .failed(let why): return why
         }
     }

@@ -16,11 +16,12 @@ import Testing
                              settings: settings)
     }
 
-    @Test func everyLanguageFeatureHasAnExplicitDefaultOnThisMac() {
+    @Test func everyFeatureHasAnExplicitDefaultOnThisMac() {
         for feature in AIFeature.allCases where feature != .classify {
             #expect(AIModelDefaults.pins[feature] == .appleSystem)
         }
-        #expect(AIModelDefaults.pins[.classify] == nil, "auto labels keep their own classifier choice")
+        #expect(AIModelDefaults.pins[.classify] == .appleSystemClassifier)
+        #expect(Set(AIModelDefaults.pins.keys) == Set(AIFeature.allCases))
     }
 
     @Test func theDefaultIsUsedAndNamedAsTheDefault() {
@@ -62,14 +63,32 @@ import Testing
         #expect(offOnly.origin == .firstReady && offOnly.defaultModel == nil)
     }
 
-    @Test func autoLabelsKeepTheFirstReadyClassifier() {
-        let classifier = ProviderCandidate(
-            id: "local.classifier", displayName: "Classifier", kind: .classifier, dataLocation: .onDevice,
-            availability: .available, consented: true, autoSelectable: true)
-        var unready = Self.system
-        unready.availability = .unavailable(reason: .modelNotReady)
-        let chosen = route(.classify, [unready, classifier], workload: .background)
-        #expect(chosen.origin == .firstReady && chosen.selection.candidate?.id == "local.classifier")
+    static let appleClassifier = ProviderCandidate(
+        id: .appleSystemClassifier, displayName: "Apple classifier", kind: .classifier, dataLocation: .onDevice,
+        availability: .available, consented: true, autoSelectable: true)
+    static let downloadedClassifier = ProviderCandidate(
+        id: "local.tiny.classifier", displayName: "Tiny model", kind: .classifier, dataLocation: .onDevice,
+        availability: .available, consented: true, autoSelectable: true)
+
+    @Test func triageUsesApplesModelByDefaultAndNeverTheDownloadedOneOnItsOwn() {
+        let chosen = route(.classify, [Self.downloadedClassifier, Self.appleClassifier, Self.system], workload: .background)
+        #expect(chosen.origin == .mailDefault && chosen.choice == .appleSystemClassifier)
+        #expect(chosen.selection.candidate?.id == .appleSystemClassifier)
+        var off = Self.appleClassifier
+        off.availability = .unavailable(reason: .appleIntelligenceNotEnabled)
+        let unready = route(.classify, [Self.downloadedClassifier, off, Self.system], workload: .background)
+        #expect(unready.selection == .unavailable(.appleIntelligenceNotEnabled, providerID: .appleSystemClassifier),
+                "no fallback to the downloaded model or a language model")
+        #expect(unready.origin == .mailDefault)
+    }
+
+    @Test func triageUsesTheDownloadedModelOnlyWhenChosenAndSaysSoWhenItIsMissing() {
+        let settings = AISettings(classifier: .localModel)
+        let chosen = route(.classify, [Self.downloadedClassifier, Self.system], settings, workload: .background)
+        #expect(chosen.origin == .yourChoice && chosen.selection.candidate?.id == "local.tiny.classifier")
+        let missing = route(.classify, [Self.system], settings, workload: .background)
+        #expect(missing.origin == .yourChoice && missing.choice == nil)
+        #expect(missing.selection.candidate == nil, "never the language model instead")
     }
 
     @Test func theFeatureSwitchComesBeforeTheModel() {
