@@ -1,4 +1,5 @@
 import Foundation
+import OpenHumanCore
 import OpenHumanLinks
 import Testing
 @testable import MailFeatures
@@ -151,7 +152,8 @@ private func tempDirectory() -> URL {
 
 @MainActor
 @Suite struct DevChecklistModelTests {
-    let dir = tempDirectory()
+    let temp = TemporaryDirectory("oh-devfeedback-tests", isDirectory: true)
+    var dir: URL { temp.url }
     let checklist: DevChecklist
 
     init() throws {

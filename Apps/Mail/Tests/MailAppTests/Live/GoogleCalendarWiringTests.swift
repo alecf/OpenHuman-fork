@@ -34,6 +34,7 @@ private final class CalendarHarness {
     let calendarTokens: InMemoryTokenStore
     let browser: RecordingBrowser
     let store: MailStore
+    private let temp: TemporaryDirectory
     let directory: URL
     let backend: LiveBackend
     let account: AccountItem
@@ -41,7 +42,8 @@ private final class CalendarHarness {
 
     init(mailScopes: [String] = [GmailScope.modify], grants: [String] = writeScopes,
          calendarStore: (any TokenStore)? = nil) throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("oh-gcal-\(UUID().uuidString)")
+        let temp = TemporaryDirectory("oh-gcal")
+        let directory = temp.url
         let store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: .test,
                                                     appVersion: "0.0.0-test",
                                                     changeNotificationName: "dev.openhuman.tests.gcal.\(UUID().uuidString)"))
@@ -68,6 +70,7 @@ private final class CalendarHarness {
             transports: LiveBackend.Transports(api: http, token: http),
             userAgent: "OpenHumanMail/test", pollInterval: .seconds(3600), makeSystemEvents: { AppSystemEvents.quiet() })
         let account = try #require(backend.account(id))
+        self.temp = temp
         self.directory = directory
         self.store = store
         self.mailToken = mailToken
@@ -88,8 +91,6 @@ private final class CalendarHarness {
                                             accessTokenExpiry: Date().addingTimeInterval(3600), grantedScopes: scopes,
                                             clientID: SyntheticClient.clientID), account: email)
     }
-
-    deinit { try? FileManager.default.removeItem(at: directory) }
 }
 
 @MainActor

@@ -15,6 +15,7 @@ final class ServicesFixture {
     let recorder: RecordingCommands
     let services = FakeServicesRegistrar()
     let active = ActiveFlag()
+    let temp = TemporaryDirectory("services")
 
     init(flags: FeatureFlags = FeatureFlags()) {
         store = FakeMailStore(corpus: .make(threadCount: 10, now: fixedNow), options: .init(remoteAck: .immediate))
@@ -39,7 +40,7 @@ final class ServicesFixture {
     var toasts: [String] { env.notices.toasts.map(\.message) }
 
     func files(_ names: [String]) throws -> [URL] {
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("services-\(UUID().uuidString)")
+        let folder = temp.url
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return try names.map { name in
             let url = folder.appendingPathComponent(name)

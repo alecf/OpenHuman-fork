@@ -18,15 +18,19 @@ struct SyncHarness {
     let syncer: AccountSyncer
     let recorder: RecordingGmail?
     let location: StoreLocation?
+    let temporary: TemporaryDirectory?
 
     init(settings: SyncSettings = SyncSettings(), clock: any OHClock = InstantClock(now: testNow), onDisk: Bool = false,
          recording: Bool = false, api: ((FakeGmail) -> any GmailAPI)? = nil) throws {
         if onDisk {
-            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("oh-sync-\(UUID().uuidString)")
+            let temporary = TemporaryDirectory("oh-sync")
+            self.temporary = temporary
+            let directory = temporary.url
             location = StoreLocation(directory: directory)
             store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: .test,
                                                     appVersion: "0.0.0-test"))
         } else {
+            temporary = nil
             location = nil
             store = try MailStore.openInMemoryForTesting()
         }

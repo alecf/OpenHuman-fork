@@ -384,7 +384,9 @@ extension AppSystemEvents {
 }
 
 @Test func aClientWithoutASecretIsReportedBeforeTheBrowserStep() async throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("oh-nosecret-\(UUID().uuidString)")
+    let temp = TemporaryDirectory("oh-nosecret")
+    defer { temp.cleanup() }
+    let directory = temp.url
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let file = directory.appendingPathComponent("client.json")
     try Data(#"{"installed":{"client_id":"1234-synthetic.apps.googleusercontent.com"}}"#.utf8).write(to: file)

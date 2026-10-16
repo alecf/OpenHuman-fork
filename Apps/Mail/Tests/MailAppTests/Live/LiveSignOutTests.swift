@@ -146,7 +146,9 @@ private func signedInApp(google: FakeGoogle, store: MailStore, tokens: InMemoryT
 }
 
 @Test func signOutThatCannotDeleteTheFilesFailsAndCanBeRetried() async throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("oh-signout-\(UUID().uuidString)")
+    let temp = TemporaryDirectory("oh-signout")
+    defer { temp.cleanup() }
+    let directory = temp.url
     let store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: .test,
                                                 appVersion: "0.0.0-test"))
     let files = FileManager.default

@@ -41,6 +41,8 @@ For a focused loop, run `swift test` inside the package you changed.
 `Tools/ThemeCodegen/run.sh --check` verifies generated theme sources.
 `Tools/render-sweep.sh --help` describes rendering the UI against fake data.
 Tests must use fixtures rather than real mail accounts.
+Tests make temporary folders with `TemporaryDirectory` from OpenHumanCore and remove
+them when the test ends; `check-test-patterns.py` rejects other new temporary paths.
 `Tools/ci/build-packages.sh --platform ios` checks that the packages still compile
 for iOS, and `Tools/ci/build-ios-app.sh` builds the iPhone app; see
 [Build for iOS](IOS-BUILD.md).

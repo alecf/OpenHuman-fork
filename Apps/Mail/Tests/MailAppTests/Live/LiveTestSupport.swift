@@ -34,14 +34,16 @@ func firstValue<T: Sendable>(_ stream: AsyncThrowingStream<T, Error>, where pred
 enum SyntheticClient {
     static let clientID = "1234-synthetic.apps.googleusercontent.com"
 
+    // Why: every caller only reads the same bytes, so the tests share one file instead of leaving a folder per call
     static func writeJSON() throws -> String {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("oh-client-\(UUID().uuidString)")
+        let root = FileManager.default.temporaryDirectory // temp-ok: one shared synthetic client file
+        let directory = root.appendingPathComponent("oh-client", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent("client.json")
         try Data("""
             {"installed":{"client_id":"\(clientID)","client_secret":"SYNTHETIC-not-a-secret",
             "auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token"}}
-            """.utf8).write(to: url)
+            """.utf8).write(to: url, options: .atomic)
         return url.path
     }
 }

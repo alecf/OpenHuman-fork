@@ -178,7 +178,9 @@ final class Locked<Value>: @unchecked Sendable {
         let names = checks.compactMap { $0["name"] as? String }
         #expect(["cli", "store.open", "sqlite", "accounts", "app", "queue", "policy"].allSatisfy(names.contains))
         #expect(!r.out.contains("Invoice") && !r.out.contains("alice@example.com"))
-        let empty = FileManager.default.temporaryDirectory.appendingPathComponent("oh-cli-doctor-\(UUID().uuidString)")
+        let temp = TemporaryDirectory("oh-cli-doctor")
+        defer { temp.cleanup() }
+        let empty = temp.url
         let none = await h.run(["doctor", "--home", empty.path, "--json"])
         #expect(none.code == 4 && none.data["ok"] as? Bool == false)
     }

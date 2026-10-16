@@ -7,8 +7,10 @@ import Testing
 
 @MainActor
 @Suite struct SnippetRecipientsFilesTests {
+    private let temp = TemporaryDirectory("snippet-v2", isDirectory: true)
+
     private func tempFile(_ name: String, bytes: Int = 64) throws -> URL {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("snippet-v2-\(UUID().uuidString)", isDirectory: true)
+        let dir = temp.url.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent(name)
         try Data(repeating: 0x41, count: bytes).write(to: url)
