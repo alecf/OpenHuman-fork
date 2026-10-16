@@ -25,10 +25,10 @@ public final class SyncSession: Sendable {
         var calendarConnections: LiveCalendarConnections? = nil
 
         public init(factory: DefaultGmailClientFactory, gmail: GmailClientConfig, metrics: SyncMetricsRegistry,
-             tokenStore: (any TokenStore)? = nil, oauthClient: OAuthClientConfig? = nil, clock: any OHClock,
-             pollInterval: Duration, systemEvents: (any StoppableSystemEvents)? = nil,
-             tokenEvents: AsyncStream<TokenEvent>? = nil, draftsDirectory: URL? = nil,
-             unsubscribeTransport: (any HTTPTransport)? = nil, accounts: (any AccountManaging)? = nil) {
+                    tokenStore: (any TokenStore)? = nil, oauthClient: OAuthClientConfig? = nil, clock: any OHClock,
+                    pollInterval: Duration, systemEvents: (any StoppableSystemEvents)? = nil,
+                    tokenEvents: AsyncStream<TokenEvent>? = nil, draftsDirectory: URL? = nil,
+                    unsubscribeTransport: (any HTTPTransport)? = nil, accounts: (any AccountManaging)? = nil) {
             self.factory = factory
             self.gmail = gmail
             self.metrics = metrics

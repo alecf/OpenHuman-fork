@@ -33,11 +33,11 @@ public final class LiveAccountManager: AccountManaging {
         var developerClientFile: @Sendable ([String: String]) -> String? = { _ in nil }
 
         public init(environment: [String: String], storeDirectory: URL, clientStore: any OAuthClientStore = InMemoryOAuthClientStore(),
-             tokenStore: any TokenStore, transport: any HTTPTransport,
-             makeReceiver: @escaping @Sendable () -> any LoopbackRedirectReceiver, browser: any ExternalBrowser,
-             clock: any OHClock, signInTimeout: Duration = .seconds(300), remoteSignInTimeout: Duration = .seconds(600),
-             calendarTokenStore: (any TokenStore)? = nil,
-             developerClientFile: @escaping @Sendable ([String: String]) -> String? = { _ in nil }) {
+                    tokenStore: any TokenStore, transport: any HTTPTransport,
+                    makeReceiver: @escaping @Sendable () -> any LoopbackRedirectReceiver, browser: any ExternalBrowser,
+                    clock: any OHClock, signInTimeout: Duration = .seconds(300), remoteSignInTimeout: Duration = .seconds(600),
+                    calendarTokenStore: (any TokenStore)? = nil,
+                    developerClientFile: @escaping @Sendable ([String: String]) -> String? = { _ in nil }) {
             self.environment = environment
             self.storeDirectory = storeDirectory
             self.clientStore = clientStore

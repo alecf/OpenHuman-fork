@@ -39,8 +39,8 @@ public final class LiveBackend {
     private let browser: any ExternalBrowser
 
     public init(store: MailStore, accountDependencies: LiveAccountManager.Dependencies,
-         transports: Transports, userAgent: String, pollInterval: Duration? = nil,
-         makeSystemEvents: @escaping @MainActor () -> (any StoppableSystemEvents)?) {
+                transports: Transports, userAgent: String, pollInterval: Duration? = nil,
+                makeSystemEvents: @escaping @MainActor () -> (any StoppableSystemEvents)?) {
         self.store = store
         self.tokenStore = accountDependencies.tokenStore
         self.transports = transports

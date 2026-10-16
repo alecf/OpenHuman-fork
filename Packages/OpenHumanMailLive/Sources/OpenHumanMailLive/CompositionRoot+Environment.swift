@@ -71,7 +71,7 @@ public enum CompositionRoot {
     }
 
     public static func showsStoreRebuildNotice(_ location: StoreLocation,
-                                        wouldErase: (StoreLocation) -> Bool = MailStore.schemaChangeWouldErase) -> Bool {
+                                               wouldErase: (StoreLocation) -> Bool = MailStore.schemaChangeWouldErase) -> Bool {
         let marker = storeRebuildMarker(location)
         let shown = FileManager.default.fileExists(atPath: marker.path)
         guard wouldErase(location) else {
@@ -160,7 +160,7 @@ public enum CompositionRoot {
     }
 
     public static func navigationStore(_ scope: String,
-                                _ environment: [String: String] = ProcessInfo.processInfo.environment) -> any NavigationStateStoring {
+                                       _ environment: [String: String] = ProcessInfo.processInfo.environment) -> any NavigationStateStoring {
         guard environment["XCTestConfigurationFilePath"] == nil else { return InMemoryNavigationStore() }
         let base: URL
         if let home = developerHome(environment) {

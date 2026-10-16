@@ -12,8 +12,8 @@ public struct SignInBrowserPlatform: Sendable {
     var browsers: @Sendable () async -> [InstalledBrowser]
 
     public init(openDefault: @escaping @Sendable (URL) async throws -> Void,
-         openWith: @escaping @Sendable (URL, InstalledBrowser) async throws -> Void,
-         browsers: @escaping @Sendable () async -> [InstalledBrowser]) {
+                openWith: @escaping @Sendable (URL, InstalledBrowser) async throws -> Void,
+                browsers: @escaping @Sendable () async -> [InstalledBrowser]) {
         self.openDefault = openDefault
         self.openWith = openWith
         self.browsers = browsers

@@ -14,7 +14,7 @@ public enum AIServices {
     public static var cacheDirectory: URL?
 
     public static func aiCenter(model: Model, persistent: Bool,
-                         environment: [String: String] = ProcessInfo.processInfo.environment) -> AICenter {
+                                environment: [String: String] = ProcessInfo.processInfo.environment) -> AICenter {
         let underTest = environment["XCTestConfigurationFilePath"] != nil
             || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         PromptServices.install(persistent: persistent && !underTest && model != .fake, directory: cacheDirectory)
