@@ -72,8 +72,7 @@ enum FakeGmailLaunch {
 
     @MainActor
     static func launch(corpus: FakeCorpus = .make(threadCount: 80)) throws -> Running {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("OpenHumanMail-FakeGmail-\(UUID().uuidString)", isDirectory: true)
+        let directory = TemporaryDirectory.processScoped("OpenHumanMail-FakeGmail-")
         let store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: .app,
                                                     observeExternalChanges: true, appVersion: CompositionRoot.appVersion))
         let gmail = FakeGmail(accountEmail: corpus.account.email)

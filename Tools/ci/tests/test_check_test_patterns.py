@@ -28,6 +28,26 @@ class CheckTestPatterns(unittest.TestCase):
         bad, warn = ctp.check(lines("await eventually { model.ready }", "try await until { v.ok }"))
         self.assertEqual((len(bad), len(warn)), (0, 2))
 
+    def test_raw_temporary_paths(self):
+        for t in ['let d = FileManager.default.temporaryDirectory.appendingPathComponent("oh-x-\\(UUID().uuidString)")',
+                  "let p = (NSTemporaryDirectory() as NSString).appendingPathComponent(name)",
+                  "let u = URL.temporaryDirectory.appending(path: name)", "let f = fm.temporaryDirectory",
+                  "guard mkdtemp(&template) != nil else { return }",
+                  "let r = try fm.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: u, create: true)"]:
+            bad, _ = ctp.check(lines(t))
+            self.assertEqual(len(bad), 1, t)
+            self.assertIn("TemporaryDirectory", bad[0])
+
+    def test_temporary_helper_and_escapes_allowed(self):
+        bad, _ = ctp.check(lines('let temp = TemporaryDirectory("oh-x")', "defer { temp.cleanup() }",
+                                 "let w = Watcher(url: FileManager.default.temporaryDirectory) // temp-ok: watches only",
+                                 "// FileManager.default.temporaryDirectory is banned",
+                                 "let temporaryDirectory = temp.url"))
+        self.assertEqual(bad, [])
+        helper = "Packages/OpenHumanCore/Tests/OpenHumanCoreTests/TemporaryDirectoryTests.swift"
+        bad, _ = ctp.check(lines("#expect(a.path == FileManager.default.temporaryDirectory.path)", path=helper))
+        self.assertEqual(bad, [])
+
     def test_only_test_files(self):
         self.assertFalse(ctp.is_test("Packages/P/Sources/P/A.swift"))
         self.assertTrue(ctp.is_test("Apps/Mail/Tests/MailAppTests/A.swift"))

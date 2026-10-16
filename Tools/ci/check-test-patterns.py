@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Check added Swift test lines for sleeps, elapsed-time assertions and real services.
+"""Check added Swift test lines for sleeps, elapsed-time assertions, real services and raw temporary paths.
 
 Usage: Tools/ci/check-test-patterns.py [--base origin/main] [--diff-file FILE]
-Allow an intentional pattern with // flake-ok: <reason>.
+Allow an intentional pattern with // flake-ok: <reason>, or a temporary path with // temp-ok: <reason>.
 """
 from __future__ import annotations
 
@@ -23,6 +23,9 @@ BANNED = [
 ]
 WARN = re.compile(r"(?<!func )\b(eventually|waitUntil|waitFor|eventuallyAsync)\s*[({]|\buntil\s*(\(|\{)")
 OK = re.compile(r"//\s*flake-ok:\s*\S")
+TEMP = re.compile(r"\.temporaryDirectory\b|\bNSTemporaryDirectory\s*\(|\bmk[ds]temp\s*\(|\.itemReplacementDirectory\b")
+TEMP_OK = re.compile(r"//\s*temp-ok:\s*\S")
+TEMP_HELPER = {"Packages/OpenHumanCore/Tests/OpenHumanCoreTests/TemporaryDirectoryTests.swift"}
 
 
 def is_test(path: str) -> bool:
@@ -69,7 +72,10 @@ def check(lines: list[tuple[str, int, str]]) -> tuple[list[str], list[str]]:
                 bad.append(f"{path}:{n}: {why}: {text.strip()[:110]}")
                 break
         else:
-            if WARN.search(text.split("//")[0]):
+            if TEMP.search(text.split("//")[0]) and path not in TEMP_HELPER and not TEMP_OK.search(text):
+                bad.append(f"{path}:{n}: raw temporary path: use TemporaryDirectory so the test removes it: "
+                           f"{text.strip()[:110]}")
+            elif WARN.search(text.split("//")[0]):
                 warn.append(f"{path}:{n}: polling helper: {text.strip()[:110]}")
     return bad, warn
 
@@ -94,7 +100,7 @@ def main() -> int:
         print("FAIL  " + b)
     if bad:
         print(f"check-test-patterns: {len(bad)} banned pattern(s) in new test code; "
-              "(or add `// flake-ok: <reason>`)")
+              "(or add `// flake-ok: <reason>`, or `// temp-ok: <reason>` for a temporary path)")
         return 1
     print(f"check-test-patterns: OK ({len(lines)} added test line(s), {len(warn)} warning(s))")
     return 0

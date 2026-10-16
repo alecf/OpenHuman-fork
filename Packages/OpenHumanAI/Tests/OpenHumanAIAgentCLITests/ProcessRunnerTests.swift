@@ -17,6 +17,7 @@ import Testing
 
     @Test func argumentsAreNeverInterpretedByAShell() async throws {
         let marker = FileManager.default.temporaryDirectory.appendingPathComponent("runner-shell-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: marker) }
         let hostile = ["; touch \(marker.path)", "$(touch \(marker.path))", "`touch \(marker.path)`", "a | b", "*"]
         let (lines, result) = try await ProcessRunner.collect(spec("/bin/echo", hostile))
         #expect(result.exitCode == 0)

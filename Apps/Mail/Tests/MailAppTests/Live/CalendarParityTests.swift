@@ -50,6 +50,7 @@ private final class Shared<Value: Sendable>: Sendable {
 private final class ParityHarness {
     static let robin = "robin@example.com"
     static let sam = "sam@example.org"
+    private let temp = TemporaryDirectory("oh-calparity")
     let home: URL
     let store: MailStore
     let http = FakeHTTPTransport()
@@ -64,7 +65,7 @@ private final class ParityHarness {
     let consentFails = Shared(false)
 
     init(calendarStore: (any TokenStore)? = nil) throws {
-        home = FileManager.default.temporaryDirectory.appendingPathComponent("oh-calparity-\(UUID().uuidString)")
+        home = temp.url
         store = try MailStore.open(StoreOptions(location: StoreLocation(directory: home), processKind: .test,
                                                 appVersion: "0.0.0-test",
                                                 changeNotificationName: "dev.openhuman.tests.calparity.\(UUID().uuidString)"))
@@ -126,8 +127,6 @@ private final class ParityHarness {
     var tokenRequests: [[String: String]] {
         http.requests.filter { $0.url.path(percentEncoded: false) == "/token" }.map { form($0.body) }
     }
-
-    deinit { try? FileManager.default.removeItem(at: home) }
 }
 
 @MainActor

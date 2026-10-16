@@ -164,7 +164,9 @@ private func refusedByTheDenyList(_ body: () async throws -> Void) async -> Bool
 
 @MainActor
 @Test func liveRefusesInsideATestRunBeforeAnythingOpens() throws {
-    let home = FileManager.default.temporaryDirectory.appendingPathComponent("oh-home-\(UUID().uuidString)")
+    let temp = TemporaryDirectory("oh-home")
+    defer { temp.cleanup() }
+    let home = temp.url
     let launches = [
         CompositionRoot.live(environment: ["XCTestConfigurationFilePath": "x"]),
         CompositionRoot.live(environment: ["XCTestConfigurationFilePath": "x", "OPENHUMAN_HOME": home.path], arguments: []),

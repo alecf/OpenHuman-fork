@@ -272,6 +272,7 @@ struct TailscaleProcessRunnerTests {
 
     @Test func aRunCancelledBeforeItStartsLaunchesNothing() async throws {
         let marker = FileManager.default.temporaryDirectory.appendingPathComponent("oh-ts-marker-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: marker) }
         let url = try script("touch \"$1\"")
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let clock = ManualRunClock(), signals = SignalLog()

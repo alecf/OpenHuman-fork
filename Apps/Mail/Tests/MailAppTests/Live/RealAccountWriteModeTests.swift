@@ -33,6 +33,7 @@ private final class RealLaunch {
     let gmail: FakeGmail
     let google: FakeGoogle
     let store: MailStore
+    private let temp = TemporaryDirectory("oh-rung3")
     let directory: URL
     let tokens: InMemoryTokenStore
     let browser = RecordingBrowser()
@@ -50,7 +51,7 @@ private final class RealLaunch {
             google.http.on(method, "/gmail/v1/") { try await api.send($0) }
             google.http.on(method, "/upload/gmail/v1/") { try await api.send($0) }
         }
-        directory = FileManager.default.temporaryDirectory.appendingPathComponent("oh-rung3-\(UUID().uuidString)")
+        directory = temp.url
         store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: .test,
                                                 appVersion: "0.0.0-test",
                                                 changeNotificationName: "dev.openhuman.tests.rung3.\(UUID().uuidString)"))
@@ -116,7 +117,7 @@ private final class RealLaunch {
         environment?.router.stop()
         await session?.stop()
         try? store.close()
-        try? FileManager.default.removeItem(at: directory)
+        temp.cleanup()
     }
     private var stopped = false
 }
