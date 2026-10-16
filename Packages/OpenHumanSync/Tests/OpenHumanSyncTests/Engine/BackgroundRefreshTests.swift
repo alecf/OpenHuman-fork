@@ -177,6 +177,7 @@ import Testing
         #expect(report.ownedElsewhere == [h.account])
         #expect(report.syncs.isEmpty)
         #expect(await h.gmail.callLog.isEmpty)
+        #expect(try h.store.lease(account: h.account)?.ownerID == "other-writer", "the rival keeps its lease")
     }
 
     @Test func theBackgroundEventPausesBackfillUntilTheAppIsActiveAgain() async throws {
@@ -274,21 +275,106 @@ import Testing
         let probe = ProbeGmail(h.gmail)
         let factory = CountingFactory(probe)
         let engine = h.engine(factory: factory)
-        let hold = probe.holdAfterCommit(.listHistory)
+        factory.observe { engine.assumeIsolated { $0.refreshing != nil } }
+        let hold = probe.holdAfterCommit(.listHistory, outlastingCancellation: true)
         let refreshing = Task { await engine.refreshOnce(deadline: h.clock.now.addingTimeInterval(20)) }
         await hold.arrival()
         #expect(factory.clients == 1)
 
-        await engine.start()
+        let starting = Task { await engine.start() }
+        await hold.cancellation()
+        #expect(await engine.ownership == nil, "start waits while the cancelled pass is still running")
+        #expect(factory.clients == 1)
+        hold.fail(.cancelled)
+        await starting.value
 
         #expect(hold.wasCancelled, "the background pass ended before start went on")
-        hold.open()
         let report = await refreshing.value
         #expect(report.syncs.map(\.error) == ["cancelled"] && report.operations.isEmpty)
         #expect(factory.clients == 2)
+        #expect(factory.passRunningAtEachClient == [true, false], "the engine made its own client after the pass ended")
         #expect(await engine.runtime(for: h.account) != nil)
         #expect(try h.store.lease(account: h.account)?.ownerID == h.store.writerID)
         await engine.stop()
+    }
+
+    @Test(.timeLimit(.minutes(1))) func aLostLeaseWindsThePassDownAndLeavesNothingClaimed() async throws {
+        let h = try await syncedHarness()
+        let probe = ProbeGmail(h.gmail)
+        let clock = AnnouncingClock(h.clock)
+        let engine = MailEngine(store: h.store, gmailFactory: FixedGmailFactory(api: probe), tokenStore: nil, oauthClient: nil,
+                                configuration: EngineConfiguration(role: .app, appVersion: "0.0.0-test",
+                                                                   gmail: engineGmailConfig, clock: clock),
+                                systemEvents: nil)
+        let queued = try queuedUploadAndArchive(h)
+        let hold = probe.holdAfterCommit(.createDraft)
+        let start = h.clock.now
+        let refreshing = Task { await engine.refreshOnce(deadline: start.addingTimeInterval(20)) }
+        await hold.arrival()
+        await clock.sleeper(at: start.addingTimeInterval(15))
+        try h.store.releaseLease(account: h.account, ownerID: h.store.writerID)
+        let rival = OwnershipManager(store: h.store, identity: ProcessIdentity(writerID: "other-writer", pid: 1,
+                                                                               host: "another-host"),
+                                     kind: "cli", clock: h.clock)
+        #expect(await rival.acquire(h.account))
+
+        h.clock.advance(to: start.addingTimeInterval(15))
+        await clock.sleeper(at: start.addingTimeInterval(30))
+        hold.open()
+        let report = await refreshing.value
+
+        #expect(!hold.wasCancelled, "the upload in flight finished")
+        #expect(!report.deadlineReached)
+        let drained = try #require(report.operations[h.account])
+        #expect(drained.claimed == 2 && drained.succeeded == 1 && drained.released == 1)
+        try await expectUploadedOnce(h, probe, draft: queued.draft, upload: queued.upload)
+        let archive = try #require(try h.store.operation(queued.archive))
+        #expect(archive.status == .pending && archive.attempts == 0 && archive.lastErrorCode == nil)
+        #expect(try h.ops([.inFlight]).isEmpty, "nothing is left claimed")
+        #expect(await h.gmail.callCount(.batchModify) == 0)
+        #expect(try h.store.lease(account: h.account)?.ownerID == "other-writer", "the rival keeps its lease")
+    }
+
+    @Test func aRuntimeStoppedWithItsEngineRefreshesNothing() async throws {
+        let h = try await syncedHarness()
+        let engine = h.engine()
+        await engine.start()
+        let runtime = try #require(await engine.runtime(for: h.account))
+        await engine.stop()
+        let archive = try h.store.apply(.archive([try h.ref(h.threads[0])]), origin: .app).operationIDs[0]
+
+        let outcome = await runtime.refresh(until: h.clock.now.addingTimeInterval(20),
+                                            maxOperations: MailEngine.refreshOperationLimit)
+
+        #expect(outcome.sync == nil && outcome.operations == nil)
+        let op = try #require(try h.store.operation(archive))
+        #expect(op.status == .pending && op.attempts == 0)
+        #expect(await h.gmail.callCount(.batchModify) == 0)
+        #expect(try h.store.lease(account: h.account) == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1))) func aRuntimeStoppedDuringItsRefreshDrainsNothingAfterTheSync() async throws {
+        let h = try await syncedHarness()
+        let probe = ProbeGmail(h.gmail)
+        let engine = h.engine(factory: FixedGmailFactory(api: probe))
+        let archive = try h.store.apply(.archive([try h.ref(h.threads[0])]), origin: .app).operationIDs[0]
+        let item = try #require(try h.store.accounts().first)
+        let runtime = try #require(await engine.makeRuntime(item))
+        let hold = probe.holdAfterCommit(.listHistory)
+        let refreshing = Task {
+            await runtime.refresh(until: h.clock.now.addingTimeInterval(20), maxOperations: MailEngine.refreshOperationLimit)
+        }
+        await hold.arrival()
+
+        await runtime.stop()
+        hold.open()
+        let outcome = await refreshing.value
+
+        #expect(outcome.operations == nil)
+        let op = try #require(try h.store.operation(archive))
+        #expect(op.status == .pending && op.attempts == 0)
+        #expect(probe.writes.isEmpty)
+        #expect(await h.gmail.callCount(.batchModify) == 0)
     }
 
     @Test(.timeLimit(.minutes(1))) func aDraftUploadInFlightAtTheDeadlineFinishesAndIsNotRepeated() async throws {
@@ -508,15 +594,27 @@ import Testing
 }
 
 private final class CountingFactory: GmailClientFactory {
+    private struct State {
+        var clients = 0
+        var passRunning: (@Sendable () -> Bool)?
+        var seen: [Bool] = []
+    }
     let api: any GmailAPI
-    private let made = Mutex(0)
+    private let state = Mutex(State())
 
     init(_ api: any GmailAPI) { self.api = api }
 
-    var clients: Int { made.withLock { $0 } }
+    var clients: Int { state.withLock { $0.clients } }
+    var passRunningAtEachClient: [Bool] { state.withLock { $0.seen } }
+
+    func observe(passRunning: @escaping @Sendable () -> Bool) { state.withLock { $0.passRunning = passRunning } }
 
     func client(for accountEmail: String) throws -> GmailAPI {
-        made.withLock { $0 += 1 }
+        let passRunning = state.withLock { s -> (@Sendable () -> Bool)? in
+            s.clients += 1
+            return s.passRunning
+        }
+        if let running = passRunning?() { state.withLock { $0.seen.append(running) } }
         return api
     }
 }

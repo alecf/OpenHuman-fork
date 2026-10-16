@@ -163,7 +163,8 @@ actor AccountRuntime {
     func refresh(until deadline: Date, maxOperations: Int) async -> RefreshOutcome {
         var outcome = RefreshOutcome()
         let clock = env.clock
-        func open() -> Bool { clock.now < deadline && !Task.isCancelled }
+        // Why: a pass that began during the engine's stop() can still hold this runtime after the lease is released
+        func open() -> Bool { pollState != .stopped && clock.now < deadline && !Task.isCancelled }
         guard open() else { return outcome }
         outcome.sync = await Self.racing(deadline, clock: clock) { await self.backgroundSync() }
         guard writable else { return outcome }
