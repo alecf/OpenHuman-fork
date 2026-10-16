@@ -46,6 +46,7 @@ let package = Package(
             .product(name: "OpenHumanStore", package: "OpenHumanStore"),
             .product(name: "OpenHumanGmail", package: "OpenHumanGmail"),
             .product(name: "OpenHumanGmailTesting", package: "OpenHumanGmail"),
+            .product(name: "OpenHumanSync", package: "OpenHumanSync"),
             .product(name: "OpenHumanAI", package: "OpenHumanAI"),
             .product(name: "OpenHumanAIMLX", package: "OpenHumanAIMLX"),
             .product(name: "OpenHumanSemanticIndex", package: "OpenHumanSemanticIndex"),
