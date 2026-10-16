@@ -17,7 +17,7 @@ is_exception() {
     return 1
 }
 
-DATA_LAYER="OpenHumanCore OpenHumanLinks OpenHumanStore OpenHumanGmail OpenHumanSync OpenHumanCLI"
+DATA_LAYER="OpenHumanCore OpenHumanLinks OpenHumanStore OpenHumanGmail OpenHumanSync OpenHumanCLI OpenHumanCloudSync"
 for manifest in Packages/*/Package.swift; do
     pkg="$(basename "$(dirname "$manifest")")"
     head -1 "$manifest" | grep -qx '// swift-tools-version: 6.4' || fail "$manifest: first line must be '// swift-tools-version: 6.4'"
@@ -46,6 +46,8 @@ allowed_imports() {
         OpenHumanLinks/OpenHumanLinksTests)     echo "Foundation Testing XCTest OpenHumanLinks" ;;
         OpenHumanMailCore/MailModel)            echo "$APPLE_SYSTEM Observation OpenHumanCore" ;;
         OpenHumanMailCore/MailTheme)            echo "$APPLE_SYSTEM" ;;
+        OpenHumanCloudSync/OpenHumanCloudSync)  echo "$APPLE_SYSTEM SQLite3 Crypto OpenHumanCore" ;;
+        OpenHumanCloudSync/OpenHumanCloudSyncTesting) echo "$APPLE_SYSTEM OpenHumanCore OpenHumanCloudSync" ;;
         *)                                      echo "*" ;;
     esac
 }
@@ -66,6 +68,7 @@ forbidden_imports() {
             if [[ "$target" == "MailFakes" ]]; then echo "$data MailFeatures MailUI MailUIMac"; else echo "$data"; fi ;;
         OpenHumanAI|OpenHumanAIMLX) echo "$data" ;;
         OpenHumanSemanticIndex) echo "$data" ;;
+        OpenHumanCloudSync) echo "$data $app" ;;
         *) echo "" ;;
     esac
 }
