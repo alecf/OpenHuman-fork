@@ -12,9 +12,15 @@ struct RuntimeEnvironment: Sendable {
     let reachability: Reachability
     let pollInterval: Duration
     let syncSettings: SyncSettings
+    let downloadBodies: SettingKey<Bool>
     let jitter: Duration
     let metrics: @Sendable (String) -> SyncMetricsCollector?
     let runnerOverride: (@Sendable (ScheduleKind, RunnerContext) -> (any ScheduleRunner)?)?
+}
+
+struct RefreshOutcome: Sendable {
+    var sync: Result<SyncReport, any Error>?
+    var operations: OperationDrainer.PassReport?
 }
 
 actor AccountRuntime {
@@ -62,14 +68,15 @@ actor AccountRuntime {
         let gate = BackfillGate(isReachable: { reachability.isReachable })
         self.gate = gate
         let store = env.store
+        let downloadBodies = env.downloadBodies
         syncer = AccountSyncer(account: account.id, store: env.store, api: api, clock: env.clock,
                                settings: env.syncSettings, metrics: env.metrics(account.email), gate: gate,
-                               bodyPolicy: { Self.bodyPolicy(store) }, muting: writable ? env.store : nil,
-                               blocking: writable ? env.store : nil)
+                               bodyPolicy: { Self.bodyPolicy(store, downloadBodies: downloadBodies) },
+                               muting: writable ? env.store : nil, blocking: writable ? env.store : nil)
     }
 
-    static func bodyPolicy(_ store: MailStore) -> BodyDownloadPolicy {
-        BodyDownloadPolicy(enabled: (try? store.setting(.downloadBodies, scope: .global)) ?? true,
+    static func bodyPolicy(_ store: MailStore, downloadBodies: SettingKey<Bool> = .downloadBodies) -> BodyDownloadPolicy {
+        BodyDownloadPolicy(enabled: (try? store.setting(downloadBodies, scope: .global)) ?? downloadBodies.defaultValue,
                            maxMessages: ((try? store.setting(.bodyMaxMessages, scope: .global)) ?? nil))
     }
 
@@ -79,12 +86,7 @@ actor AccountRuntime {
         let last = (try? env.store.syncStatus(account: account))?.lastSuccessAt
         env.connectivity.set(account, .online(syncing: true, lastSyncAt: last))
         if writable {
-            let drainer = OperationDrainer(account: account, store: env.store, api: api, clock: env.clock,
-                                           emit: env.emit,
-                                           onApplied: { [weak self] appliedAt in
-                                               Task { await self?.syncSoon(after: appliedAt) }
-                                           },
-                                           gate: gate)
+            let drainer = makeDrainer()
             self.drainer = drainer
             await drainer.start()
         }
@@ -149,6 +151,26 @@ actor AccountRuntime {
         return try result.get()
     }
 
+    func refresh(until deadline: Date, maxOperations: Int) async -> RefreshOutcome {
+        var outcome = RefreshOutcome()
+        let clock = env.clock
+        func open() -> Bool { clock.now < deadline && !Task.isCancelled }
+        guard open() else { return outcome }
+        let syncer = self.syncer
+        outcome.sync = await withTaskCancellationHandler {
+            await runSync(reason: "background", rerun: false, backfill: false)
+        } onCancel: {
+            Task { await syncer.cancelRun() }
+        }
+        guard writable else { return outcome }
+        if !schedulerKinds.isEmpty, open() {
+            if let scheduler { await scheduler.poke() } else { await makeScheduler().runPass(now: clock.now) }
+        }
+        guard open() else { return outcome }
+        outcome.operations = await (drainer ?? makeDrainer()).drainOnce(limit: maxOperations, deadline: deadline)
+        return outcome
+    }
+
     private func pollLoop() async {
         var first = true
         while !Task.isCancelled {
@@ -180,14 +202,14 @@ actor AccountRuntime {
         }
     }
 
-    private func runSync(reason: String) async -> Result<SyncReport, Error> {
+    private func runSync(reason: String, rerun: Bool = true, backfill: Bool = true) async -> Result<SyncReport, Error> {
         env.connectivity.update { states in
             if case let .online(_, last)? = states[account] { states[account] = .online(syncing: true, lastSyncAt: last) }
         }
         do {
-            let report = try await syncer.sync(reason: reason)
+            let report = try await syncer.sync(reason: reason, rerunIfRunning: rerun)
             completedRuns += 1
-            await afterSuccess()
+            await afterSuccess(backfill: backfill)
             return .success(report)
         } catch {
             if Task.isCancelled || AccountSyncer.code(error) == "cancelled" { return .failure(error) }
@@ -197,7 +219,7 @@ actor AccountRuntime {
         }
     }
 
-    private func afterSuccess() async {
+    private func afterSuccess(backfill: Bool) async {
         let status = try? env.store.syncStatus(account: account)
         if pollState == .stoppedNeedsReauth {
             pollState = .running
@@ -206,7 +228,7 @@ actor AccountRuntime {
         env.connectivity.set(account, .online(syncing: false, lastSyncAt: status?.lastSuccessAt ?? env.clock.now))
         reportPhase(status)
         warnAboutScheduleLabels()
-        await syncer.startBackfill()
+        if backfill { await syncer.startBackfill() }
     }
 
     private func afterFailure(_ error: Error) async {
@@ -248,6 +270,12 @@ actor AccountRuntime {
         budgetWarned = true
         log.notice("account \(account.rawValue): \(count) schedule labels")
         env.emit(.scheduleLabelBudget(account, count: count))
+    }
+
+    private func makeDrainer() -> OperationDrainer {
+        OperationDrainer(account: account, store: env.store, api: api, clock: env.clock, emit: env.emit,
+                         onApplied: { [weak self] appliedAt in Task { await self?.syncSoon(after: appliedAt) } },
+                         gate: gate)
     }
 
     private func makeScheduler() -> Scheduler {

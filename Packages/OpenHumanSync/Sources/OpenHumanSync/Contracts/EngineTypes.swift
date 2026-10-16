@@ -19,6 +19,7 @@ public struct EngineConfiguration: Sendable {
     public var pollInterval: Duration = .seconds(60)
     public var clock: any OHClock
     public var schedulers: Set<ScheduleKind> = Set(ScheduleKind.allCases)
+    public var window: LocalWindow = .platformDefault
 
     // generated-init: Tools/ci/gen-public-inits.py
     public init(
@@ -27,7 +28,8 @@ public struct EngineConfiguration: Sendable {
         gmail: GmailClientConfig,
         pollInterval: Duration = .seconds(60),
         clock: any OHClock,
-        schedulers: Set<ScheduleKind> = Set(ScheduleKind.allCases)
+        schedulers: Set<ScheduleKind> = Set(ScheduleKind.allCases),
+        window: LocalWindow = .platformDefault
     ) {
         self.role = role
         self.appVersion = appVersion
@@ -35,6 +37,49 @@ public struct EngineConfiguration: Sendable {
         self.pollInterval = pollInterval
         self.clock = clock
         self.schedulers = schedulers
+        self.window = window
+    }
+    // end generated-init
+}
+
+public struct LocalWindow: Sendable, Hashable {
+    public var metadataHorizonDays: Int?
+    public var bodyHorizonDays: Int
+    public var downloadBodies: Bool
+    public var backfillUnitsPerMinute: Int?
+
+    // generated-init: Tools/ci/gen-public-inits.py
+    public init(
+        metadataHorizonDays: Int? = nil,
+        bodyHorizonDays: Int,
+        downloadBodies: Bool,
+        backfillUnitsPerMinute: Int? = nil
+    ) {
+        self.metadataHorizonDays = metadataHorizonDays
+        self.bodyHorizonDays = bodyHorizonDays
+        self.downloadBodies = downloadBodies
+        self.backfillUnitsPerMinute = backfillUnitsPerMinute
+    }
+    // end generated-init
+}
+
+public struct RefreshReport: Sendable {
+    public var syncs: [SyncReport] = []
+    public var operations: [AccountID: OperationDrainer.PassReport] = [:]
+    public var ownedElsewhere: [AccountID] = []
+    public var deadlineReached: Bool = false
+
+    // generated-init: Tools/ci/gen-public-inits.py
+    public init(
+        syncs: [SyncReport] = [],
+        operations: [AccountID: OperationDrainer.PassReport] = [:],
+        ownedElsewhere: [AccountID] = [],
+        deadlineReached: Bool = false
+    ) {
+        self.syncs = syncs
+        self.operations = operations
+        self.ownedElsewhere = ownedElsewhere
+        self.deadlineReached = deadlineReached
     }
     // end generated-init
 }
@@ -42,7 +87,9 @@ public struct EngineConfiguration: Sendable {
 public protocol SystemEventsSource: Sendable {
     var events: AsyncStream<SystemEvent> { get }
 }
-public enum SystemEvent: Sendable { case didWake, didBecomeActive, didResignActive, networkReachable(Bool), willTerminate }
+public enum SystemEvent: Sendable {
+    case didWake, didBecomeActive, didResignActive, didEnterBackground, networkReachable(Bool), willTerminate
+}
 
 public enum SendAuthorization: Sendable {
     case userConfirmed
