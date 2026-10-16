@@ -17,7 +17,7 @@ public struct LabelSidebarView: View {
             VStack(alignment: .leading, spacing: 0) {
                 if router.showsAccountSwitcher {
                     header("Accounts")
-                    allInboxesRow()
+                    if router.allInboxesEnabled { allInboxesRow() }
                     ForEach(Array(router.accounts.enumerated()), id: \.element.id) { position, state in
                         accountRow(state, position: position + 1)
                     }
@@ -26,7 +26,8 @@ public struct LabelSidebarView: View {
                 if let state = router.active {
                     header(router.showsAccountSwitcher ? (state.account.alias ?? state.account.email) : "Mailboxes")
                     ForEach(state.sidebarItems) { item in
-                        row(item, isSelected: router.unifiedInbox == nil && item.location == state.location)
+                        row(item, isSelected: router.unifiedInbox == nil && item.location == state.location,
+                            hideable: state.sidebarFolder(for: item.location) != nil)
                     }
                 }
             }
@@ -86,6 +87,9 @@ public struct LabelSidebarView: View {
         }
         .buttonStyle(.plain)
         .onHover { inside in hover(key, inside) }
+        .contextMenu {
+            Button("Hide All Inboxes") { router.hideAllInboxes() }
+        }
         .help("Every account's inbox together  ⌃0  G U")
         .accessibilityLabel("All Inboxes")
         .accessibilityValue(router.allInboxesUnread.map {
@@ -123,7 +127,7 @@ public struct LabelSidebarView: View {
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
-    private func row(_ item: SidebarItem, isSelected: Bool) -> some View {
+    private func row(_ item: SidebarItem, isSelected: Bool, hideable: Bool) -> some View {
         let key = "location.\(item.id)"
         let tokens = theme.component.labelSidebar
         return Button {
@@ -153,6 +157,11 @@ public struct LabelSidebarView: View {
         }
         .buttonStyle(.plain)
         .onHover { inside in hover(key, inside) }
+        .contextMenu {
+            if hideable {
+                Button("Hide from sidebar") { router.hideFromSidebar(item.location) }
+            }
+        }
         .accessibilityLabel(item.title)
         .accessibilityValue(item.count.map { "\($0)" } ?? "")
         .accessibilityAddTraits(isSelected ? .isSelected : [])

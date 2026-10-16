@@ -13,7 +13,7 @@ public struct AccountSwitcherView: View {
 
     public var body: some View {
         HStack(spacing: ShellMetrics.avatarGap) {
-            allInboxesAvatar
+            if router.allInboxesEnabled { allInboxesAvatar }
             ForEach(Array(router.accounts.enumerated()), id: \.element.id) { position, state in
                 avatar(state, position: position + 1)
             }
@@ -63,7 +63,7 @@ public struct AccountSwitcherView: View {
                 Button(mode == .off ? "Show count" : "Hide count") {
                     store(AppSettings.accountCounts, mode == .off ? .important : .off)
                 }
-                Button("Hide All Inboxes") { store(AppSettings.allInboxesShown, false) }
+                Button("Hide All Inboxes") { router.hideAllInboxes() }
             }
         }
         .help(Self.allInboxesTooltip(count, mode))

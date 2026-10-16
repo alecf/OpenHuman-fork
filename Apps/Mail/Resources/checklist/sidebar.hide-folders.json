@@ -1,0 +1,15 @@
+{
+  "id": "sidebar.hide-folders",
+  "area": "Sidebar",
+  "title": "Hide All mail and turn All Inboxes off in Settings > Sidebar",
+  "steps": [
+    "Launch with -UseFakeGmail (two fake accounts), press Ctrl-Cmd-S to show the sidebar, then open Settings > Sidebar",
+    "Turn All mail off, then in the mail window press G A and afterwards G I",
+    "Turn Show All Inboxes off, then press Ctrl-0 and G U; turn both switches back on",
+    "Right-click Spam in the sidebar, choose Hide from sidebar, then press Undo in the notice"
+  ],
+  "deepLink": null,
+  "expected": "The All mail row leaves the sidebar at once; G A still opens All mail and its row stays while it is open, then goes after G I. With All Inboxes off the tray button before the account pictures and the All Inboxes row are gone and Ctrl-0, G U do nothing. Switching back on restores them. Spam leaves the sidebar with a notice naming in:spam; Undo brings it back.",
+  "requires": "fake",
+  "addedIn": "2026-10-15"
+}

@@ -10,8 +10,8 @@ struct SettingsShellTests {
         let f = SettingsFixture()
         let model = SettingsShellModel(environment: f.env)
         let ids = model.pages.map(\.id)
-        #expect(ids == ["general", "accounts", "notifications", "importance", "splitInbox", "snippets", "shortcuts", "ai",
-                        "calendar", "appearance", "privacy", "blocked", "platform", "advanced"])
+        #expect(ids == ["general", "accounts", "notifications", "importance", "splitInbox", "sidebar", "snippets", "shortcuts",
+                        "ai", "calendar", "appearance", "privacy", "blocked", "platform", "advanced"])
         #expect(model.selected == "general")
         let off = SettingsShellModel(environment: SettingsFixture(flags: FeatureFlags().with(.notifications, false)).env)
         #expect(Array(off.pages.map(\.id).prefix(3)) == ["general", "accounts", "importance"])

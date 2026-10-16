@@ -26,6 +26,7 @@ public final class AppRouter {
     @ObservationIgnored public var willPersist: (@MainActor () -> Void)?
     public internal(set) var unifiedInbox: AllInboxesModel?
     public internal(set) var accountCountMode: AccountCountMode = AppSettings.accountCounts.defaultValue
+    public internal(set) var allInboxesEnabled = AppSettings.allInboxesShown.defaultValue
     public var sequenceHint: String?
 
     @ObservationIgnored public let environment: AppEnvironment
@@ -34,6 +35,7 @@ public final class AppRouter {
     @ObservationIgnored private var snapshot: NavigationSnapshot?
     @ObservationIgnored private var accountsTask: Task<Void, Never>?
     @ObservationIgnored var accountCountsTask: Task<Void, Never>?
+    @ObservationIgnored var allInboxesTask: Task<Void, Never>?
     @ObservationIgnored private var debouncer: PersistDebouncer?
     @ObservationIgnored private var snapshotLoaded = false
     @ObservationIgnored private var frozen = false
@@ -57,6 +59,7 @@ public final class AppRouter {
     isolated deinit {
         accountsTask?.cancel()
         accountCountsTask?.cancel()
+        allInboxesTask?.cancel()
         debouncer?.cancel()
     }
 
@@ -99,6 +102,7 @@ public final class AppRouter {
         }
         startTrackingIfNeeded()
         observeAccountCounts()
+        followAllInboxesSetting()
         let stream = environment.data.accounts()
         accountsTask = Task { [weak self] in
             do {
@@ -120,10 +124,12 @@ public final class AppRouter {
         accountsTask = nil
         accountCountsTask?.cancel()
         accountCountsTask = nil
+        allInboxesTask?.cancel()
+        allInboxesTask = nil
         for state in accounts { state.stop() }
     }
 
-    private func apply(_ list: [Account]) {
+    func apply(_ list: [Account]) {
         accountsLoaded = true
         let ordered = list.sorted { $0.id < $1.id }
         var next: [AccountState] = []

@@ -425,6 +425,7 @@ public enum ActionCatalog {
         settingsPage("accounts", "Accounts", ["sign out", "alias", "short name", "send as", "from address"]),
         settingsPage("appearance", "Appearance", ["theme", "dark mode", "light mode", "accent", "font", "density"]),
         settingsPage("splitInbox", "Split inbox", ["splits", "tabs", "presets"]),
+        settingsPage("sidebar", "Sidebar", ["folders", "hide folders", "all mail", "all inboxes", "unified inbox"]),
         settingsPage("shortcuts", "Shortcuts", ["keyboard shortcuts", "keys", "cheat sheet"]),
         settingsPage("snippets", "Snippets", ["templates"]),
         settingsPage("ai", "AI", ["quick replies", "summary", "models"]),

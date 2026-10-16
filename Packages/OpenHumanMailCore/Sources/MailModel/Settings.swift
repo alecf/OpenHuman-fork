@@ -73,6 +73,7 @@ public enum AppSettings {
     public static let spotlightIndexSubjects = AppSettingKey(name: "spotlight.index_subjects", defaultValue: false)
     public static let calendarSecondTimeZone = AppSettingKey<String?>(name: "calendar.second_time_zone", defaultValue: nil)
     public static let tabCounts = AppSettingKey(name: "ui.tab_counts", defaultValue: TabCountMode.all)
+    public static let sidebarHidden = AppSettingKey<[String]>(name: "ui.sidebar.hidden", defaultValue: [])
     public static let lastBulkArchive = AppSettingKey<BulkArchiveReceipt?>(name: "hygiene.last_bulk_archive",
                                                                            defaultValue: nil)
     public static let calendarAddMeetLink = AppSettingKey(name: "calendar.add_meet_link", defaultValue: true)

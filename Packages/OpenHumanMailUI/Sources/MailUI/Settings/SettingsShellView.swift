@@ -122,6 +122,7 @@ public struct SettingsShellView: View {
         case .accounts: AccountsSettingsPage(environment: environment)
         case .appearance: hosting.appearance()
         case .splitInbox: SplitSettingsPage(environment: environment)
+        case .sidebar: SidebarSettingsPage(environment: environment)
         case .shortcuts: ShortcutsSettingsPage(environment: environment, printText: hosting.printText)
         case .snippets: SnippetSettingsPage(environment: environment)
         case .ai: AISettingsPage(environment: environment, providers: hosting.aiProviders)
