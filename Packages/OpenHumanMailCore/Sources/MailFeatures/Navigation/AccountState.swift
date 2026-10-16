@@ -472,6 +472,7 @@ public final class AccountState: Identifiable {
     }
 
     private func open(_ key: ThreadKey, marksRead: Bool) {
+        if marksRead, mode == .list { environment.searchRanking.noteOpened(key, from: location) }
         readerRestore?.cancel()
         if pendingReaderPlace?.thread != key { pendingReaderPlace = nil }
         noteDetour(opening: key)

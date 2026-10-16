@@ -226,6 +226,8 @@ public final class PaletteController {
         .importSuperhumanLabels: "square.and.arrow.down", .sendFeedback: "paperplane.circle",
         .shortcutHelp: "keyboard", .undo: "arrow.uturn.backward", .redo: "arrow.uturn.forward",
         .resetShortcutHints: "arrow.counterclockwise",
+        .resetSearchLearning: "arrow.counterclockwise", .toggleSearchSort: "arrow.up.arrow.down",
+        .copySearchRanking: "list.number",
         .nextMessage: "chevron.down", .previousMessage: "chevron.up", .toggleMessage: "rectangle.expand.vertical",
         .expandAllMessages: "rectangle.expand.vertical", .toggleQuotedText: "ellipsis", .showImages: "photo",
         .showNewMessages: "arrow.down.circle", .findInConversation: "text.magnifyingglass",

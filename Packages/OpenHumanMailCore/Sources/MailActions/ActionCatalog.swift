@@ -428,6 +428,7 @@ public enum ActionCatalog {
         settingsPage("sidebar", "Sidebar", ["folders", "hide folders", "all mail", "all inboxes", "unified inbox"]),
         settingsPage("shortcuts", "Shortcuts", ["keyboard shortcuts", "keys", "cheat sheet"]),
         settingsPage("snippets", "Snippets", ["templates"]),
+        settingsPage("search", "Search", ["sort", "most relevant", "most recent", "ranking", "search learning"]),
         settingsPage("ai", "AI", ["quick replies", "summary", "models"]),
         settingsPage("notifications", "Notifications", ["alerts", "previews", "sounds"]),
         settingsPage("calendar", "Calendar", ["time zone", "timezone", "meeting link"]),

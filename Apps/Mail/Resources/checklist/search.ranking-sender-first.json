@@ -1,0 +1,14 @@
+{
+  "id": "search.ranking-sender-first",
+  "area": "Overlays",
+  "title": "Search ranks the sender and subject above text-only matches",
+  "steps": [
+    "Pick a sender whose display name has two words, from the inbox",
+    "Press /, type those two words (no from:), press Return",
+    "Look at the first rows, then scroll further down"
+  ],
+  "deepLink": null,
+  "expected": "Conversations from that sender come first, even old ones; newer mail that only mentions the words in its text follows below them, so nothing is hidden. No date headers (Today, Last 7 days, a month) appear among the results while they are sorted by relevance.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

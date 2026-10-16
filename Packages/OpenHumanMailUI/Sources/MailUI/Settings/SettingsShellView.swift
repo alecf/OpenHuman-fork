@@ -125,6 +125,7 @@ public struct SettingsShellView: View {
         case .sidebar: SidebarSettingsPage(environment: environment)
         case .shortcuts: ShortcutsSettingsPage(environment: environment, printText: hosting.printText)
         case .snippets: SnippetSettingsPage(environment: environment)
+        case .search: SearchSettingsPage(environment: environment)
         case .ai: AISettingsPage(environment: environment, providers: hosting.aiProviders)
         case .notifications: hosting.notifications()
         case .calendar: CalendarSettingsPage(environment: environment)

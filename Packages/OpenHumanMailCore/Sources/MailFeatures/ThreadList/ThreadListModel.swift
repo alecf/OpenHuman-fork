@@ -120,7 +120,8 @@ public final class ThreadListModel {
     }
 
     private func makeGroups(_ rows: [ThreadRow]) -> ThreadListGroups {
-        guard groupsByDate, !location.sortsAscending else { return .none }
+        guard ThreadListGroups.applies(groupsByDate: groupsByDate, sortsAscending: location.sortsAscending,
+                                       searchOrdering: searchStatus?.ordering) else { return .none }
         return ThreadListGroups.make(rows: rows, format: groupFormatting, now: now())
     }
 

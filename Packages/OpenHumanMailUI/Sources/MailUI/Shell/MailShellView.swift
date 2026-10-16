@@ -37,10 +37,17 @@ public struct MailShellView<Content: View>: View {
                         .transaction { $0.disablesAnimations = true }
                 }
                 VStack(spacing: 0) {
-                    if router.unifiedInbox == nil, router.active?.searchOpen == true, let summary = environment.overlays.search.resultsSummary {
-                        SearchResultsHeader(text: summary, search: environment.overlays.search)
+                    if router.showsSearchResultsHeader, let summary = environment.overlays.search.resultsSummary {
+                        HStack(spacing: 0) {
+                            SearchResultsHeader(text: summary, search: environment.overlays.search)
+                            if let query = environment.overlays.search.shownQuery,
+                               router.list?.searchStatus?.canSortByRelevance == true {
+                                SearchSortSwitch(query: query, model: environment.searchRanking)
+                                    .padding(.trailing, theme.space5)
+                            }
+                        }
                     }
-                    if router.active?.searchOpen == true, let notice = environment.overlays.search.coverageNotice {
+                    if router.showsSearchResultsHeader, let notice = environment.overlays.search.coverageNotice {
                         SearchCoverageRow(notice: notice, search: environment.overlays.search)
                     }
                     if let cleanup = environment.archiveSuggestion, let suggestion = cleanup.suggestion,

@@ -254,9 +254,10 @@ enum CompositionRoot {
         let calendarCache: (any CalendarCachePersisting)? = isFake ? nil : AIServices.cacheDirectory.flatMap {
             try? SQLiteCalendarCache(url: $0.appendingPathComponent(SQLiteCalendarCache.fileName))
         }
+        let searchRanking = searchRankingService(store: store, isFake: isFake)
         let environment = AppEnvironment(data: MailStoreAdapter(store: store, ensureBody: ensureBody, attachmentFile: attachmentFile,
                                                      connectivity: connectivity, syncProgress: syncProgress,
-                                                     onDemand: onDemand, semantic: semantic?.arm),
+                                                     onDemand: onDemand, semantic: semantic?.arm, ranking: searchRanking),
                               commands: commands, accounts: accounts, settings: MailStoreSettings(store: store),
                               isFake: isFake, navigationStore: navigationStore(isFake ? "fakeGmail" : "live"),
                               importance: MailStoreImportance(store: store),
@@ -269,6 +270,7 @@ enum CompositionRoot {
                                   : AIServices.cacheDirectory.map { LearnedBehaviourFile(directory: $0) },
                               waiting: (store as? any WaitingOverrideStoring).map { MailStoreWaiting(store: $0) })
         attachClassification(environment, isFake: isFake)
+        environment.installSearchRanking(searchRanking)
         CategoryImportanceMatcher.install(on: environment.autoLabels, store: store)
         if let searching = store as? any MailSearching {
             environment.overlays.search.interpretation.resolver = SearchPlanResolver(isValidQuery: { text in

@@ -1,0 +1,15 @@
+{
+  "id": "search.learning-reset",
+  "area": "Settings",
+  "title": "Search learning remembers opens and resets",
+  "steps": [
+    "Search a word and open a result from the list",
+    "Open Settings › Search and read Opened from search",
+    "Run Reset search learning from the palette (⌘K)",
+    "Look at Opened from search again"
+  ],
+  "deepLink": null,
+  "expected": "After opening a result it says 1 conversation remembered. The palette entry shows a \"Search learning reset\" notice and the line says no conversations are remembered. The settings themselves are unchanged. Going through results with J and K in a conversation does not count as opening them.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

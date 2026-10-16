@@ -3,7 +3,7 @@ import MailModel
 import Observation
 
 public enum SettingsPageID: String, Sendable, Hashable, CaseIterable {
-    case general, accounts, notifications, splitInbox, sidebar, snippets, shortcuts, ai, calendar, appearance, privacy, platform
+    case general, accounts, notifications, splitInbox, sidebar, snippets, search, shortcuts, ai, calendar, appearance, privacy, platform
     case advanced
 
     public var title: String {
@@ -15,6 +15,7 @@ public enum SettingsPageID: String, Sendable, Hashable, CaseIterable {
         case .sidebar: "Sidebar"
         case .shortcuts: "Shortcuts"
         case .snippets: "Snippets"
+        case .search: "Search"
         case .ai: "AI"
         case .notifications: "Notifications"
         case .calendar: "Calendar"
@@ -33,6 +34,7 @@ public enum SettingsPageID: String, Sendable, Hashable, CaseIterable {
         case .sidebar: "sidebar.left"
         case .shortcuts: "keyboard"
         case .snippets: "text.badge.plus"
+        case .search: "magnifyingglass"
         case .ai: "sparkles"
         case .notifications: "bell"
         case .calendar: "calendar"

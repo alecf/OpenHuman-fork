@@ -239,6 +239,7 @@ actor ThreadListPipeline {
                 assembler.liveTotal = window.totalCount
                 assembler.liveHasMore = window.hasMore
                 searchStatus = window.search
+                assembler.ordersByRelevance = window.search?.ordering == .relevance
                 if !window.hasMore {
                     assembler.pages = []
                     assembler.pagingFinished = false

@@ -14,13 +14,15 @@ public struct SearchHitInfo: Sendable, Hashable, Identifiable {
     public let matchedMessageRowIDs: [Int64]
     public let highlight: String?
     public let searchMatch: SearchMatchKind?
+    public let explanation: SearchScoreExplanation?
 
     public init(row: ThreadRow, matchedMessageRowIDs: [Int64] = [], highlight: String? = nil,
-                searchMatch: SearchMatchKind? = nil) {
+                searchMatch: SearchMatchKind? = nil, explanation: SearchScoreExplanation? = nil) {
         self.row = row
         self.matchedMessageRowIDs = matchedMessageRowIDs
         self.highlight = highlight
         self.searchMatch = searchMatch
+        self.explanation = explanation
     }
 
     public var id: ThreadKey { row.id }
@@ -67,12 +69,19 @@ public struct SearchWindowStatus: Sendable, Hashable {
     public let completeness: SearchCompletenessInfo
     public let gmail: GmailSearchState
     public let gmailAvailable: Bool
+    public let ordering: SearchResultsOrdering
+    public let explanations: [Int64: SearchScoreExplanation]
+    public let canSortByRelevance: Bool
 
     public init(completeness: SearchCompletenessInfo = .complete, gmail: GmailSearchState = .notAsked,
-                gmailAvailable: Bool = false) {
+                gmailAvailable: Bool = false, ordering: SearchResultsOrdering = .date,
+                explanations: [Int64: SearchScoreExplanation] = [:], canSortByRelevance: Bool = false) {
         self.completeness = completeness
         self.gmail = gmail
         self.gmailAvailable = gmailAvailable
+        self.ordering = ordering
+        self.explanations = explanations
+        self.canSortByRelevance = canSortByRelevance
     }
 }
 

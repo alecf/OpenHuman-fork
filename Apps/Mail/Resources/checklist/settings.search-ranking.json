@@ -1,0 +1,15 @@
+{
+  "id": "settings.search-ranking",
+  "area": "Settings",
+  "title": "Settings › Search: order, presets and weights",
+  "steps": [
+    "Open Settings › Search",
+    "Choose Recent first, then Balanced, under Ranking",
+    "Move the Recency slider, then click its Reset",
+    "Click Reset all"
+  ],
+  "deepLink": null,
+  "expected": "Each weight has a short explanation. Moving a slider turns Ranking into Custom and shows Reset beside it; Reset puts Balanced's value back (Ranking returns to Balanced). The note under the weights says whether sender and subject matches always come first. Reset all returns to Most relevant and Balanced. Classic hides the sliders and describes the earlier ranking.",
+  "requires": "fake",
+  "addedIn": "2026-10-14"
+}

@@ -30,5 +30,6 @@ extension ActionCatalog {
         newslettersSplit,
         shortcutHints,
         classification,
+        searchRanking,
     ].flatMap { $0 }
 }
