@@ -132,6 +132,7 @@ public struct ComposerCard<Editor: View>: View {
                 InstantReplyShortcuts(model: strip)
             }
         }
+        .environment(\.actionDescriptors, manager.actionDescriptors)
         .onAppear { manager.attachInstantReply(session) }
         .onKeyPress(.escape) {
             if session.mentionPicker != nil { session.dismissMention(); return .handled }
@@ -173,7 +174,8 @@ public struct ComposerCard<Editor: View>: View {
             .accessibilityLabel(DraftLine.spoken(isAuto: isAuto, names: session.recipientSummary))
             .accessibilityIdentifier("composer.draftLine")
             Spacer(minLength: theme.space3)
-            IconButton(symbol: "macwindow.on.rectangle", help: "Pop out", size: ComposerMetrics.lineBand) {
+            IconButton(symbol: "macwindow.on.rectangle", help: "Pop out", size: ComposerMetrics.lineBand,
+                       shortcut: .popOutComposer, tipTitle: "Pop out") {
                 manager.perform(.popOutComposer, in: session)
             }
         }
@@ -200,11 +202,12 @@ public struct ComposerCard<Editor: View>: View {
                 .truncationMode(.tail)
             Spacer(minLength: theme.space5)
             if session.placement != .window {
-                IconButton(symbol: "macwindow.on.rectangle", help: "Pop out") {
+                IconButton(symbol: "macwindow.on.rectangle", help: "Pop out", shortcut: .popOutComposer, tipTitle: "Pop out") {
                     manager.perform(.popOutComposer, in: session)
                 }
             }
-            IconButton(symbol: "xmark", help: "Close and keep the draft  Esc", action: onClose)
+            IconButton(symbol: "xmark", help: "Close and keep the draft", shortcut: .closeComposer,
+                       tipTitle: "Close and keep the draft", action: onClose)
         }
         .padding(.bottom, theme.space4)
     }
@@ -215,10 +218,10 @@ public struct ComposerCard<Editor: View>: View {
                 TextButton(title: "Subject", help: "Edit the subject", compact: true) { session.showsSubject = true }
             }
             if !session.showsCc {
-                TextButton(title: "Cc", help: "Add Cc  ⇧⌘C", compact: true) { session.showCc() }
+                TextButton(title: "Cc", help: "Add Cc", compact: true, shortcut: .showCc) { session.showCc() }
             }
             if !session.showsBcc {
-                TextButton(title: "Bcc", help: "Add Bcc  ⇧⌘B", compact: true) { session.showBcc() }
+                TextButton(title: "Bcc", help: "Add Bcc", compact: true, shortcut: .showBcc) { session.showBcc() }
             }
         }
     }
@@ -277,6 +280,9 @@ struct IconButton: View {
     let help: String
     var tint: ThemeColor?
     var size: CGFloat = ComposerMetrics.iconButton
+    var shortcut: ActionID?
+    var tipTitle: String?
+    var tipHint: String?
     let action: () -> Void
     @Environment(\.theme) private var theme
 
@@ -289,7 +295,7 @@ struct IconButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(help)
+        .shortcutTip(shortcut, title: tipTitle, hint: tipHint, orHelp: help)
         .accessibilityLabel(help.components(separatedBy: "  ").first ?? help)
     }
 }
@@ -300,6 +306,9 @@ struct TextButton: View {
     var strong = false
     var enabled = true
     var compact = false
+    var shortcut: ActionID?
+    var tipTitle: String?
+    var tipHint: String?
     let action: () -> Void
     @Environment(\.theme) private var theme
 
@@ -314,9 +323,24 @@ struct TextButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(help)
         .accessibilityLabel(title)
-        .accessibilityHint(help)
+        .modifier(TextButtonHelp(help: help, shortcut: shortcut, tipTitle: tipTitle, tipHint: tipHint))
+    }
+}
+
+private struct TextButtonHelp: ViewModifier {
+    let help: String
+    let shortcut: ActionID?
+    let tipTitle: String?
+    let tipHint: String?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let shortcut {
+            content.shortcutTip(shortcut, title: tipTitle, hint: tipHint)
+        } else {
+            content.help(help).accessibilityHint(help)
+        }
     }
 }
 

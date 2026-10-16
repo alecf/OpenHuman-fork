@@ -10,15 +10,7 @@ public enum SelectAllShortcuts {
         }
     }
 
-    public struct TipRow: Equatable, Sendable {
-        public let title: String
-        public let keycaps: [String]
-
-        public init(title: String, keycaps: [String]) {
-            self.title = title
-            self.keycaps = keycaps
-        }
-    }
+    public typealias TipRow = ShortcutTip.Row
 
     public static func tipRows(_ descriptors: [ActionDescriptor] = ActionCatalog.all) -> [TipRow] {
         [TipRow(title: "Select All", keycaps: keycaps(for: .checkAll, in: descriptors)),
@@ -27,7 +19,12 @@ public enum SelectAllShortcuts {
     }
 
     public static func keycaps(for id: ActionID, in descriptors: [ActionDescriptor] = ActionCatalog.all) -> [String] {
-        descriptors.first { $0.id == id }?.defaultBindings.first?.separatedKeycaps ?? []
+        descriptors.first { $0.id == id }.map(ShortcutTip.keycaps) ?? []
+    }
+
+    public static func tip(_ descriptors: [ActionDescriptor] = ActionCatalog.all) -> ShortcutTip? {
+        let rows = tipRows(descriptors)
+        return rows.isEmpty ? nil : ShortcutTip(rows: rows)
     }
 
     public static func spoken(_ keycaps: [String]) -> String {

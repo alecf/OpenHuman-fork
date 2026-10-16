@@ -439,7 +439,8 @@ struct ThreadListViewTests {
         let columns = ThreadRowView.columns(width: view.bounds.width)
         #expect(plate.frame.maxX == columns.date.upperBound)
         #expect(plate.frame.minX >= columns.subject.upperBound)
-        #expect(plate.subviews.compactMap { $0 as? NSButton }.map(\.toolTip) == ["Mark done"])
+        #expect(plate.subviews.compactMap { $0 as? NSButton }.map { $0.accessibilityLabel() } == ["Mark done"])
+        #expect(plate.subviews.compactMap { $0 as? NSButton }.allSatisfy { $0.toolTip == nil })
         rowView.mouseExited(with: enter)
         #expect(!view.isHovering)
     }

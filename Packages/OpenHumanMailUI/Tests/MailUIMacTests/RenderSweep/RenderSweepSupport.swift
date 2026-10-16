@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import MailActions
 import MailFakes
 import MailFeatures
 import MailModel
@@ -170,11 +171,12 @@ enum SweepWindow {
     static let size = NSSize(width: 1360, height: 860)
 
     static func make(_ environment: AppEnvironment, theme: SweepTheme, size: NSSize = size,
-                     selectAllTipPinned: Bool = false) async throws -> InlineReplyWindow {
+                     selectAllTipPinned: Bool = false, pinnedTip: ActionID? = nil) async throws -> InlineReplyWindow {
         let themes = theme.makeStore()
         var attached: MainContentViewController?
         let hosting = NSHostingView(rootView: MainWindowRoot(environment: environment, themes: themes) { attached = $0 }
-            .environment(\.selectAllTipPinned, selectAllTipPinned))
+            .environment(\.selectAllTipPinned, selectAllTipPinned)
+            .environment(\.pinnedShortcutTip, pinnedTip))
         let frame = NSRect(origin: NSPoint(x: -6000, y: -6000), size: size)
         let window = NSWindow(contentRect: frame, styleMask: [.titled, .resizable, .fullSizeContentView], backing: .buffered,
                               defer: false)

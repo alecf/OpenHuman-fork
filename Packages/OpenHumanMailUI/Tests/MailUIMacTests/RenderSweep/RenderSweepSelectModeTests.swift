@@ -35,7 +35,8 @@ extension RenderSweepTests {
         try await sweepShoot(w.window, screen: "select-cmd-a-middle-toast", theme: theme)
 
         list.clearChecks()
-        let tip = sweepStandaloneWindow(SelectAllTip(rows: SelectAllShortcuts.tipRows()), store: theme.makeStore(),
+        let rows = try #require(SelectAllShortcuts.tip())
+        let tip = sweepStandaloneWindow(ShortcutTipView(tip: rows), store: theme.makeStore(),
                                         size: NSSize(width: 360, height: 90))
         defer { tip.close() }
         try await sweepShoot(tip, screen: "select-header-tip", theme: theme)

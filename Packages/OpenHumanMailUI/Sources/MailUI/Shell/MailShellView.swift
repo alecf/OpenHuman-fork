@@ -83,9 +83,8 @@ public struct MailShellView<Content: View>: View {
         .overlayPreferenceValue(SearchDropdownKey.self, alignment: .topLeading) { request in
             if let request { SearchDropdownLayer(request: request) }
         }
-        .overlayPreferenceValue(SelectAllTipKey.self, alignment: .topLeading) { request in
-            if let request { SelectAllTipLayer(request: request) }
-        }
+        .shortcutTipRoot()
+        .environment(\.actionDescriptors, environment.actions.descriptors)
         .task { hints.start() }
         .overlay { OverlayHostView(center: environment.overlays) }
     }

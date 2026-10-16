@@ -1,3 +1,4 @@
+import MailActions
 import MailFeatures
 import MailTheme
 import SwiftUI
@@ -63,7 +64,7 @@ public struct FormatBarView: View {
                 .contentShape(RoundedRectangle(cornerRadius: theme.radiusMD))
         }
         .buttonStyle(.plain)
-        .help(command.help)
+        .modifier(FormatButtonTip(command: command, inline: style == .inline))
         .accessibilityLabel(command.title)
         .accessibilityAddTraits(active ? .isSelected : [])
         .accessibilityIdentifier("composer.format.\(command.rawValue)")
@@ -92,4 +93,19 @@ public enum FormatBarMetrics {
     static let floatingPadding: CGFloat = 2
     static let glyph: CGFloat = 13
     static var glyphInset: CGFloat { (button - glyph) / 2 }
+}
+
+private struct FormatButtonTip: ViewModifier {
+    let command: ComposeFormatCommand
+    let inline: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if inline {
+            let tip = ShortcutTip(title: command.title, keycaps: ShortcutTip.keycaps(symbols: command.shortcut))
+            content.shortcutTip(tip).accessibilityHint(tip.spokenDetail)
+        } else {
+            content.help(command.help)
+        }
+    }
 }
