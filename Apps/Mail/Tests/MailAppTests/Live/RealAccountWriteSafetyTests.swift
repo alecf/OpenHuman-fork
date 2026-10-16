@@ -443,6 +443,14 @@ private enum RepoSources {
     let storeWrites = #"store\s*\.\s*(apply|undo|createDraft|updateDraft|updateAgentDraft|saveDraftRemotely|discardDraft|setReviewState|send|scheduleSend|cancelScheduledSend|cancelSend|sendNow|resolveDraftConflict|upsertSnippet|deleteSnippet|recordSnippetUse|upsertSplit|deleteSplit|reorderSplits|dismissFailedOperation)\("#
     #expect(AppSources.files(sources, matching: storeWrites) == ["MailStoreCommands.swift"])
     #expect(AppSources.files(sources, matching: #"flushPendingSends\("#) == ["SyncSession.swift"])
+    #expect(AppSources.files(sources, matching: #"refreshOnce\(|refreshInBackground\("#) == ["SyncSession.swift"])
+    #expect(AppSources.files(sources, matching: #"\.didEnterBackground\b"#) == ["SceneSystemEvents.swift"])
+    #expect(AppSources.files(everything, matching: #"flushPendingSends\("#)
+        == ["OpenHumanSync/MailEngine+Background.swift", "OpenHumanSync/MailEngine.swift", "SyncSession.swift"])
+    #expect(codeLines(try #require(everything["OpenHumanSync/MailEngine+Background.swift"]), containing: "flushPendingSends(")
+        == ["await flushPendingSends(deadline: Self.backgroundFlushDeadline)"])
+    #expect(AppSources.files(everything, matching: #"refreshOnce\("#)
+        == ["OpenHumanSync/MailEngine+Background.swift", "SyncSession.swift"])
 
     let session = try text("SyncSession.swift")
     #expect(AppSources.files(sources, matching: #"MailStoreCommands\("#) == ["SyncSession.swift"])
