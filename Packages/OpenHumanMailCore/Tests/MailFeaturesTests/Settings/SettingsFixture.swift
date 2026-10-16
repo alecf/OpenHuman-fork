@@ -43,8 +43,3 @@ struct SettingsFixture {
         return []
     }
 }
-
-func scratchDefaults() -> (UserDefaults, String) {
-    let name = "openhuman.test.settings.\(UUID().uuidString)"
-    return (UserDefaults(suiteName: name)!, name)
-}

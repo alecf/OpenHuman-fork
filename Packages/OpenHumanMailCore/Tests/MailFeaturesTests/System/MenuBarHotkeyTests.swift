@@ -168,9 +168,8 @@ struct MenuBarItemTests {
     }
 
     @Test func preferencesPersistInTheirDefaultsSuite() {
-        let suite = "openhuman.test.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaults = ScopedDefaults("openhuman.test.menubar")
+        defer { defaults.cleanup() }
         let a = SystemPreferences(defaults: defaults)
         #expect(!a.menuBarEnabled && a.menuBarCount == .important && !a.globalHotkeyEnabled)
         #expect(a.globalHotkeyBinding == GlobalHotkeyRules.defaultBinding.grammar)

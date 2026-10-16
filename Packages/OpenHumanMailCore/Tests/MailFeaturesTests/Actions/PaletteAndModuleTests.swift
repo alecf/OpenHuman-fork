@@ -142,9 +142,8 @@ import Testing
     }
 
     @Test func flagsComeFromUserDefaults() throws {
-        let suite = "dev.openhuman.mail.tests.flags.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaults = ScopedDefaults("dev.openhuman.mail.tests.flags")
+        defer { defaults.cleanup() }
         defaults.set(false, forKey: FeatureFlags.key(.snooze))
         defaults.set(true, forKey: FeatureFlags.key(.ai))
         let flags = FeatureFlags.load(from: defaults)

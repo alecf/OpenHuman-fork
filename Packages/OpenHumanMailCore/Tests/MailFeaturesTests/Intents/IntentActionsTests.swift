@@ -378,9 +378,8 @@ final class IntentFixture {
     }
 
     @Test func preferencesDefaultToOffExceptAsking() throws {
-        let suite = "dev.openhuman.mail.tests.intents.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaults = ScopedDefaults("dev.openhuman.mail.tests.intents")
+        defer { defaults.cleanup() }
         let preferences = IntentPreferences(defaults: defaults)
         #expect(!preferences.isEnabled && !preferences.shareSubjects && !preferences.allowMailChanges)
         #expect(preferences.askBeforeChanges)

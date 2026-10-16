@@ -120,8 +120,8 @@ final class SettingsWindowRecorder {
 @Suite(.serialized)
 struct NewMailModeTests {
     @Test func theModePersistsAndAnAccountSwitchedOffBeforeReadsAsOff() throws {
-        let (defaults, name) = scratchDefaults()
-        defer { defaults.removePersistentDomain(forName: name) }
+        let defaults = ScopedDefaults("openhuman.test.settings")
+        defer { defaults.cleanup() }
         defaults.set(false, forKey: SystemPreferences.newMailKey(AccountID(5)))
         let a = SystemPreferences(defaults: defaults)
         #expect(a.newMailMode(AccountID(5)) == .off && a.newMailMode(AccountID(6)) == .important, "Important only by default")

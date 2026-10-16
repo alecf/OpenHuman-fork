@@ -1,15 +1,15 @@
 import Foundation
 import MailFakes
 import MailFeatures
+import OpenHumanCore
 import Testing
 @testable import OpenHumanMail
 
 @MainActor
 struct SendToDeviceWiringTests {
     @Test func theSheetsEntryPointsFollowTheDeveloperOption() throws {
-        let suite = "send-to-device-wiring-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaults = ScopedDefaults("openhuman.test.send-to-device-wiring")
+        defer { defaults.cleanup() }
         let environment = AppEnvironment.fake(corpus: .make(threadCount: 1, now: Date(timeIntervalSince1970: 1_791_000_000)))
         let center = environment.system.sendFeedback
 

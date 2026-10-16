@@ -13,9 +13,8 @@ struct SignOutCleanupTests {
 
     @Test func theIndexerDropsAnAccountsDomainAtOnceAndForgetsItsLedger() async throws {
         let f = SystemFixture(corpus: .rich(threadCount: 30, now: fixedNow))
-        let suite = "openhuman.test.signout.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaults = ScopedDefaults("openhuman.test.signout")
+        defer { defaults.cleanup() }
         let indexer = SpotlightIndexer(data: f.store, settings: f.store, index: f.spotlight, defaults: defaults)
         indexer.debounce = .zero
         indexer.start()

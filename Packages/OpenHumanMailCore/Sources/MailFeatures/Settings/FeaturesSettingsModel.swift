@@ -29,8 +29,7 @@ public final class FeaturesSettingsModel {
 
     public convenience init(environment: AppEnvironment, modules: [any FeatureModule]? = nil,
                             defaults: UserDefaults = .standard) {
-        let target = environment.isFake ? (UserDefaults(suiteName: "openhuman.fake.features.\(UUID().uuidString)") ?? defaults)
-                                        : defaults
+        let target = environment.isFake ? AppEnvironment.fakeDefaults() : defaults
         self.init(modules: modules ?? ModuleList.all + ModuleList.configured(calendar: environment.calendar),
                   registered: environment.modules.modules, defaults: target)
     }

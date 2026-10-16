@@ -493,7 +493,7 @@ import Testing
     }
 
     @Test func cleanupPreferenceDefaultsOnAndWordingCounts() {
-        #expect(SystemPreferences(defaults: UserDefaults(suiteName: "unsub.cleanup.\(UUID().uuidString)")!).unsubscribeCleanupOffer)
+        #expect(SystemPreferences(defaults: ScopedDefaults("openhuman.test.unsub-cleanup")).unsubscribeCleanupOffer)
         #expect(ThreadActionHandler.cleanupMessage(count: 1, capped: false, hasAddress: true).contains("1 conversation from"))
         #expect(ThreadActionHandler.cleanupMessage(count: 3, capped: false, hasAddress: true).contains("3 conversations"))
         #expect(ThreadActionHandler.cleanupMessage(count: 500, capped: true, hasAddress: true).contains("500+"))

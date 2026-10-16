@@ -125,10 +125,8 @@ import Testing
 
     @MainActor
     @Test func settingsPersistInDefaults() throws {
-        let suite = "dev.openhuman.tests.devfeedback.settings"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaults = ScopedDefaults("openhuman.test.devfeedback.settings")
+        defer { defaults.cleanup() }
         let settings = DevFeedbackSettings(defaults: defaults)
         #expect(settings.isEnabled)
         #expect(settings.taildropTarget.isEmpty)

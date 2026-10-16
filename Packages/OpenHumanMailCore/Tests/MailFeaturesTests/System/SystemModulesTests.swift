@@ -200,9 +200,8 @@ struct NotificationsSettingsModelTests {
     }
 
     @Test func preferencesPersistInTheirDefaultsSuite() {
-        let suite = "openhuman.test.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaults = ScopedDefaults("openhuman.test.system")
+        defer { defaults.cleanup() }
         let a = SystemPreferences(defaults: defaults)
         a.hidePreviews = true
         a.dockBadge = .inbox

@@ -34,11 +34,9 @@ private enum Hostile {
 @MainActor
 @Suite(.serialized) struct DevFeedbackPrivacyTests {
     let support = FileManager.default.temporaryDirectory.appendingPathComponent("oh-devfeedback-app-\(UUID().uuidString)", isDirectory: true)
+    let defaults = ScopedDefaults("openhuman.test.devfeedback.privacy")
 
     func center(for app: AppModel) throws -> (DevFeedbackCenter, AppDevFeedbackHost) {
-        let suite = "dev.openhuman.tests.devfeedback.privacy"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
         let center = DevFeedbackCenter(availability: .devTools, settings: DevFeedbackSettings(defaults: defaults),
                                        paths: DevFeedbackPaths(support: support),
                                        bundledChecklist: Bundle.main.url(forResource: "dev-test-checklist", withExtension: "json"))
@@ -61,7 +59,7 @@ private enum Hostile {
     }
 
     @Test func mailScreenBundleWithDefaultsHasNoHostileContent() async throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         let corpus = FakeCorpus.make(threadCount: 10)
         let gmail = FakeGmail(accountEmail: corpus.account.email)
         await FakeGmailLaunch.seed(gmail, corpus: corpus)
@@ -126,7 +124,7 @@ private enum Hostile {
     }
 
     @Test func signInScreenBundleHasNoHintOrPastedAddress() async throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         let store = FakeMailStore(corpus: .make(threadCount: 2))
         let signIn = SignInModel(accounts: store, loginHint: Hostile.loginHint)
         signIn.pastedAddress = Hostile.pasted
@@ -144,7 +142,7 @@ private enum Hostile {
     }
 
     @Test func fakeDataRunReportsCountsFromTheFakeStore() async throws {
-        defer { try? FileManager.default.removeItem(at: support) }
+        defer { try? FileManager.default.removeItem(at: support); defaults.cleanup() }
         let app = CompositionRoot.makeApp(arguments: ["-UseFakeData"], environment: [:])
         let (center, host) = try center(for: app)
         let counters = await host.accountCounters()

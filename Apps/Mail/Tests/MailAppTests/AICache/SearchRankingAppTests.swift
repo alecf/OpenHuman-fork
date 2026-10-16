@@ -82,10 +82,10 @@ private func key(_ account: Int64, _ row: Int64, _ thread: String) -> ThreadKey 
     }
 
     @Test func settingsPersistInTheirOwnDefaultsSuite() {
-        let suite = "dev.openhuman.mail.tests.searchRanking.\(UUID().uuidString)"
-        defer { UserDefaults().removePersistentDomain(forName: suite) }
-        service(persistence: .defaults(suite: suite)).save(SearchRankingSettings(sort: .recent, preset: .relevance))
-        #expect(service(persistence: .defaults(suite: suite)).settings() == SearchRankingSettings(sort: .recent, preset: .relevance))
+        let suite = ScopedDefaults("dev.openhuman.mail.tests.searchRanking")
+        defer { suite.cleanup() }
+        service(persistence: .defaults(suite: suite.name)).save(SearchRankingSettings(sort: .recent, preset: .relevance))
+        #expect(service(persistence: .defaults(suite: suite.name)).settings() == SearchRankingSettings(sort: .recent, preset: .relevance))
         #expect(service(persistence: .memory).settings() == .defaults)
     }
 

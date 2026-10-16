@@ -43,6 +43,9 @@ For a focused loop, run `swift test` inside the package you changed.
 Tests must use fixtures rather than real mail accounts.
 Tests make temporary folders with `TemporaryDirectory` from OpenHumanCore and remove
 them when the test ends; `check-test-patterns.py` rejects other new temporary paths.
+Defaults suites come from `ScopedDefaults` in OpenHumanCore, which keeps the suite's plist
+in a temporary folder instead of `~/Library/Preferences` and removes it when the test ends;
+`check-test-patterns.py` rejects other new `UserDefaults(suiteName:)` calls in tests.
 `Tools/ci/build-packages.sh --platform ios` checks that the packages still compile
 for iOS, and `Tools/ci/build-ios-app.sh` builds the iPhone app; see
 [Build for iOS](IOS-BUILD.md).

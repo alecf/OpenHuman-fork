@@ -200,14 +200,14 @@ import Testing
     }
 
     @Test func userDefaultsStoresRoundTrip() throws {
-        let suite = "dev.openhuman.mail.tests.actions.\(UUID().uuidString)"
-        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
-        let keymaps = UserDefaultsKeymapStore(suiteName: suite)
+        let suite = ScopedDefaults("dev.openhuman.mail.tests.actions")
+        defer { suite.cleanup() }
+        let keymaps = UserDefaultsKeymapStore(suiteName: suite.name)
         #expect(keymaps.load() == nil)
         let overrides = KeymapOverrides(bindings: ["thread.done": ["y"]])
         keymaps.save(overrides)
         #expect(keymaps.load() == overrides)
-        let recents = UserDefaultsRecentActionsStore(suiteName: suite)
+        let recents = UserDefaultsRecentActionsStore(suiteName: suite.name)
         recents.save([RecentActionUse(id: .markDone, count: 2, lastUsed: Date(timeIntervalSince1970: 1))])
         #expect(recents.load().map(\.id) == [.markDone])
         #expect(UserDefaultsKeymapStore.key.hasPrefix("dev.openhuman.mail."))

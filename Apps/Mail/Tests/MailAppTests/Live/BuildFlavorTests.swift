@@ -1,6 +1,7 @@
 import Foundation
 import MailFakes
 import MailFeatures
+import OpenHumanCore
 import Testing
 @testable import OpenHumanMail
 @testable import OpenHumanMailLive
@@ -51,9 +52,8 @@ struct BuildFlavorTests {
     }
 
     @Test func theDebuggingToolsFollowTheirSwitch() throws {
-        let suite = "debugging-tools-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaults = ScopedDefaults("openhuman.test.debugging-tools")
+        defer { defaults.cleanup() }
         let environment = AppEnvironment.fake(corpus: .make(threadCount: 1, now: Date(timeIntervalSince1970: 1_791_000_000)))
         #expect(!environment.system.showsDebuggingTools(), "hidden until a dev-tools build installs the switch")
         let devTools = DeveloperOptions(devFeedback: .devTools, defaults: defaults)
