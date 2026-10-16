@@ -21,7 +21,7 @@ struct SettingsRoot: View {
                 SettingsShellView(standaloneHosting: SettingsHosting(
                     appearance: { AnyView(appearance) }, advancedExtras: { AnyView(advanced) },
                     showsDeveloperItems: Self.showsDeveloperItems(developerOptions),
-                    offersDeveloperSettings: developerOptions.isAvailable || devFeedback.availability.isAvailable,
+                    offersDeveloperSettings: developerOptions.isAvailable,
                     build: .main))
             }
         }
@@ -52,7 +52,7 @@ struct SettingsRoot: View {
             } },
             printText: { PrintCheatSheet.print($0) },
             showsDeveloperItems: Self.showsDeveloperItems(developerOptions),
-            offersDeveloperSettings: developerOptions.isAvailable || devFeedback.availability.isAvailable,
+            offersDeveloperSettings: developerOptions.isAvailable,
             build: .main)
     }
 
@@ -71,10 +71,12 @@ struct SettingsRoot: View {
 
     private var advanced: some View {
         Group {
+            #if OH_DEV_TOOLS
             DeveloperOptionsSection(options: developerOptions)
             DevFeedbackSettingsView(settings: devFeedback.settings, availability: devFeedback.availability,
                                     feedbackFolder: devFeedback.paths.feedbackDirectory.path,
                                     onRevealFolder: { DevFeedbackRuntime.revealFeedbackFolder(devFeedback) })
+            #endif
         }
     }
 }
@@ -88,29 +90,51 @@ enum AppDeveloperOptions {
         if let created { return created }
         let defaults = environment["XCTestConfigurationFilePath"] != nil
             ? (UserDefaults(suiteName: "dev.openhuman.mail.tests.developerOptions") ?? .standard) : .standard
-        let options = DeveloperOptions(environment: environment, devFeedback: devFeedback, defaults: defaults)
+        let options = DeveloperOptions(devFeedback: devFeedback, defaults: defaults)
         created = options
         return options
     }
 }
 
+#if OH_DEV_TOOLS
 struct DeveloperOptionsSection: View {
     @Bindable var options: DeveloperOptions
 
     static let detail = "Shows the switches and notes meant for developers in Settings: every feature module, build "
-        + "notes and models that aren't available yet. Off by default; launching with OPENHUMAN_DEVELOPER=1 turns it on."
+        + "notes and models that aren't available yet. Off by default."
     static let sendToDeviceTitle = "Send to another device via Tailscale"
     static let sendToDeviceDetail = "Adds \"\(SendFeedbackCenter.menuTitle)\" to the Help menu, the command palette and "
         + "this page: a note with scrubbed diagnostics, sent to one of your own devices over Tailscale. Off by default."
+    static let debuggingToolsTitle = "Show debugging tools"
+    static let debuggingToolsDetail = "Adds \"Copy debug info for this conversation\" and \"Save debug info to a "
+        + "file…\" to the Help menu and the command palette. They only read; nothing about your mail changes. Off by "
+        + "default."
 
     var body: some View {
         if options.isAvailable {
             SettingsSection("Developer options") {
                 SettingsRow("Show developer options", detail: Self.detail, isOn: $options.isOn)
+                SettingsRow(Self.debuggingToolsTitle, detail: Self.debuggingToolsDetail, isOn: $options.debuggingTools)
                 SettingsRow(Self.sendToDeviceTitle, detail: Self.sendToDeviceDetail, isOn: $options.sendToDevice)
             }
         }
     }
+}
+#endif
+
+@MainActor
+enum DebuggingTools {
+    static func install(in environment: AppEnvironment) {
+        #if OH_DEV_TOOLS
+        install(in: environment, options: AppDeveloperOptions.shared(DevFeedbackRuntime.availability))
+        #endif
+    }
+
+    #if OH_DEV_TOOLS
+    static func install(in environment: AppEnvironment, options: DeveloperOptions) {
+        environment.system.showsDebuggingTools = { options.showsDebuggingTools }
+    }
+    #endif
 }
 
 @MainActor

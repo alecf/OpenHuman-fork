@@ -129,7 +129,7 @@ enum Fixtures {
         let location = StoreLocation(directory: URL(fileURLWithPath: "/tmp/oh"))
         #expect(location.databaseURL.lastPathComponent == "mail.sqlite")
         let options = StoreOptions(location: location, processKind: .cli, appVersion: "0.1.0")
-        #expect(!options.readOnly && !options.observeExternalChanges)
+        #expect(!options.readOnly && !options.observeExternalChanges && !options.pollOnly)
     }
 
     @Test func syncWritingTypes() {

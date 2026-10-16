@@ -333,7 +333,7 @@ extension AppSystemEvents {
         == "Google didn't give Mail permission to read your mail. Sign in again and allow it.")
     #expect(message(OAuthError.insufficientScopes(missing: [GmailScope.modify])).hasPrefix(
         "Google didn't give Mail permission to change your mail. Sign in again and allow it. Nothing was saved.\nDetails: "))
-    #expect(message(OAuthError.configurationMissing("OPENHUMAN_OAUTH_CLIENT_JSON: file not readable"))
+    #expect(message(OAuthError.configurationMissing("client file: file not readable"))
         == LiveAccountManager.clientMissing)
     #expect(!LiveAccountManager.clientMissing.contains("OPENHUMAN") && !LiveAccountManager.clientMissing.contains("xcconfig"))
     #expect(!LiveAccountManager.broaderThanModify.contains("gmail.modify"))

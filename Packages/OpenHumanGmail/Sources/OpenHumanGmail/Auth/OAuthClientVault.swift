@@ -168,9 +168,9 @@ public final class OAuthClientVault: Sendable {
         return all.first(where: \.isDefault) ?? all.first
     }
 
-    func environmentClient(_ environment: [String: String]) throws -> OAuthClientConfig? {
-        guard OAuthClientConfig.resolveSource(environment: environment, storeDirectory: nil) == .environment else { return nil }
-        return try OAuthClientConfig.load(environment: environment, storeDirectory: nil)
+    func developerClient(_ clientFile: String?) throws -> OAuthClientConfig? {
+        guard OAuthClientConfig.resolveSource(clientFile: clientFile, storeDirectory: nil) == .environment else { return nil }
+        return try OAuthClientConfig.load(clientFile: clientFile, storeDirectory: nil)
     }
 
     private func defaultWithoutEnvironment() -> OAuthClientConfig? {
@@ -179,24 +179,23 @@ public final class OAuthClientVault: Sendable {
         return legacyFileClients().first
     }
 
-    public func loadDefault(environment: [String: String]) throws -> OAuthClientConfig {
-        if let env = try environmentClient(environment) { return env }
+    public func loadDefault(clientFile: String?) throws -> OAuthClientConfig {
+        if let developer = try developerClient(clientFile) { return developer }
         if let client = defaultWithoutEnvironment() { return client }
-        throw OAuthError.configurationMissing(
-            "no OAuth client: set \(OAuthClientConfig.environmentKey), import a Desktop client JSON, or use the client picker")
+        throw OAuthError.configurationMissing("no OAuth client: import a Desktop client JSON, or use the client picker")
     }
 
-    public func source(environment: [String: String]) -> OAuthClientSource {
-        if OAuthClientConfig.resolveSource(environment: environment, storeDirectory: nil) == .environment { return .environment }
+    public func source(clientFile: String?) -> OAuthClientSource {
+        if OAuthClientConfig.resolveSource(clientFile: clientFile, storeDirectory: nil) == .environment { return .environment }
         return defaultWithoutEnvironment() == nil ? .missing : .storeFile
     }
 
-    public func available(environment: [String: String]) -> [OAuthClientConfig] {
+    public func available(clientFile: String?) -> [OAuthClientConfig] {
         var result: [OAuthClientConfig] = []
         func add(_ client: OAuthClientConfig) {
             if !result.contains(where: { $0.clientID == client.clientID }) { result.append(client) }
         }
-        if let main = try? loadDefault(environment: environment) { add(main) }
+        if let main = try? loadDefault(clientFile: clientFile) { add(main) }
         for item in stored() { add(item.config) }
         for client in importedHere.withLock({ $0 }) { add(client) }
         for client in legacyFileClients() { add(client) }

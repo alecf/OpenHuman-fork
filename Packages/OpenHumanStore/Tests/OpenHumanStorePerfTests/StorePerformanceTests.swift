@@ -130,10 +130,8 @@ import Testing
     private static func wakeLatency(store: MailStore, account: AccountID, dir: URL, helper: String, label: String,
                                     pollOnly: Bool, budgetMs: Double) async throws -> Sample {
         try store.close()
-        if pollOnly { setenv("OPENHUMAN_STORE_POLL_ONLY", "1", 1) }
         let observer = try MailStore.open(StoreOptions(location: StoreLocation(directory: dir), processKind: .app,
-                                                       observeExternalChanges: true, appVersion: "perf"))
-        unsetenv("OPENHUMAN_STORE_POLL_ONLY")
+                                                       observeExternalChanges: true, appVersion: "perf", pollOnly: pollOnly))
         defer { try? observer.close() }
         let list = PerfCollector(observer.observeThreadList(view: .system(account, .inbox), limit: 100))
         _ = await list.wait { !$0.isEmpty }

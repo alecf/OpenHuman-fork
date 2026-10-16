@@ -1,8 +1,8 @@
 import Foundation
 
 extension StoreLocation {
-    public static func resolve(environment: [String: String] = ProcessInfo.processInfo.environment) throws -> StoreLocation {
-        if let home = environment["OPENHUMAN_HOME"], !home.isEmpty {
+    public static func resolve(home: String? = nil) throws -> StoreLocation {
+        if let home, !home.isEmpty {
             return StoreLocation(directory: URL(fileURLWithPath: (home as NSString).expandingTildeInPath, isDirectory: true))
         }
         let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,

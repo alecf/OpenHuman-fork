@@ -1,0 +1,12 @@
+{
+  "id": "feedback.debugging-tools",
+  "area": "Feedback",
+  "title": "Conversation debug info is a developer option",
+  "steps": [
+    "Launch a Debug build with -UseFakeData, open a conversation, press ⌘K and type debug",
+    "In Settings › Advanced › Developer options, turn on Show debugging tools",
+    "Press ⌘K and type debug again, then open the Help menu"
+  ],
+  "expected": "Copy debug info for this conversation and Save debug info to a file… are missing until the option is on, then show in the command palette and the Help menu. Nothing about the mail changes.",
+  "requires": "fake"
+}

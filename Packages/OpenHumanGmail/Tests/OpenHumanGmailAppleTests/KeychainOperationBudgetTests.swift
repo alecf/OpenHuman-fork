@@ -263,7 +263,7 @@ private func runLaunch(_ install: Install, _ endpoint: FakeTokenEndpoint,
     install.vault.migrateLegacyFiles()
     install.synced.migrateLocalSignIns()
     _ = try install.synced.load(account: Fixture.existing)
-    let known = install.vault.available(environment: [:])
+    let known = install.vault.available(clientFile: nil)
     _ = try install.synced.load(account: Fixture.existing)
     _ = try install.calendar.load(account: Fixture.existing)
     let client = try #require(known.first)

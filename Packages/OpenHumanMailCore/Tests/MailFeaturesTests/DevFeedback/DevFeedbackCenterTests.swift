@@ -9,7 +9,7 @@ import Testing
 @MainActor
 final class FakeDevFeedbackHost: DevFeedbackHost {
     var appInfo = DevFeedbackSnapshot.AppInfo(version: "0.1.0", build: "1", gitCommit: "abc1234", configuration: "Debug",
-                                              dataMode: "fake", devFeedbackEnabledBy: "debugBuild", os: "macOS 27")
+                                              dataMode: "fake", devFeedbackEnabledBy: "devTools", os: "macOS 27")
     var screenName = "mail"
     var theme: DevFeedbackSnapshot.ThemeInfo? = .init(themeID: "openhuman.light", appearance: "light", mode: "system", accentID: "blue")
     var extraDenylist: [String] = []
@@ -51,7 +51,7 @@ func contentStrings(_ corpus: FakeCorpus) -> [String] {
              "requires": item.requires.rawValue, "deepLink": item.deepLink.map { $0 as Any } ?? NSNull()]
         }
         try JSONSerialization.data(withJSONObject: ["items": items]).write(to: bundled)
-        let center = DevFeedbackCenter(availability: .debugBuild, settings: DevFeedbackSettings(defaults: defaults),
+        let center = DevFeedbackCenter(availability: .devTools, settings: DevFeedbackSettings(defaults: defaults),
                                        paths: DevFeedbackPaths(support: support), bundledChecklist: bundled,
                                        now: { fixedNow }, timeZone: TimeZone(identifier: "Europe/Berlin") ?? .current)
         center.host = host

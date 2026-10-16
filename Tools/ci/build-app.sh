@@ -9,11 +9,14 @@ Usage: Tools/ci/build-app.sh [options]
 Builds the Mail app. Runs Tools/bootstrap.sh first, which installs the pinned
 XcodeGen and generates the Xcode project.
 
-  --configuration <Debug|Release>  default Release
+  --configuration <Debug|DevTools|Release>
+                                   default Release. DevTools is optimised like Release and adds the
+                                   developer tools: the Developer menu, the test checklist, Developer
+                                   options and the sample-data launch arguments. Release has none of them
   --derived-data <dir>             default <repo>/build/dd (ignored by git)
   --build-number <n>               CURRENT_PROJECT_VERSION; default: the project's value
-  --local-install                  after a Release build, copy the app to "OpenHuman Mail.app" in the
-                                   install folder (default ~/Applications, created if missing; no sudo).
+  --local-install                  after a Release or DevTools build, copy the app to "OpenHuman Mail.app"
+                                   in the install folder (default ~/Applications, created if missing; no sudo).
                                    Override with --install-dir <dir> or OH_INSTALL_DIR. An existing copy at
                                    that path (or under the old name "Mail by OpenHuman.app") is replaced.
                                    Never touches /Applications unless you ask for it.
@@ -39,7 +42,8 @@ while [[ $# -gt 0 ]]; do
         *) echo "build-app: unknown argument $1 (see --help)" >&2; exit 2 ;;
     esac
 done
-[[ "$INSTALL" == 0 || "$CONFIG" == Release ]] || { echo "build-app: --local-install needs --configuration Release" >&2; exit 2; }
+case "$CONFIG" in Debug|DevTools|Release) ;; *) echo "build-app: --configuration must be Debug, DevTools or Release" >&2; exit 2 ;; esac
+[[ "$INSTALL" == 0 || "$CONFIG" != Debug ]] || { echo "build-app: --local-install needs --configuration Release or DevTools" >&2; exit 2; }
 
 "$ROOT/Tools/bootstrap.sh"
 

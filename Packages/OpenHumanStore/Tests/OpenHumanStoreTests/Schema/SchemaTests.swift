@@ -110,10 +110,10 @@ private func tempStore(kind: ProcessKind = .test, readOnly: Bool = false, dir: U
         }
     }
 
-    @Test func resolveHonorsOpenHumanHome() throws {
-        let loc = try StoreLocation.resolve(environment: ["OPENHUMAN_HOME": "/tmp/oh-home"])
+    @Test func resolveHonorsAHomeDirectory() throws {
+        let loc = try StoreLocation.resolve(home: "/tmp/oh-home")
         #expect(loc.directory.path == "/tmp/oh-home")
-        let def = try StoreLocation.resolve(environment: [:])
+        let def = try StoreLocation.resolve(home: nil)
         #expect(def.directory.path.hasSuffix("Application Support/OpenHuman/Mail"))
     }
 }

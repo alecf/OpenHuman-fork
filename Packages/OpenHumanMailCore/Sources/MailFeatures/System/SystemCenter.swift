@@ -23,6 +23,7 @@ public final class SystemCenter {
     @ObservationIgnored public let platform: SystemPlatform
     @ObservationIgnored public let preferences: SystemPreferences
     @ObservationIgnored public var logLines: @MainActor () -> [String] = { [] }
+    @ObservationIgnored public var showsDebuggingTools: @MainActor () -> Bool = { false }
     @ObservationIgnored public var coalesce: Duration = NotificationService.defaultCoalesce
     @ObservationIgnored private unowned let environment: AppEnvironment
     @ObservationIgnored private var observers: [Task<Void, Never>] = []

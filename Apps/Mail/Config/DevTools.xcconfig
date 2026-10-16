@@ -1,0 +1,5 @@
+// Optimised like Release, with the developer tools compiled in (OH_DEV_TOOLS); never hand this build out.
+#include "Base.xcconfig"
+SWIFT_OPTIMIZATION_LEVEL = -O
+SWIFT_COMPILATION_MODE = wholemodule
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = OH_DEV_TOOLS

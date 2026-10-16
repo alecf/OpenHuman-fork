@@ -54,12 +54,4 @@ import Testing
             #expect(throws: TokenStoreError.invalidAccount) { try store.save(token, account: bad) }
         }
     }
-
-    @Test func insecureFileTokensOnlyWhenExplicitlyEnabled() throws {
-        let dir = try TempDirectory()
-        defer { dir.cleanup() }
-        #expect(FileTokenStore.insecureFromEnvironment([:], baseDirectory: dir.url) == nil)
-        #expect(FileTokenStore.insecureFromEnvironment(["OPENHUMAN_INSECURE_FILE_TOKENS": "true"], baseDirectory: dir.url) == nil)
-        #expect(FileTokenStore.insecureFromEnvironment(["OPENHUMAN_INSECURE_FILE_TOKENS": "1"], baseDirectory: dir.url) != nil)
-    }
 }

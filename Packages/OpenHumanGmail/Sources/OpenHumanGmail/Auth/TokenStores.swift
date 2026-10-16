@@ -47,18 +47,10 @@ public final class InMemoryTokenStore: TokenStore {
 }
 
 public final class FileTokenStore: TokenStore {
-    public static let environmentKey = "OPENHUMAN_INSECURE_FILE_TOKENS"
     public let directory: URL
 
     public init(baseDirectory: URL) {
         directory = baseDirectory.appendingPathComponent("tokens", isDirectory: true)
-    }
-
-    public static func insecureFromEnvironment(_ environment: [String: String], baseDirectory: URL) -> FileTokenStore? {
-        guard environment[environmentKey] == "1" else { return nil }
-        FileHandle.standardError.write(Data(
-            "warning: \(environmentKey)=1: OAuth tokens are stored in plain files under \(baseDirectory.path)/tokens\n".utf8))
-        return FileTokenStore(baseDirectory: baseDirectory)
     }
 
     private func fileURL(_ email: String) throws -> URL {

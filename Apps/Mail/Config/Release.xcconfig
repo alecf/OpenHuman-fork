@@ -1,7 +1,7 @@
 #include "Base.xcconfig"
 SWIFT_OPTIMIZATION_LEVEL = -O
 SWIFT_COMPILATION_MODE = wholemodule
+SWIFT_ACTIVE_COMPILATION_CONDITIONS =
 
-// The developer test checklist stays out of Release bundles. A Release run with OPENHUMAN_DEV_FEEDBACK=1 reads an
-// override file from the support folder instead; Debug builds and the tests keep the bundled copy.
+// The developer test checklist stays out of Release bundles; Debug and DevTools builds keep the bundled copy.
 EXCLUDED_SOURCE_FILE_NAMES = dev-test-checklist.json

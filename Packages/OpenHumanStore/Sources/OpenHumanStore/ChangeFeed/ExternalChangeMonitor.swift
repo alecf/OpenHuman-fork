@@ -14,7 +14,7 @@ final class ExternalChangeMonitor: Sendable {
         var inactive: TimeInterval
         var leewayFraction: Double
         static let standard = PollPolicy(active: 30, inactive: 60, leewayFraction: 0.1)
-        static let pollOnlyTestHook = PollPolicy(active: 1, inactive: 10, leewayFraction: 0.1)
+        static let pollOnly = PollPolicy(active: 1, inactive: 10, leewayFraction: 0.1)
         func interval(active isActive: Bool) -> TimeInterval { isActive ? active : inactive }
         func leeway(active isActive: Bool) -> DispatchTimeInterval {
             .milliseconds(Int(interval(active: isActive) * leewayFraction * 1_000))
@@ -34,14 +34,16 @@ final class ExternalChangeMonitor: Sendable {
     private let queue = DispatchQueue(label: "dev.openhuman.mail.store.monitor")
     private let state = Mutex(State())
     let notificationName: String
+    let pollOnly: Bool
     private let readOthers: @Sendable () throws -> [String: Int64]
     private let pulse: @Sendable () throws -> Void
     private let log = Log(.store)
     private var policy: PollPolicy { state.withLock { $0.policy } }
 
-    init(notificationName: String = OHIdentifiers.storeChangedNotification,
+    init(notificationName: String = OHIdentifiers.storeChangedNotification, pollOnly: Bool = false,
          readOthers: @escaping @Sendable () throws -> [String: Int64], pulse: @escaping @Sendable () throws -> Void) {
         self.notificationName = notificationName
+        self.pollOnly = pollOnly
         self.readOthers = readOthers
         self.pulse = pulse
     }
@@ -50,11 +52,11 @@ final class ExternalChangeMonitor: Sendable {
 
     func start(active: Bool = true, poll: Bool = true) {
         queue.sync {
-            if ProcessInfo.processInfo.environment["OPENHUMAN_STORE_POLL_ONLY"] == "1" { state.withLock { $0.policy = .pollOnlyTestHook } }
+            if pollOnly { state.withLock { $0.policy = .pollOnly } }
             guard !state.withLock({ $0.stopped }) else { return }
             state.withLock { $0.others = (try? readOthers()) ?? [:] }
             #if canImport(Darwin)
-            if ProcessInfo.processInfo.environment["OPENHUMAN_STORE_POLL_ONLY"] != "1" {
+            if !pollOnly {
                 var token: Int32 = 0
                 let status = notify_register_dispatch(notificationName, &token, queue) { [weak self] _ in
                     self?.performCheck()

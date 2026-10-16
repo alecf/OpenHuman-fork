@@ -67,9 +67,7 @@ import Testing
     }
 
     @Test func thePollFallbackAloneWakesTheObserverOfAnotherProcessWrite() async throws {
-        setenv("OPENHUMAN_STORE_POLL_ONLY", "1", 1)
-        let (store, dir) = try openTemp(kind: .app, observe: true)
-        unsetenv("OPENHUMAN_STORE_POLL_ONLY")
+        let (store, dir) = try openTemp(kind: .app, observe: true, pollOnly: true)
         defer { try? FileManager.default.removeItem(at: dir) }
         let account = try store.addAccount(email: "me@example.com", displayName: nil, scopes: [])
         try store.upsertLabels(OpenHumanStoreTesting.systemLabels, account: account, removeMissing: false)

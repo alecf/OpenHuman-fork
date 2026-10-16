@@ -124,8 +124,7 @@ private final class Flag {
 
 @Test func aTokenBroaderThanModifyIsNeverHandedToAClient() throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("oh-none-\(UUID().uuidString)")
-    let client = try OAuthClientConfig.load(environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()],
-                                            storeDirectory: directory)
+    let client = try OAuthClientConfig.load(clientFile: try SyntheticClient.writeJSON(), storeDirectory: directory)
     let tokens = InMemoryTokenStore([
         "robin@example.com": StoredToken(refreshToken: "synthetic-1", grantedScopes: [GmailScope.modify],
                                          clientID: SyntheticClient.clientID),

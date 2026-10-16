@@ -27,7 +27,8 @@ guard let command = args.first else { usage() }
 
 func location(_ override: String?) -> StoreLocation {
     if let override { return StoreLocation(directory: URL(fileURLWithPath: override, isDirectory: true)) }
-    do { return try StoreLocation.resolve() } catch { fail("cannot resolve the store location: \(error)") }
+    let home = ProcessInfo.processInfo.environment["OPENHUMAN_HOME"]
+    do { return try StoreLocation.resolve(home: home) } catch { fail("cannot resolve the store location: \(error)") }
 }
 
 func openStore(_ loc: StoreLocation) -> MailStore {

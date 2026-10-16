@@ -28,7 +28,7 @@ public final class CLIContext {
         if let home = global.home, !home.isEmpty {
             location = StoreLocation(directory: URL(fileURLWithPath: (home as NSString).expandingTildeInPath, isDirectory: true))
         } else {
-            do { location = try StoreLocation.resolve(environment: variables) } catch {
+            do { location = try StoreLocation.resolve(home: variables["OPENHUMAN_HOME"]) } catch {
                 throw CLIError("failure", "Cannot resolve the store location.", .failure)
             }
         }

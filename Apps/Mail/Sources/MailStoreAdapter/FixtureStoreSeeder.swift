@@ -1,3 +1,4 @@
+#if DEBUG || OH_DEV_TOOLS
 import Foundation
 import MailFakes
 import MailModel
@@ -109,3 +110,4 @@ public enum FixtureStoreSeeder {
         return account
     }
 }
+#endif

@@ -12,18 +12,12 @@ enum DevFeedbackRuntime {
     static let checklistWindowID = "dev-checklist"
     static let mainWindowID = "main"
 
-    static var isDebugBuild: Bool {
-        #if DEBUG
-        true
-        #else
-        false
-        #endif
-    }
+    static var availability: DevFeedbackAvailability { BuildFlavor.hasDevTools ? .devTools : .off }
 
     static func start(arguments: [String] = ProcessInfo.processInfo.arguments,
                       environment: [String: String] = ProcessInfo.processInfo.environment,
                       app: @escaping @MainActor () -> AppModel? = { MailApp.app }) -> DevFeedbackCenter {
-        let availability = DevFeedbackAvailability.resolve(environment: environment, isDebugBuild: isDebugBuild)
+        let availability = Self.availability
         let underTests = environment["XCTestConfigurationFilePath"] != nil
         let paths: DevFeedbackPaths
         let defaults: UserDefaults
@@ -32,7 +26,8 @@ enum DevFeedbackRuntime {
                 .appendingPathComponent("OpenHumanMail-DevFeedback-\(UUID().uuidString)", isDirectory: true))
             defaults = UserDefaults(suiteName: "dev.openhuman.mail.tests.devfeedback") ?? .standard
         } else {
-            paths = DevFeedbackPaths.resolve(environment: environment)
+            paths = DevFeedbackPaths.resolve(home: BuildFlavor.home(environment),
+                                             feedbackDirectory: BuildFlavor.feedbackDirectory(environment))
             defaults = .standard
         }
         let center = DevFeedbackCenter(
@@ -110,7 +105,7 @@ final class AppDevFeedbackHost: DevFeedbackHost {
             version: info["CFBundleShortVersionString"] as? String ?? "unknown",
             build: info["CFBundleVersion"] as? String ?? "unknown",
             gitCommit: (info["OHGitCommit"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "unknown",
-            configuration: DevFeedbackRuntime.isDebugBuild ? "Debug" : "Release", dataMode: mode,
+            configuration: BuildFlavor.name, dataMode: mode,
             devFeedbackEnabledBy: availability.rawValue,
             os: ProcessInfo.processInfo.operatingSystemVersionString)
     }

@@ -205,7 +205,7 @@ struct ConversationDebugReportTests {
         #expect(outcome.matches == nil)
     }
 
-    @Test func catalogEntriesHaveNoKeyAndShowInRelease() throws {
+    @Test func catalogEntriesHaveNoKeyAndChangeNoMail() throws {
         for id in [ActionID.copyConversationDebug, .saveConversationDebug] {
             let descriptor = try #require(ActionCatalog.descriptor(id))
             #expect(descriptor.defaultBindings.isEmpty)
@@ -214,6 +214,24 @@ struct ConversationDebugReportTests {
             #expect(descriptor.changesMail == false)
         }
         #expect(ActionCatalog.descriptor(.copyConversationDebug)?.title == "Copy debug info for this conversation")
+    }
+
+    @Test func theActionsShowOnlyWhileTheDebuggingToolsAreShown() {
+        let environment = AppEnvironment.fake(corpus: FakeCorpus.make(threadCount: 1, now: Self.now))
+        let handler = ConversationDebugActionHandler(environment: environment)
+        let context = ActionContext(scope: .reader)
+        for id in ConversationDebugActionHandler.ids {
+            #expect(handler.availability(of: id, in: context, host: nil) == .hidden, "off unless a dev-tools build turns it on")
+        }
+        var shown = true
+        environment.system.showsDebuggingTools = { shown }
+        for id in ConversationDebugActionHandler.ids {
+            #expect(handler.availability(of: id, in: context, host: nil) == .enabled)
+        }
+        shown = false
+        for id in ConversationDebugActionHandler.ids {
+            #expect(handler.availability(of: id, in: context, host: nil) == .hidden)
+        }
     }
 
     @Test func suggestedFileNameIsUTC() {

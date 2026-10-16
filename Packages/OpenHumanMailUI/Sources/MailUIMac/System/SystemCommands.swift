@@ -17,7 +17,8 @@ public struct SystemCommands: Commands {
                 Task { await system.exportDiagnostics() }
             }
             .disabled(environment?.modules.modules.contains(.diagnostics) != true)
-            if environment?.modules.modules.contains(.diagnostics) == true {
+            if environment?.modules.modules.contains(.diagnostics) == true
+                && environment?.system.showsDebuggingTools() == true {
                 ForEach([ActionID.copyConversationDebug, .saveConversationDebug].compactMap(ActionCatalog.descriptor)) { descriptor in
                     MenuItem(descriptor: descriptor, router: environment?.router)
                 }

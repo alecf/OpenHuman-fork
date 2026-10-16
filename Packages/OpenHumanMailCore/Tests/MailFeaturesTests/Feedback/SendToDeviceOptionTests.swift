@@ -25,26 +25,27 @@ import Testing
     @Test func theOptionIsOffByDefaultInEveryBuild() throws {
         let (defaults, name) = try scratch()
         defer { defaults.removePersistentDomain(forName: name) }
-        for availability in [DevFeedbackAvailability.off, .debugBuild, .environment] {
-            let options = DeveloperOptions(environment: [:], devFeedback: availability, defaults: defaults)
+        for availability in [DevFeedbackAvailability.off, .devTools] {
+            let options = DeveloperOptions(devFeedback: availability, defaults: defaults)
             #expect(!options.sendToDevice && !options.offersSendToDevice, "\(availability)")
         }
-        let developer = DeveloperOptions(environment: [DeveloperOptions.environmentKey: "1"], devFeedback: .off, defaults: defaults)
+        let developer = DeveloperOptions(devFeedback: .devTools, defaults: defaults)
+        developer.isOn = true
         #expect(developer.showsDeveloperItems && !developer.offersSendToDevice)
     }
 
     @Test func theOptionIsRememberedWhereOfferedAndIgnoredInAPublicBuild() throws {
         let (defaults, name) = try scratch()
         defer { defaults.removePersistentDomain(forName: name) }
-        let debug = DeveloperOptions(environment: [:], devFeedback: .debugBuild, defaults: defaults)
-        debug.sendToDevice = true
-        #expect(debug.offersSendToDevice)
-        #expect(DeveloperOptions(environment: [:], devFeedback: .debugBuild, defaults: defaults).offersSendToDevice)
+        let devTools = DeveloperOptions(devFeedback: .devTools, defaults: defaults)
+        devTools.sendToDevice = true
+        #expect(devTools.offersSendToDevice)
+        #expect(DeveloperOptions(devFeedback: .devTools, defaults: defaults).offersSendToDevice)
 
-        let release = DeveloperOptions(environment: [:], devFeedback: .off, defaults: defaults)
+        let release = DeveloperOptions(devFeedback: .off, defaults: defaults)
         #expect(!release.isAvailable && !release.offersSendToDevice)
         release.sendToDevice = false
-        #expect(DeveloperOptions(environment: [:], devFeedback: .debugBuild, defaults: defaults).offersSendToDevice,
+        #expect(DeveloperOptions(devFeedback: .devTools, defaults: defaults).offersSendToDevice,
                 "a run that does not offer the option leaves the stored choice alone")
     }
 

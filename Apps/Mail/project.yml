@@ -4,8 +4,13 @@ options:
   deploymentTarget: { macOS: "27.0" }
   createIntermediateGroups: true
   preGenCommand: python3 ../../Tools/ci/checklist.py build
+configs:
+  Debug: debug
+  DevTools: release
+  Release: release
 configFiles:
   Debug: Config/Debug.xcconfig
+  DevTools: Config/DevTools.xcconfig
   Release: Config/Release.xcconfig
 packages:
   OpenHumanMailUI: { path: ../../Packages/OpenHumanMailUI }
@@ -69,7 +74,7 @@ targets:
       - { package: OpenHumanStore, product: OpenHumanStore }
       - { package: OpenHumanGmail, product: OpenHumanGmail }
       - { package: OpenHumanGmail, product: OpenHumanGmailApple }
-      # Linked on purpose: -UseFakeGmail runs against it with no network and no Keychain
+      # Linked in every flavour; only Debug and DevTools builds compile the -UseFakeGmail entry point that uses it
       - { package: OpenHumanGmail, product: OpenHumanGmailTesting }
       - { package: OpenHumanSync, product: OpenHumanSync }
       - { package: OpenHumanAI, product: OpenHumanAI }
@@ -94,8 +99,13 @@ schemes:
   Mail:
     build: { targets: { Mail: all } }
     run:
+      config: Debug
       # Untick to sign in to a real account: every change then reaches Gmail
       commandLineArguments: { "-UseFakeGmail": true }
     test:
+      config: Debug
       targets: [MailAppTests]
       commandLineArguments: { "-UseFakeData": true, "-UseFakeCalendar": true }
+    analyze: { config: Debug }
+    profile: { config: Release }
+    archive: { config: Release }

@@ -30,22 +30,27 @@ struct UIFixesSettingsTests {
         #expect(FeaturesSettingsModel.userFacing.contains(.ai), "the user's own switches stay")
     }
 
-    @Test func developerOptionsAreOffByDefaultInEveryBuildAndOnWithTheVariable() throws {
+    @Test func developerOptionsAreOffByDefaultAndOnlyOfferedInADevToolsBuild() throws {
         let (defaults, name) = try scratch()
         defer { defaults.removePersistentDomain(forName: name) }
-        for availability in [DevFeedbackAvailability.off, .debugBuild, .environment] {
-            let options = DeveloperOptions(environment: [:], devFeedback: availability, defaults: defaults)
+        for availability in [DevFeedbackAvailability.off, .devTools] {
+            let options = DeveloperOptions(devFeedback: availability, defaults: defaults)
             #expect(!options.isOn && !options.showsDeveloperItems, "\(availability)")
+            #expect(!options.debuggingTools && !options.showsDebuggingTools, "\(availability)")
         }
-        let requested = DeveloperOptions(environment: [DeveloperOptions.environmentKey: "1"], devFeedback: .off, defaults: defaults)
-        #expect(requested.isAvailable && requested.showsDeveloperItems)
-        #expect(!DeveloperOptions(environment: [DeveloperOptions.environmentKey: "yes"], devFeedback: .off, defaults: defaults)
-            .showsDeveloperItems)
-        let debug = DeveloperOptions(environment: [:], devFeedback: .debugBuild, defaults: defaults)
-        debug.isOn = true
-        #expect(DeveloperOptions(environment: [:], devFeedback: .debugBuild, defaults: defaults).showsDeveloperItems)
-        let release = DeveloperOptions(environment: [:], devFeedback: .off, defaults: defaults)
-        #expect(!release.isAvailable && !release.showsDeveloperItems)
+        let devTools = DeveloperOptions(devFeedback: .devTools, defaults: defaults)
+        devTools.isOn = true
+        devTools.debuggingTools = true
+        let again = DeveloperOptions(devFeedback: .devTools, defaults: defaults)
+        #expect(again.showsDeveloperItems && again.showsDebuggingTools)
+        let release = DeveloperOptions(devFeedback: .off, defaults: defaults)
+        #expect(!release.isAvailable && !release.showsDeveloperItems && !release.showsDebuggingTools,
+                "a stored choice never turns anything on in a public build")
+        release.debuggingTools = true
+        #expect(!release.showsDebuggingTools)
+        release.isOn = false
+        #expect(DeveloperOptions(devFeedback: .devTools, defaults: defaults).showsDeveloperItems,
+                "a public build leaves the stored choice alone")
     }
 
     @Test func theCalendarNotesUseNoModeWording() {

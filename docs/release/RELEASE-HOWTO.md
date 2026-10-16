@@ -126,6 +126,11 @@ message rendering, and the features affected by the change on another Mac or
 user account. The app and DMG must retain their signatures and stapled tickets.
 Users import their own Google client. Release builds must not embed a client.
 
+`check-release.sh` also searches every file in the app for the sample-data
+launch arguments and developer variables that only Debug and DevTools builds
+compile (see [Build flavours](../BUILD.md#build-flavours)). A DevTools build fails
+this check by design; hand out Release builds only.
+
 Finish `release-notes.md` (requirements, changes, known limitations, the Google
 client setup step), keeping its first lines, then upload it as a draft
 pre-release:

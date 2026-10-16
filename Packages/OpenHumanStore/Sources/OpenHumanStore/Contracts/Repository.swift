@@ -8,15 +8,17 @@ public struct StoreOptions: Sendable {   // no-generated-init
     public var observeExternalChanges: Bool
     public var appVersion: String
     public var changeNotificationName: String
+    public var pollOnly: Bool
     public init(location: StoreLocation, processKind: ProcessKind, readOnly: Bool = false,
                 observeExternalChanges: Bool = false, appVersion: String,
-                changeNotificationName: String = OHIdentifiers.storeChangedNotification) {
+                changeNotificationName: String = OHIdentifiers.storeChangedNotification, pollOnly: Bool = false) {
         self.location = location
         self.processKind = processKind
         self.readOnly = readOnly
         self.observeExternalChanges = observeExternalChanges
         self.appVersion = appVersion
         self.changeNotificationName = changeNotificationName
+        self.pollOnly = pollOnly
     }
 }
 public enum ProcessKind: String, Sendable { case app, cli, test }

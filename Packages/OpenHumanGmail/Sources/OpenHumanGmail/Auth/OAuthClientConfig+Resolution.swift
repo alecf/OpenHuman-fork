@@ -4,31 +4,30 @@ import OpenHumanCore
 extension OAuthClientConfig {
     public var hasClientSecret: Bool { !(clientSecret ?? "").isEmpty }
 
-    public static let environmentKey = "OPENHUMAN_OAUTH_CLIENT_JSON"
     public static let storeFileName = "oauth-client.json"
+    static let clientFileLabel = "client file"
 
     static let defaultAuthURI = URL(string: "https://accounts.google.com/o/oauth2/auth")!
     static let defaultTokenURI = URL(string: "https://oauth2.googleapis.com/token")!
     static let googleOAuthHosts: Set<String> = ["accounts.google.com", "oauth2.googleapis.com"]
 
-    public static func load(environment: [String: String], storeDirectory: URL?) throws -> OAuthClientConfig {
-        switch resolveSource(environment: environment, storeDirectory: storeDirectory) {
+    public static func load(clientFile: String?, storeDirectory: URL?) throws -> OAuthClientConfig {
+        switch resolveSource(clientFile: clientFile, storeDirectory: storeDirectory) {
         case .environment:
-            let path = environmentPath(environment)!
+            let path = clientFilePath(clientFile)!
             guard let data = FileManager.default.contents(atPath: path) else {
-                throw OAuthError.configurationMissing("\(environmentKey): file not readable")
+                throw OAuthError.configurationMissing("\(clientFileLabel): file not readable")
             }
-            return try parseGoogleJSON(data, source: environmentKey)
+            return try parseGoogleJSON(data, source: clientFileLabel)
         case .storeFile:
             return try readClientFile(storeFileURL(storeDirectory!), label: storeFileName)
         case .missing:
-            throw OAuthError.configurationMissing(
-                "no OAuth client: set \(environmentKey), import a Desktop client JSON, or use the client picker")
+            throw OAuthError.configurationMissing("no OAuth client: import a Desktop client JSON, or use the client picker")
         }
     }
 
-    public static func resolveSource(environment: [String: String], storeDirectory: URL?) -> OAuthClientSource {
-        if environmentPath(environment) != nil { return .environment }
+    public static func resolveSource(clientFile: String?, storeDirectory: URL?) -> OAuthClientSource {
+        if clientFilePath(clientFile) != nil { return .environment }
         if let storeDirectory, SecureFile.inspect(storeFileURL(storeDirectory)).kind != .missing { return .storeFile }
         return .missing
     }
@@ -67,8 +66,8 @@ extension OAuthClientConfig {
         return try parseGoogleJSON(data, source: label)
     }
 
-    private static func environmentPath(_ environment: [String: String]) -> String? {
-        guard let raw = environment[environmentKey]?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+    private static func clientFilePath(_ clientFile: String?) -> String? {
+        guard let raw = clientFile?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
             return nil
         }
         return (raw as NSString).expandingTildeInPath
