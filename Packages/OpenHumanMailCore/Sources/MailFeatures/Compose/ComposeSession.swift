@@ -114,6 +114,8 @@ public final class ComposeSession: Identifiable {
     public var subject = "" { didSet { if subject != oldValue { edited() } } }
     public var showsCc = false
     public var showsBcc = false
+    public internal(set) var recipientDrag: RecipientDrag?
+    @ObservationIgnored let recipientUndoBox = RecipientUndoBox()
     public var showsSubject: Bool
     public let fromChoices: [FromIdentity]
     public private(set) var from: FromIdentity

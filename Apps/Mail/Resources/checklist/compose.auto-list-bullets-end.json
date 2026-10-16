@@ -1,0 +1,14 @@
+{
+  "id": "compose.auto-list-bullets-end",
+  "area": "Composer",
+  "title": "Return twice ends a bulleted list",
+  "steps": [
+    "Launch Mail with -UseFakeGmail and open a new message",
+    "In the body type - and a space, then Milk, Return, Eggs",
+    "Press Return twice, then type Thanks"
+  ],
+  "deepLink": null,
+  "expected": "- and a space start a bulleted list, Return adds a bullet, Return on the empty bullet ends the list and Thanks is a normal line. Backspace right after a bullet removes the bullet and keeps the text.",
+  "requires": "fake",
+  "addedIn": "2026-10-15"
+}

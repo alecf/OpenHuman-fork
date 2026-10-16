@@ -96,10 +96,11 @@ public enum CalendarDescription {
                 case .paragraph(let inlines):
                     out += AttributedString(indent)
                     out += attributed(inlines)
-                case .list(let ordered, let items):
+                case .list(let ordered, let items, let start):
+                    let firstNumber = RichTextDocument.listStart(start, ordered: ordered) ?? 1
                     for (number, item) in items.enumerated() {
                         if number > 0 { out += AttributedString("\n") }
-                        out += AttributedString(indent + (ordered ? "\(number + 1). " : "\u{2022} "))
+                        out += AttributedString(indent + (ordered ? "\(firstNumber + number). " : "\u{2022} "))
                         var first = true
                         for inner in item {
                             if !first { out += AttributedString("\n") }

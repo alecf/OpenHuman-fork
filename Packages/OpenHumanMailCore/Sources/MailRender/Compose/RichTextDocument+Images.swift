@@ -15,7 +15,7 @@ extension RichTextDocument {
             switch block {
             case .paragraph:
                 continue
-            case .list(_, let items):
+            case .list(_, let items, _):
                 for item in items { ids += imageIDs(item) }
             case .quote(let inner):
                 ids += imageIDs(inner)
@@ -32,8 +32,8 @@ extension RichTextDocument {
             switch block {
             case .paragraph:
                 out.append(block)
-            case .list(let ordered, let items):
-                out.append(.list(ordered: ordered, items: items.map { keeping($0, ids) }))
+            case .list(let ordered, let items, let start):
+                out.append(.list(ordered: ordered, items: items.map { keeping($0, ids) }, start: start))
             case .quote(let inner):
                 out.append(.quote(keeping(inner, ids)))
             case .image(let ref):

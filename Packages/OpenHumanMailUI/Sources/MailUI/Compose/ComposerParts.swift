@@ -4,6 +4,7 @@ import MailModel
 import MailTheme
 import OpenHumanCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct FromLine: View {
     let session: ComposeSession
@@ -127,9 +128,11 @@ struct RecipientRow<Trailing: View>: View {
     let autofocus: Bool
     @ViewBuilder let trailing: Trailing
     @Environment(\.theme) private var theme
+    @Environment(\.undoManager) private var undoManager
     @FocusState private var focused: Bool
     @State private var recentMail = RecentMailDetails()
     @State private var history = RecipientHistory()
+    @State private var dropTargeted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -137,9 +140,22 @@ struct RecipientRow<Trailing: View>: View {
                 FieldLabel(title: field.title)
                 TokenFlowLayout(spacing: 4) {
                     ForEach(field.tokens, id: \.self) { address in
-                        RecipientToken(address: address, expanded: session.linkRecipients?.contains(address) == true) {
+                        RecipientToken(address: address, expanded: session.linkRecipients?.contains(address) == true,
+                                       moves: moves(for: address),
+                                       dragged: session.recipientDrag == RecipientDrag(address: address, from: field.kind)) {
                             field.remove(address)
                         }
+                        .onDrag {
+                            session.beginRecipientDrag(address, from: field.kind)
+                            return NSItemProvider(object: RecipientMove.dragText(address) as NSString)
+                        }
+                    }
+                    if field.tokens.isEmpty, isDropZone {
+                        Text("Drop here")
+                            .font(theme.typeBody.swiftUIFont)
+                            .foregroundStyle(theme.textTertiary.color)
+                            .frame(height: ComposerMetrics.lineBand)
+                            .accessibilityHidden(true)
                     }
                     TextField("", text: Binding(get: { field.text }, set: { field.text = $0 }))
                         .textFieldStyle(.plain)
@@ -161,6 +177,20 @@ struct RecipientRow<Trailing: View>: View {
                 trailing.frame(height: ComposerMetrics.lineBand)
             }
             .padding(.vertical, (rowHeight - ComposerMetrics.lineBand) / 2)
+            .background {
+                if dropTargeted {
+                    RoundedRectangle(cornerRadius: theme.radiusMD).fill(theme.bgRowSelected.color)
+                        .accessibilityHidden(true)
+                }
+            }
+            .onDrop(of: [.plainText], delegate: RecipientDropTarget(session: session, kind: field.kind,
+                                                                    undoManager: undoManager, targeted: $dropTargeted))
+            .onDragSessionUpdated { drag in
+                switch drag.phase {
+                case .ended, .dataTransferCompleted: session.endRecipientDrag()
+                default: break
+                }
+            }
             historyLine
             if inlinePopovers, focused, !field.suggestions.isEmpty {
                 SuggestionList(field: field, detail: recentMailDetail)
@@ -225,48 +255,132 @@ struct RecipientRow<Trailing: View>: View {
         field.suggestions.indices.contains(field.suggestionCursor) ? field.suggestions[field.suggestionCursor].email : nil
     }
 
+    private var isDropZone: Bool {
+        guard let drag = session.recipientDrag else { return false }
+        return drag.from != field.kind
+    }
+
+    private func moves(for address: EmailAddress) -> [RecipientTokenMove] {
+        let source = field.kind
+        return session.moveTargets(from: source).map { target in
+            RecipientTokenMove(title: RecipientMove.title(movingTo: target)) {
+                _ = session.moveRecipient(address, from: source, to: target, undoManager: undoManager)
+            }
+        }
+    }
+
     private var recentMailDetail: ((EmailAddress) -> String?)? {
         guard recentMailLookup != nil else { return nil }
         return { address in recentMail.detail(for: address.email) }
     }
 }
 
+struct RecipientTokenMove {
+    let title: String
+    let action: () -> Void
+}
+
+struct RecipientDropTarget: DropDelegate {
+    let session: ComposeSession
+    let kind: RecipientFieldModel.Kind
+    let undoManager: UndoManager?
+    let targeted: Binding<Bool>
+
+    private var accepts: Bool {
+        guard let drag = session.recipientDrag else { return false }
+        return drag.from != kind
+    }
+
+    func validateDrop(info: DropInfo) -> Bool {
+        session.recipientDrag != nil && info.hasItemsConforming(to: [.plainText])
+    }
+
+    func dropEntered(info: DropInfo) {
+        targeted.wrappedValue = accepts
+    }
+
+    func dropExited(info: DropInfo) {
+        targeted.wrappedValue = false
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: accepts ? .move : .cancel)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        targeted.wrappedValue = false
+        guard accepts else {
+            session.endRecipientDrag()
+            return false
+        }
+        return session.dropRecipient(on: kind, undoManager: undoManager)
+    }
+}
+
 struct RecipientToken: View {
     let address: EmailAddress
     let expanded: Bool
+    var moves: [RecipientTokenMove] = []
+    var dragged = false
     let remove: () -> Void
     @Environment(\.theme) private var theme
-    @State private var hovered = false
+    @State private var removeHovered = false
+
+    static let removeHitWidth: CGFloat = 20
+    static let removeGlyphSize: CGFloat = 9
+
+    struct RemoveStyle: Equatable {
+        let opacity: Double
+        let emphasized: Bool
+    }
+
+    static func removeStyle(hovered: Bool) -> RemoveStyle {
+        RemoveStyle(opacity: 1, emphasized: hovered)
+    }
 
     var body: some View {
         let token = theme.component.token
         let valid = RecipientParser.isValid(address.email)
-        HStack(spacing: 4) {
+        let style = Self.removeStyle(hovered: removeHovered)
+        HStack(spacing: 0) {
             Text(label)
                 .font(theme.typeBody.swiftUIFont)
                 .foregroundStyle((valid ? theme.textPrimary : theme.textDanger).color)
                 .underline(!valid, pattern: .dot, color: theme.textDanger.color)
                 .lineLimit(1)
+                .padding(.leading, 8)
             Button(action: remove) {
-                Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(theme.textTertiary.color)
+                Image(systemName: "xmark").font(.system(size: Self.removeGlyphSize, weight: .semibold))
+                    .foregroundStyle((style.emphasized ? theme.textPrimary : theme.textSecondary).color)
+                    .frame(width: Self.removeHitWidth, height: token.height)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .opacity(Self.showsRemove(hovered: hovered) ? 1 : 0)
-            .allowsHitTesting(Self.showsRemove(hovered: hovered))
+            .opacity(style.opacity)
+            .onHover { removeHovered = $0 }
+            .help("Remove \(address.email)")
             .accessibilityHidden(true)
         }
-        .padding(.horizontal, 8)
+        .padding(.trailing, 2)
         .frame(height: token.height)
-        .background(RoundedRectangle(cornerRadius: token.radius).fill(token.bg.color))
-        .onHover { hovered = $0 }
+        .background(RoundedRectangle(cornerRadius: token.radius).fill((dragged ? token.bgSelected : token.bg).color))
+        .opacity(dragged ? 0.6 : 1)
         .help(valid ? address.email : "Not a valid address")
+        .contextMenu {
+            ForEach(Array(moves.enumerated()), id: \.offset) { _, move in
+                Button(move.title, action: move.action)
+            }
+            Button("Remove", action: remove)
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(valid ? label : "\(label), not a valid address")
         .accessibilityAction(named: Text("Remove \(label)"), remove)
+        .accessibilityActions {
+            ForEach(Array(moves.enumerated()), id: \.offset) { _, move in
+                Button(move.title, action: move.action)
+            }
+        }
     }
-
-    static func showsRemove(hovered: Bool) -> Bool { hovered }
 
     private var label: String {
         if expanded, let name = address.name, !name.isEmpty { return "\(name) <\(address.email)>" }

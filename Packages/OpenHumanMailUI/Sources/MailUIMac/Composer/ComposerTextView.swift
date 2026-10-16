@@ -63,6 +63,8 @@ public final class ComposerTextView: NSTextView {
     }
 
     func configure() {
+        // List markers are part of the text; otherwise TextKit 2 draws its own and pushes the item text out of view
+        textContentStorage?.includesTextListMarkers = true
         isRichText = true
         allowsUndo = true
         isEditable = true
@@ -87,6 +89,8 @@ public final class ComposerTextView: NSTextView {
     }
 
     public private(set) var textFlags: ComposeTextFlags?
+
+    public var isPlainTextMode = false
 
     public func configure(with flags: ComposeTextFlags) {
         guard flags != textFlags else { return }
@@ -267,6 +271,7 @@ public final class ComposerTextView: NSTextView {
             return manager.usageBoundsForTextContainer.height
         }
         let content = NSTextContentStorage()
+        content.includesTextListMarkers = true
         let manager = NSTextLayoutManager()
         content.addTextLayoutManager(manager)
         let container = NSTextContainer(size: NSSize(width: containerWidth, height: .greatestFiniteMagnitude))
@@ -303,9 +308,25 @@ public final class ComposerTextView: NSTextView {
     }
 
     public override func insertText(_ string: Any, replacementRange: NSRange) {
+        let openGroups = undoManager?.groupingLevel ?? 0
         super.insertText(string, replacementRange: replacementRange)
         guard !hasMarkedText() else { return }
+        if Self.typed(string) == " " { autoListAfterSpace(openGroupsBeforeTyping: openGroups) }
         onTyped?(self.string, selectedRange().location)
+    }
+
+    static func typed(_ value: Any) -> String? {
+        (value as? String) ?? (value as? NSAttributedString)?.string
+    }
+
+    public override func deleteBackward(_ sender: Any?) {
+        if autoListBackspace() { return }
+        super.deleteBackward(sender)
+    }
+
+    public override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool) {
+        super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
+        if !stillSelecting { keepTheLastEmptyLineOutOfLists() }
     }
 
     public override func moveUp(_ sender: Any?) {
@@ -321,17 +342,20 @@ public final class ComposerTextView: NSTextView {
     public override func insertNewline(_ sender: Any?) {
         if pickerKeys?(.choose) == true { return }
         if suggestionKeys?(.use) == true { return }
+        if autoListReturn() { return }
         super.insertNewline(sender)
     }
 
     public override func insertTab(_ sender: Any?) {
         if pickerKeys?(.choose) == true { return }
         if suggestionKeys?(.next) == true { return }
+        if autoListTab(outdent: false) { return }
         super.insertTab(sender)
     }
 
     public override func insertBacktab(_ sender: Any?) {
         if suggestionKeys?(.previous) == true { return }
+        if autoListTab(outdent: true) { return }
         super.insertBacktab(sender)
     }
 
@@ -498,7 +522,7 @@ public final class ComposerTextView: NSTextView {
             let quoted = range.location < storage.length
                 && storage.attribute(AttributedBridge.quoteKey, at: range.location, effectiveRange: nil) != nil
             if !removing {
-                let marker = "\t" + list.marker(forItemNumber: index + 1) + "\t"
+                let marker = AttributedBridge.marker(list, number: index + 1)
                 var attrs = bridge.typingAttributes
                 if quoted { attrs[AttributedBridge.quoteKey] = true }
                 storage.insert(NSAttributedString(string: marker, attributes: attrs), at: range.location)
@@ -563,7 +587,10 @@ public final class ComposerTextView: NSTextView {
             }
             return count
         }
-        let markers = plan.map { "\t" + $0.lists[$0.lists.count - 1].marker(forItemNumber: number($0.range.location, in: $0.lists)) + "\t" }
+        let markers = plan.map { item in
+            let list = item.lists[item.lists.count - 1]
+            return AttributedBridge.marker(list, number: number(item.range.location, in: item.lists) + list.startingItemNumber - 1)
+        }
         let selection = selectedRange()
         var shift = 0
         storage.beginEditing()

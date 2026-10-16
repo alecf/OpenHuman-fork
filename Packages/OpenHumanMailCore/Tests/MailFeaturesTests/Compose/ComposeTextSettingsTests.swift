@@ -24,6 +24,17 @@ struct ComposeTextSettingsTests {
         #expect(flags == ComposeTextFlags(continuousSpelling: true, autocorrect: true, grammar: false, textReplacement: true,
                                           quoteSubstitution: true, dashSubstitution: true, writingTools: false))
         #expect(ComposeTextFlags.standard.writingTools == false)
+        #expect(settings.autoLists && flags.autoLists && ComposeTextFlags.standard.autoLists, "automatic lists start on")
+    }
+
+    @Test func automaticListsCanBeTurnedOffAndStayOff() {
+        let defaults = suite()
+        let a = ComposeTextSettings(defaults: defaults, system: FakeSystemTextSettings())
+        a.autoLists = false
+        #expect(!a.flags(for: Self.work).autoLists)
+        let b = ComposeTextSettings(defaults: defaults, system: FakeSystemTextSettings())
+        #expect(!b.autoLists && !b.flags(for: Self.work).autoLists)
+        #expect(defaults.object(forKey: "compose.auto_lists") as? Bool == false, "the documented key")
     }
 
     @Test func sameAsMacOSFollowsTheSystemAndOnOrOffOverride() {

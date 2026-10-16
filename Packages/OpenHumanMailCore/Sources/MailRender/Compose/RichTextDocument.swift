@@ -10,7 +10,7 @@ public struct RichTextDocument: Sendable, Hashable, Codable {
 
     public indirect enum Block: Sendable, Hashable, Codable {
         case paragraph([Inline])
-        case list(ordered: Bool, items: [[Block]])
+        case list(ordered: Bool, items: [[Block]], start: Int? = nil)
         case quote([Block])
         case image(InlineImageRef)
     }
@@ -42,17 +42,24 @@ public struct RichTextDocument: Sendable, Hashable, Codable {
             case .paragraph(let inlines):
                 let n = normalize(inlines)
                 return .paragraph(n == [.lineBreak] ? [] : n)
-            case .list(let ordered, let items):
+            case .list(let ordered, let items, let start):
                 return .list(ordered: ordered, items: items.map { item in
                     let n = normalize(item)
                     return n == [.paragraph([])] ? [] : n
-                })
+                }, start: listStart(start, ordered: ordered))
             case .quote(let inner):
                 return .quote(normalize(inner))
             case .image:
                 return block
             }
         }
+    }
+
+    public static let listStartRange = 1...99_999
+
+    public static func listStart(_ start: Int?, ordered: Bool) -> Int? {
+        guard ordered, let start, start != 1, listStartRange.contains(start) else { return nil }
+        return start
     }
 
     static func normalize(_ inlines: [Inline]) -> [Inline] {
