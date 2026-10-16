@@ -73,6 +73,7 @@ private final class RealLaunch {
             transports: LiveBackend.Transports(api: google.http, token: google.http),
             userAgent: "OpenHumanMail/test", pollInterval: .seconds(3600), makeSystemEvents: { AppSystemEvents.quiet() })
         app = AppModel(live: backend)
+        await app.launched()
     }
 
     var session: SyncSession? { app.session }

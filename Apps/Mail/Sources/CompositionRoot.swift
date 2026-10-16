@@ -80,6 +80,7 @@ extension CompositionRoot {
             SignInPanelController.install(signInBroker)
             let keychain = keychainStores(environment: environment, directory: location.directory,
                                           accessGroup: keychainAccessGroup())
+            let calendarTokens = liveCalendarTokenStore(arguments: arguments)
             let backend = LiveBackend(
                 store: store,
                 accountDependencies: LiveAccountManager.Dependencies(
@@ -87,8 +88,10 @@ extension CompositionRoot {
                     clientStore: keychain.client, tokenStore: keychain.tokens,
                     transport: tokenTransport, makeReceiver: { signInBroker.wrap(NWLoopbackReceiver()) },
                     browser: signInBroker,
-                    clock: SystemClock(), calendarTokenStore: liveCalendarTokenStore(arguments: arguments),
-                    developerClientFile: BuildFlavor.oauthClientFile),
+                    clock: SystemClock(), calendarTokenStore: calendarTokens,
+                    developerClientFile: BuildFlavor.oauthClientFile,
+                    credentialAccess: credentialAccess(environment: environment, directory: location.directory,
+                                                       calendar: calendarTokens)),
                 transports: LiveBackend.Transports(api: URLSessionTransport(userAgent: userAgent), token: tokenTransport,
                                                    unsubscribe: OneClickTransport(userAgent: userAgent)),
                 userAgent: userAgent, makeSystemEvents: { AppSystemEvents() })
@@ -102,6 +105,14 @@ extension CompositionRoot {
     static func keychainService(environment: [String: String], directory: URL) -> String {
         guard BuildFlavor.home(environment) != nil else { return OHIdentifiers.keychainService }
         return OHIdentifiers.keychainService + ".home." + stableID(directory.standardizedFileURL.path)
+    }
+
+    static func credentialAccess(environment: [String: String], directory: URL,
+                                 calendar: (any TokenStore)?) -> KeychainCredentialAccess {
+        var services = [keychainService(environment: environment, directory: directory),
+                        clientKeychainService(environment: environment, directory: directory)]
+        if let calendar = calendar as? KeychainTokenStore { services.append(calendar.service) }
+        return KeychainCredentialAccess(services: services)
     }
 
     static func syncedTokenStore(service: String, accessGroup: String?) -> SyncedTokenStore {

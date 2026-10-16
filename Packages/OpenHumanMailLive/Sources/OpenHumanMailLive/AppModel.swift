@@ -31,6 +31,7 @@ public final class AppModel {
     @ObservationIgnored public private(set) lazy var intents: IntentActions = IntentActions(router: { [weak self] in self?.router },
                                                                                   links: deepLinks)
     @ObservationIgnored private let live: LiveBackend?
+    @ObservationIgnored private var launchTask: Task<Void, Never>?
     public var liveAccounts: LiveAccountManager? { live?.accounts }
     @ObservationIgnored var platform: (@MainActor () -> SystemPlatform)?
 
@@ -52,14 +53,47 @@ public final class AppModel {
         self.live = live
         self.platform = platform
         self.screen = .launching
-        switch live.initialStep() {
-        case .session(let account):
-            proceed(account, backend: live)
-        case .signIn(let hint, let notice):
-            showSignIn(backend: live, loginHint: hint, notice: notice)
-        case .needsWriteAccess(let account):
-            showSignIn(backend: live, loginHint: account.email, notice: LiveBackend.writeAccessNotice)
+        launch(live, explainFirst: true, explained: false)
+    }
+
+    public func launched() async {
+        await launchTask?.value
+    }
+
+    private func launch(_ live: LiveBackend, explainFirst: Bool, explained: Bool) {
+        screen = .launching
+        launchTask = Task { [weak self] in
+            let next = await live.loadLaunch(explainFirst: explainFirst, explained: explained)
+            await self?.open(next, live: live)
         }
+    }
+
+    private func open(_ next: LiveBackend.Launch, live: LiveBackend) async {
+        switch next {
+        case .explain:
+            screen = .notice(.keychainExplainer(continue: { [weak self] in
+                self?.launch(live, explainFirst: false, explained: true)
+            }))
+        case .start(.session(let account)):
+            await startSession(account, backend: live)
+        case .start(.signIn(let hint, let notice)):
+            showSignIn(backend: live, loginHint: hint, notice: notice)
+        case .start(.needsWriteAccess(let account)):
+            showSignIn(backend: live, loginHint: account.email, notice: LiveBackend.writeAccessNotice)
+        case .start(.keychainRefused(let account)):
+            showKeychainRefused(account, backend: live)
+        }
+    }
+
+    private func showKeychainRefused(_ account: AccountItem, backend: LiveBackend) {
+        screen = .notice(.keychainRefused(
+            tryAgain: { [weak self] in
+                backend.forgetKeychainRefusals()
+                self?.launch(backend, explainFirst: false, explained: false)
+            },
+            signInAgain: { [weak self] in
+                self?.showSignIn(backend: backend, loginHint: account.email, notice: nil)
+            }))
     }
 
     private func showSignIn(backend: LiveBackend, loginHint: String, notice: String?) {
@@ -78,16 +112,16 @@ public final class AppModel {
     }
 
     private func proceed(_ account: AccountItem, backend: LiveBackend) {
-        startSession(account, backend: backend)
+        launchTask = Task { [weak self] in await self?.startSession(account, backend: backend) }
     }
 
     public func shutdown() async {
         await session?.shutdown()
     }
 
-    private func startSession(_ account: AccountItem, backend: LiveBackend) {
+    private func startSession(_ account: AccountItem, backend: LiveBackend) async {
         do {
-            let session = try backend.makeSession(for: account)
+            let session = try await backend.makeSession(for: account)
             self.session = session
             backend.accounts.attach(link(for: session))
             screen = .mail(session.environment)
@@ -95,7 +129,11 @@ public final class AppModel {
             startSystemFeatures(session.environment)
             Task { await session.start() }
         } catch let error as AccountSetupError where error.kind == .clientMissing {
-            showSignIn(backend: backend, loginHint: account.email, notice: error.message)
+            if backend.keychainRefused {
+                showKeychainRefused(account, backend: backend)
+            } else {
+                showSignIn(backend: backend, loginHint: account.email, notice: error.message)
+            }
         } catch {
             screen = .notice(StartupProblem(
                 title: "Mail couldn't start syncing",

@@ -238,6 +238,7 @@ extension AppSystemEvents {
     #expect(backend.initialStep() == .signIn(loginHint: "", notice: nil))
 
     let app = AppModel(live: backend)
+    await app.launched()
     guard case .signIn(let signIn) = app.screen else {
         Issue.record("expected the sign-in screen")
         return

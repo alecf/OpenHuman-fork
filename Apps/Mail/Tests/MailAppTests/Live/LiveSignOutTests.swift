@@ -69,6 +69,7 @@ private func signedInApp(google: FakeGoogle, store: MailStore, tokens: InMemoryT
     let backend = liveBackend(google: google, store: store, tokens: tokens, browser: browser,
                               clientPath: try SyntheticClient.writeJSON())
     let app = AppModel(live: backend)
+    await app.launched()
     guard case .signIn(let signIn) = app.screen else {
         Issue.record("expected the sign-in screen")
         return (app, backend)

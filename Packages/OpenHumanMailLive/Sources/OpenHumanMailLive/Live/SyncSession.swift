@@ -23,6 +23,7 @@ public final class SyncSession: Sendable {
         var accounts: (any AccountManaging)? = nil
         var calendar: GoogleCalendarSession? = nil
         var calendarConnections: LiveCalendarConnections? = nil
+        var api: (any GmailAPI)? = nil
 
         public init(factory: DefaultGmailClientFactory, gmail: GmailClientConfig, metrics: SyncMetricsRegistry,
                     tokenStore: (any TokenStore)? = nil, oauthClient: OAuthClientConfig? = nil, clock: any OHClock,
@@ -62,7 +63,7 @@ public final class SyncSession: Sendable {
         account = item.id
         email = item.email
         self.store = store
-        api = try wiring.factory.client(for: item.email)
+        api = try wiring.api ?? wiring.factory.client(for: item.email)
         systemEvents = wiring.systemEvents
         tokenEvents = wiring.tokenEvents
         calendar = wiring.calendar
