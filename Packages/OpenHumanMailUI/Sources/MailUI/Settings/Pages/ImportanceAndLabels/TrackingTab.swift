@@ -20,9 +20,6 @@ struct TrackingTab: View {
                 SettingsRow("Suggest rules when I correct", detail: "Offers \u{201C}Always do this for this sender, domain "
                             + "or list\u{201D}; nothing is saved until you tap.", isOn: binding(model.suggest))
                 SettingsRow("Keep subject and preview text with corrections and the log", isOn: binding(model.keepText))
-                SettingsRow("\u{201C}Not important\u{201D} also removes Gmail's Important mark",
-                            detail: "Off: only Mail's own rule changes. On: the mark comes off in Gmail too, with undo.",
-                            isOn: binding(model.removesGmailFlag))
             }
             decisionLog
             corrections

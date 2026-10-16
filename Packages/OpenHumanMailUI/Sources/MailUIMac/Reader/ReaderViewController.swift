@@ -750,7 +750,7 @@ public final class ReaderViewController: NSViewController {
             ]))
             line.append(NSAttributedString(string: " " + chip.title, attributes: [
                 .font: theme.typeMeta.font,
-                .foregroundColor: (chip.isFallback ? theme.textTertiary : theme.textSecondary).nsColor,
+                .foregroundColor: (chip.isQuiet ? theme.textTertiary : theme.textSecondary).nsColor,
             ]))
         }
     }

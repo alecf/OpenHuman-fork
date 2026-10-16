@@ -28,6 +28,7 @@ extension AppEnvironment {
         environment.autoLabels?.onIndexChange = { [weak rules] index in
             rules?.setAutoLabelLookup { key in index.category(account: key.account, thread: key.gmailThreadID, labelIDs: []) }
         }
+        rules.setGmailImportantLookup { [weak store] key in store?.isGmailImportant(key) }
         return environment
     }
 }

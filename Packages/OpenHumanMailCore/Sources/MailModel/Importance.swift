@@ -119,13 +119,17 @@ public struct ImportanceExplanation: Sendable, Hashable {
     public let placement: String
     public let reason: String
     public let ruleID: String?
+    public let gmailImportant: Bool
 
-    public init(isImportant: Bool, placement: String, reason: String, ruleID: String? = nil) {
+    public init(isImportant: Bool, placement: String, reason: String, ruleID: String? = nil, gmailImportant: Bool = false) {
         self.isImportant = isImportant
         self.placement = placement
         self.reason = reason
         self.ruleID = ruleID
+        self.gmailImportant = gmailImportant
     }
+
+    public var gmailDisagrees: Bool { gmailImportant && !isImportant }
 
     public var line: String { "In \(placement): \(reason)" }
 }

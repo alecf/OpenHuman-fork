@@ -170,7 +170,8 @@ extension MailStore {
         let sender = visible.last { !$0.isFromMe && $0.fromEmail != nil }?.fromEmail?.lowercased()
         return ImportanceReason(thread: ref, importance: importance, basis: basis, rule: rule,
                                 importanceSplitRuleText: splitRuleText, isInInbox: inInbox, placementSplitID: placementID,
-                                placementName: placementName, chipSplitIDs: chips, exemptions: exemptions, sender: sender)
+                                placementName: placementName, chipSplitIDs: chips, exemptions: exemptions, sender: sender,
+                                gmailImportant: row["is_important"] as Bool)
     }
 
     static func fetchImportanceRule(_ rid: Int64, in db: Database) throws -> ImportanceRule? {

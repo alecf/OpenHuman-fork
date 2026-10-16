@@ -70,6 +70,10 @@ struct ImportanceSettingsPage: View {
         SettingsSection("Importance", footnote: "Important: your importance rules, then Gmail's Important mark. Change "
                         + "the Important split's rule in Split inbox.") {
             SettingsRow("Importance rules", detail: ImportanceSettingsModel.precedenceNote)
+            SettingsRow(ImportanceSettingsModel.sendsToGmailTitle, detail: ImportanceSettingsModel.sendsToGmailDetail,
+                        isOn: Binding(get: { model.sendsToGmail.value },
+                                      set: { on in Task { await model.sendsToGmail.set(on) } }))
+                .accessibilityIdentifier("settings.importance.sendsToGmail")
         }
         importanceContent
     }

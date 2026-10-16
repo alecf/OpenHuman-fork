@@ -65,32 +65,11 @@ extension AutoLabelCenter {
     }
 }
 
-struct ImportanceAndFlagUndo: MailUndoing {
-    struct Steps: Codable { var importance: Data; var flag: Data? }
-
-    let importance: any MailUndoing
-    let commands: any MailUndoing
-
-    static func token(importance: UndoToken, flag: UndoToken?) throws -> UndoToken {
-        UndoToken(payload: try JSONEncoder().encode(Steps(importance: importance.payload, flag: flag?.payload)))
-    }
-
-    func undo(_ token: UndoToken) async throws -> UndoToken? {
-        let steps = try JSONDecoder().decode(Steps.self, from: token.payload)
-        var flagBack: UndoToken?
-        if let flag = steps.flag { flagBack = try await commands.undo(UndoToken(payload: flag)) }
-        guard let back = try await importance.undo(UndoToken(payload: steps.importance)) else { return nil }
-        return try Self.token(importance: back, flag: flagBack)
-    }
-}
-
 @MainActor @Observable
 public final class ClassificationCorrectionHandler: ActionHandler {
     public static let ids: [ActionID] = [.classificationNotImportant, .classificationMarkImportant,
                                          .classificationRuleFromThread]
         + ActionID.classificationLabelCategories.map(ActionID.classificationSetLabel)
-
-    nonisolated static let gmailImportant = GmailLabelID("IMPORTANT")
 
     @ObservationIgnored private weak var environment: AppEnvironment?
     @ObservationIgnored private let feedback: ActionFeedback
@@ -120,9 +99,12 @@ public final class ClassificationCorrectionHandler: ActionHandler {
         case .classificationNotImportant, .classificationMarkImportant:
             guard let port = environment.importance else { return .notHandled }
             let important = request.id == .classificationMarkImportant
-            return .started(Task { [weak self] in
-                await self?.correctImportance(important, thread: thread, row: row, port: port, sender: context.sender,
-                                              domain: context.senderDomain)
+            let mover = ImportanceMover(environment: environment, port: port, feedback: feedback,
+                                        list: ImportanceMover.list(for: thread, router: request.router))
+            let move = ImportanceMover.Move(thread: thread, toImportant: important, location: context.location,
+                                            sender: context.sender, domain: context.senderDomain, row: row)
+            return .started(mover.start(move) { [weak self] resolved in
+                await self?.recordImportance(important, thread: thread, row: resolved)
             })
         case .classificationRuleFromThread:
             return .started(Task { [weak self] in
@@ -149,43 +131,6 @@ public final class ClassificationCorrectionHandler: ActionHandler {
     }
 
 
-    private func correctImportance(_ important: Bool, thread: ThreadKey, row: ThreadRow?, port: any ImportanceRulesPort,
-                                   sender: String?, domain: String?) async {
-        guard let environment else { return }
-        var row = row
-        if row == nil { row = (try? await environment.data.localThread(thread.account, gmailThreadID: thread.gmailThreadID)) ?? nil }
-        let change = ImportanceChange(kind: important ? .alwaysThread : .neverThread, account: thread.account,
-                                      value: thread.gmailThreadID.rawValue, thread: thread)
-        let flagSetting = (try? await environment.settings?.get(AppSettings.classificationNotImportantRemovesGmailFlag))
-            ?? AppSettings.classificationNotImportantRemovesGmailFlag.defaultValue
-        let removesFlag = !important && flagSetting && (row?.isImportant ?? true)
-        let commands = removesFlag ? environment.commands : nil
-        let title: LocalizedStringResource = important ? "Marked important" : "Marked not important"
-        do {
-            let work: () async throws -> UndoToken = {
-                let rule = try await port.apply(change)
-                guard let commands else { return rule }
-                do {
-                    let flag = try await commands.apply(.modifyLabels([thread], add: [], remove: [Self.gmailImportant]))
-                    return try ImportanceAndFlagUndo.token(importance: rule, flag: flag)
-                } catch {
-                    _ = try? await port.undo(rule)
-                    throw error
-                }
-            }
-            let undoer: any MailUndoing = commands.map { ImportanceAndFlagUndo(importance: port, commands: $0) } ?? port
-            if let undo = environment.undo {
-                try await undo.perform(title, threads: [thread], via: undoer, work)
-            } else {
-                _ = try await work()
-            }
-            await recordImportance(important, thread: thread, row: row)
-            await offerImportanceRule(important, thread: thread, port: port, sender: sender, domain: domain)
-        } catch {
-            feedback.failed("Couldn't change the importance rule")
-        }
-    }
-
     private func recordImportance(_ important: Bool, thread: ThreadKey, row: ThreadRow?) async {
         guard let environment else { return }
         let ruleSet = environment.classification
@@ -206,29 +151,6 @@ public final class ClassificationCorrectionHandler: ActionHandler {
     private func suggestsRules() async -> Bool {
         (try? await environment?.settings?.get(AppSettings.classificationSuggestRules))
             ?? AppSettings.classificationSuggestRules.defaultValue
-    }
-
-    private func offerImportanceRule(_ important: Bool, thread: ThreadKey, port: any ImportanceRulesPort, sender: String?,
-                                     domain: String?) async {
-        guard let environment, await suggestsRules(), let sender, let domain else { return }
-        let undo = environment.undo
-        func choice(_ title: String, _ kind: ImportanceRuleKind, _ value: String, _ done: LocalizedStringResource)
-            -> NoticeCenter.Choice {
-            NoticeCenter.Choice(title) { [weak self] in
-                let change = ImportanceChange(kind: kind, account: thread.account, value: value, thread: thread)
-                do {
-                    if let undo { try await undo.perform(done, threads: [thread], via: port) { try await port.apply(change) } }
-                    else { _ = try await port.apply(change) }
-                } catch {
-                    self?.feedback.failed("Couldn't change the importance rule")
-                }
-            }
-        }
-        let prefix = important ? "Always important" : "Never important"
-        environment.notices.postChoice(
-            "\(prefix) for:",
-            choice("This sender", important ? .alwaysSender : .neverSender, sender, "\(prefix) from \(sender)"),
-            choice("This domain", important ? .alwaysDomain : .neverDomain, domain, "\(prefix) from \(domain)"))
     }
 
     private func offerLabelRule(_ category: String, thread: ThreadKey, sender: String?, domain: String?) async {

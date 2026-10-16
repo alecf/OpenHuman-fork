@@ -119,3 +119,24 @@ private let now = Date(timeIntervalSince1970: 1_791_000_000)
     #expect(counters.map(\.repliedAt) == expected.map(\.sentAt))
     #expect(counters.map(\.name) == expected.map(\.name))
 }
+
+@Test(.timeLimit(.minutes(1))) func rowCarriesThePlacementAndTheGmailMark() async throws {
+    let (store, account) = try FixtureStoreSeeder.makeStore(corpus: FakeCorpus.make(threadCount: 12, now: now))
+    let data = MailStoreAdapter(store: store)
+    let inbox = try await firstValue(data.threadWindow(.system(.inbox), account: account, limit: 50)) { !$0.rows.isEmpty }
+    let marked = try #require(inbox.rows.first { $0.isImportant && !$0.participants.allSatisfy(\.isMe) })
+    #expect(marked.isPlacedImportant, "by default Gmail's mark places the conversation in Important")
+    #expect(inbox.rows.filter { !$0.isImportant }.allSatisfy { !$0.isPlacedImportant })
+
+    let port = MailStoreImportance(store: store)
+    _ = try await port.apply(ImportanceChange(kind: .neverThread, account: account,
+                                              value: marked.id.gmailThreadID.rawValue, thread: marked.id))
+    let other = try await firstValue(data.threadWindow(.splitOther, account: account, limit: 50)) { window in
+        window.rows.contains { $0.id == marked.id }
+    }
+    let row = try #require(other.rows.first { $0.id == marked.id })
+    #expect(row.isImportant && !row.isPlacedImportant, "Gmail's mark and Mail's placement travel separately")
+    let why = try await port.explain(marked.id)
+    #expect(why.gmailImportant && !why.isImportant && why.gmailDisagrees)
+    #expect(why.line == "In Other: moved to Other (this conversation only); Gmail marks it important")
+}

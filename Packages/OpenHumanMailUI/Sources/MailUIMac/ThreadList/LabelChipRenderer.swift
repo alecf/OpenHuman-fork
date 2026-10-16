@@ -72,7 +72,8 @@ final class LabelChipRenderer {
         let (visible, hidden) = counts(chips, maximum: maximum)
         guard visible > 0 || hidden > 0 else { return [] }
         var result = chips.filter { $0.kind != .overflow }.prefix(visible).map {
-            (title: $0.kind == .returned ? $0.title : $0.title.localizedLowercase, hue: $0.hue, muted: $0.isFallback)
+            (title: $0.kind == .returned || $0.kind == .gmailImportant ? $0.title : $0.title.localizedLowercase,
+             hue: $0.hue, muted: $0.isQuiet)
         }
         if hidden > 0 { result.append(overflow(hidden)) }
         return result

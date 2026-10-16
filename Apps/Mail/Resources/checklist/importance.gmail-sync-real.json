@@ -1,0 +1,15 @@
+{
+  "id": "importance.gmail-sync-real",
+  "area": "Importance",
+  "title": "Moves set and clear Gmail's Important mark (real Gmail)",
+  "steps": [
+    "With a real Gmail account and Settings › Importance & labels › Rules › Tell Gmail when I move mail on, pick a low-stakes conversation in Other that Gmail doesn't mark important and run Move to Important from ⌘K",
+    "Open the same conversation in Gmail on the web, then back in Mail run Move to Other on it and check Gmail on the web again",
+    "Leave both apps alone for at least 30 minutes, let Mail sync, then check the conversation in Gmail on the web and in the Gmail phone app",
+    "Note whether the phone notified you about the conversation after either move (with Gmail's High priority only notifications, if you use them)"
+  ],
+  "deepLink": null,
+  "expected": "Step 1: the row leaves Other at once and Gmail shows the Important marker on every message of the conversation. Step 2: the marker is gone in Gmail and the row stays in Other. Step 3: Gmail has not put the mark back; if it has, note the time and whether a new message arrived. Step 4: record what the phone did; nothing in Mail claims Gmail learns from these moves.",
+  "requires": "real",
+  "addedIn": "2026-10-16"
+}

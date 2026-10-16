@@ -80,7 +80,7 @@ import Testing
         #expect(undo.stack.count == 1)
         #expect(f.rules.allRules.count == rulesBefore + 1, "one conversation rule")
         #expect(f.rules.allRules.contains { $0.value == role.id.gmailThreadID.rawValue })
-        #expect(try await row(f, Self.roleSubject).isImportant, "Gmail's mark stays with the switch off (D-3)")
+        #expect(try await !row(f, Self.roleSubject).isImportant, "Gmail's mark comes off in the same undo entry")
         let followUp = try #require(f.env.notices.toasts.first { $0.message == "Never important for:" })
         #expect(followUp.actionTitle == "This sender" && followUp.secondaryActionTitle == "This domain")
         #expect(f.rules.allRules.count == rulesBefore + 1, "nothing saved before a tap")
@@ -92,22 +92,26 @@ import Testing
         await undo.undoLast()
         await undo.undoLast()
         #expect(f.rules.allRules.count == rulesBefore)
+        #expect(try await row(f, Self.roleSubject).isImportant, "one ⌘Z puts Gmail's mark back with the rule")
     }
 
-    @Test func withItsSwitchOnNotImportantAlsoTakesGmailsMarkOffInTheSameUndoEntry() async throws {
+    @Test func withTheSwitchOffNotImportantChangesOnlyThisMac() async throws {
         let f = F(writes: true)
-        try await f.store.set(AppSettings.classificationNotImportantRemovesGmailFlag, true)
+        try await f.store.set(AppSettings.importanceSendsToGmail, false)
         f.store.deliverMessage(account: F.work, from: Self.recruiter, subject: Self.roleSubject, text: "A role for you.",
                                important: true)
         let role = try await row(f, Self.roleSubject)
+        let sent = f.recorder.commands.count
         await perform(f, .classificationNotImportant, on: role)
         let undo = try #require(f.env.undo)
         #expect(undo.stack.count == 1)
-        let after = try await row(f, Self.roleSubject)
-        #expect(!after.isImportant)
+        #expect(String(localized: try #require(undo.stack.last).title) == "Moved to Other on this Mac")
+        #expect(f.recorder.commands.count == sent, "nothing reaches Gmail")
+        #expect(try await row(f, Self.roleSubject).isImportant, "Gmail's mark stays")
+        #expect(f.rules.allRules.contains { $0.value == role.id.gmailThreadID.rawValue && $0.effect == .neverImportant })
         await undo.undoLast()
-        #expect(try await row(f, Self.roleSubject).isImportant, "one ⌘Z puts the mark back")
-        #expect(!f.rules.allRules.contains { $0.value == role.id.gmailThreadID.rawValue }, "and removes the rule")
+        #expect(!f.rules.allRules.contains { $0.value == role.id.gmailThreadID.rawValue }, "one ⌘Z removes the rule")
+        #expect(f.recorder.commands.count == sent)
     }
 
     @Test func markImportantAddsTheConversationRule() async throws {

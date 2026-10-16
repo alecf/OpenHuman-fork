@@ -9,20 +9,25 @@ public struct RowPatch: Sendable, Hashable {
     public var snoozedUntil: Date??
     public var addUserLabels: Set<Int64>
     public var removeUserLabels: Set<Int64>
+    public var isImportant: Bool?
+    public var isPlacedImportant: Bool?
 
     public init(isUnread: Bool? = nil, isStarred: Bool? = nil, reminderAt: Date?? = nil, snoozedUntil: Date?? = nil,
-                addUserLabels: Set<Int64> = [], removeUserLabels: Set<Int64> = []) {
+                addUserLabels: Set<Int64> = [], removeUserLabels: Set<Int64> = [], isImportant: Bool? = nil,
+                isPlacedImportant: Bool? = nil) {
         self.isUnread = isUnread
         self.isStarred = isStarred
         self.reminderAt = reminderAt
         self.snoozedUntil = snoozedUntil
         self.addUserLabels = addUserLabels
         self.removeUserLabels = removeUserLabels
+        self.isImportant = isImportant
+        self.isPlacedImportant = isPlacedImportant
     }
 
     public var isEmpty: Bool {
         isUnread == nil && isStarred == nil && reminderAt == nil && snoozedUntil == nil && addUserLabels.isEmpty
-            && removeUserLabels.isEmpty
+            && removeUserLabels.isEmpty && isImportant == nil && isPlacedImportant == nil
     }
 
     public func applied(to row: ThreadRow) -> ThreadRow {
@@ -35,7 +40,8 @@ public struct RowPatch: Sendable, Hashable {
         return row.replacing(
             unreadCount: unread == row.isUnread ? row.unreadCount : (unread ? max(1, row.unreadCount) : 0),
             isUnread: unread, isStarred: isStarred ?? row.isStarred, userLabelIDs: labels,
-            reminderAt: reminderAt ?? row.reminderAt, snoozedUntil: snoozedUntil ?? row.snoozedUntil)
+            reminderAt: reminderAt ?? row.reminderAt, snoozedUntil: snoozedUntil ?? row.snoozedUntil,
+            isImportant: isImportant ?? row.isImportant, isPlacedImportant: isPlacedImportant ?? row.isPlacedImportant)
     }
 
     public func isReflected(in row: ThreadRow) -> Bool {
@@ -45,6 +51,8 @@ public struct RowPatch: Sendable, Hashable {
         if let snoozedUntil, row.snoozedUntil != snoozedUntil { return false }
         if !addUserLabels.isSubset(of: row.userLabelIDs) { return false }
         if row.userLabelIDs.contains(where: removeUserLabels.contains) { return false }
+        if let isImportant, row.isImportant != isImportant { return false }
+        if let isPlacedImportant, row.isPlacedImportant != isPlacedImportant { return false }
         return true
     }
 
@@ -55,14 +63,18 @@ public struct RowPatch: Sendable, Hashable {
                         reminderAt: newer.reminderAt == nil ? reminderAt : nil,
                         snoozedUntil: newer.snoozedUntil == nil ? snoozedUntil : nil,
                         addUserLabels: addUserLabels.subtracting(relabeled),
-                        removeUserLabels: removeUserLabels.subtracting(relabeled))
+                        removeUserLabels: removeUserLabels.subtracting(relabeled),
+                        isImportant: newer.isImportant == nil ? isImportant : nil,
+                        isPlacedImportant: newer.isPlacedImportant == nil ? isPlacedImportant : nil)
     }
 
     func merged(with other: RowPatch) -> RowPatch {
         RowPatch(isUnread: other.isUnread ?? isUnread, isStarred: other.isStarred ?? isStarred,
                  reminderAt: other.reminderAt ?? reminderAt, snoozedUntil: other.snoozedUntil ?? snoozedUntil,
                  addUserLabels: addUserLabels.subtracting(other.removeUserLabels).union(other.addUserLabels),
-                 removeUserLabels: removeUserLabels.subtracting(other.addUserLabels).union(other.removeUserLabels))
+                 removeUserLabels: removeUserLabels.subtracting(other.addUserLabels).union(other.removeUserLabels),
+                 isImportant: other.isImportant ?? isImportant,
+                 isPlacedImportant: other.isPlacedImportant ?? isPlacedImportant)
     }
 }
 
@@ -134,6 +146,21 @@ public struct OptimisticEffect: Sendable, Equatable {
             let change = RowPatch(addUserLabels: added, removeUserLabels: removed)
             return change.isEmpty ? OptimisticEffect() : patch(change)
         }
+    }
+
+    public static func importanceMove(_ keys: [ThreadKey], toImportant: Bool, changesGmail: Bool, in location: MailLocation,
+                                      impliesImportance: Bool) -> OptimisticEffect {
+        let leaves = switch location {
+        case .split: impliesImportance && !toImportant
+        case .splitOther: toImportant
+        case .system(.important): changesGmail && !toImportant
+        default: false
+        }
+        if leaves { return OptimisticEffect(hidden: Set(keys)) }
+        let change = RowPatch(isImportant: changesGmail ? toImportant : nil,
+                              isPlacedImportant: location.isInboxLike ? toImportant : nil)
+        return change.isEmpty ? OptimisticEffect()
+            : OptimisticEffect(patches: Dictionary(keys.map { ($0, change) }, uniquingKeysWith: { $1 }))
     }
 }
 
@@ -316,14 +343,16 @@ public struct ThreadListOverlay: Sendable {
 extension ThreadRow {
     public func replacing(unreadCount: Int? = nil, isUnread: Bool? = nil, isStarred: Bool? = nil,
                           userLabelIDs: [Int64]? = nil, reminderAt: Date?? = nil,
-                          snoozedUntil: Date?? = nil) -> ThreadRow {
+                          snoozedUntil: Date?? = nil, isImportant: Bool? = nil,
+                          isPlacedImportant: Bool? = nil) -> ThreadRow {
         ThreadRow(id: id, subject: subject, snippet: snippet, participantsDisplay: participantsDisplay,
                   participants: participants, messageCount: messageCount, unreadCount: unreadCount ?? self.unreadCount,
                   draftCount: draftCount, attachmentCount: attachmentCount, isUnread: isUnread ?? self.isUnread,
-                  isStarred: isStarred ?? self.isStarred, isImportant: isImportant,
+                  isStarred: isStarred ?? self.isStarred, isImportant: isImportant ?? self.isImportant,
                   userLabelIDs: userLabelIDs ?? self.userLabelIDs, lastMessageAt: lastMessageAt, sortAt: sortAt,
                   snoozedUntil: snoozedUntil ?? self.snoozedUntil, reminderAt: reminderAt ?? self.reminderAt,
                   scheduledSendAt: scheduledSendAt, hasPendingChanges: hasPendingChanges,
-                  categoryLabelIDs: categoryLabelIDs, returnedByReminder: returnedByReminder)
+                  categoryLabelIDs: categoryLabelIDs, returnedByReminder: returnedByReminder,
+                  isPlacedImportant: isPlacedImportant ?? self.isPlacedImportant)
     }
 }

@@ -5,6 +5,7 @@ import OpenHumanCore
 public struct ThreadRowChip: Sendable, Hashable {
     public enum Kind: Sendable, Hashable {
         case important
+        case gmailImportant
         case category
         case label
         case overflow
@@ -26,6 +27,8 @@ public struct ThreadRowChip: Sendable, Hashable {
         self.color = color
         self.isFallback = isFallback
     }
+
+    public var isQuiet: Bool { isFallback || kind == .gmailImportant }
 }
 
 public struct ThreadRowChipContext: Sendable {
@@ -198,7 +201,9 @@ public struct ThreadRowFormatting: Sendable {
         var currentLabel: GmailLabelID?
         if case .label(let id) = context.location { currentLabel = id }
         if row.isImportant, !context.impliesImportance {
-            chips.append(ThreadRowChip(kind: .important, title: importantTitle))
+            chips.append(isInboxTab(context.location) && !row.isPlacedImportant
+                ? ThreadRowChip(kind: .gmailImportant, title: gmailImportantTitle)
+                : ThreadRowChip(kind: .important, title: importantTitle))
         }
         let ours = autoLabel.flatMap { $0.isEmpty ? nil : $0 }
         let fallback = ours == nil ? superhumanCategory(of: row, context: context) : nil
@@ -234,6 +239,17 @@ public struct ThreadRowFormatting: Sendable {
     }
 
     private static let importantTitle = String(localized: "Important")
+    public static let gmailImportantTitle = String(localized: "Gmail important")
+    public static let gmailImportantTip = String(
+        localized: "Gmail marks this conversation important. Mail keeps it out of your Important tab.")
+
+    // Placement exists only for Inbox tabs; elsewhere Gmail's mark is the only signal
+    static func isInboxTab(_ location: MailLocation) -> Bool {
+        switch location {
+        case .split, .splitOther: true
+        default: false
+        }
+    }
 
     public static func withVIPChip(_ chips: [ThreadRowChip], title: String) -> [ThreadRowChip] {
         var result = chips
@@ -286,6 +302,7 @@ public struct ThreadRowFormatting: Sendable {
         for chip in chips {
             switch chip.kind {
             case .important: parts.append(String(localized: "important"))
+            case .gmailImportant: parts.append(String(localized: "Gmail marks it important, kept out of Important"))
             case .category:
                 parts.append(chip.isFallback ? String(localized: "Superhuman category \(chip.title)")
                                              : String(localized: "category \(chip.title)"))

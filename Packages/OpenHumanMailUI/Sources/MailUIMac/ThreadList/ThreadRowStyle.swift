@@ -241,12 +241,12 @@ final class ThreadRowStyle {
                 dot("●", warning, into: line)
             case .vip:
                 dot("★", warning, into: line)
-            case .category:
+            case .category, .gmailImportant:
                 dot("○", tertiary, into: line)
             case .label:
                 dot("●", chip.color.flatMap { ThemeColor(hex: $0)?.nsColor } ?? tertiary, into: line)
             }
-            line.append(NSAttributedString(string: chip.title, attributes: attributes(metaFont, chip.isFallback ? tertiary : secondary)))
+            line.append(NSAttributedString(string: chip.title, attributes: attributes(metaFont, chip.isQuiet ? tertiary : secondary)))
         }
         if let followUpReason, !followUpReason.isEmpty {
             gap(line, 8)
@@ -287,6 +287,7 @@ final class ThreadRowStyle {
         let shown = LabelChipRenderer.shown(chips, maximum: Self.maximumFilledChips)
         guard !shown.isEmpty else { return }
         let counts = LabelChipRenderer.counts(chips, maximum: Self.maximumFilledChips)
+        let named = chips.filter { $0.kind != .overflow }
         var end: CGFloat = 0
         for (index, chip) in shown.enumerated() {
             let start = line.length
@@ -295,17 +296,33 @@ final class ThreadRowStyle {
                 end += CGFloat(theme.space2)
             }
             let image = self.chips.image(chip.title, hue: chip.hue, muted: chip.muted)
+            let chipStart = end
             line.append(chipAttachment(image))
             end += image.image.size.width
             let range = NSRange(location: start, length: line.length - start)
             line.addAttribute(Self.chipEnd, value: end, range: range)
             let dropped = max(0, counts.visible - index) + counts.hidden
             line.addAttribute(Self.chipCut, value: makeChipCut(count: dropped, leadingGap: index > 0), range: range)
+            if index < counts.visible, named[index].kind == .gmailImportant {
+                line.addAttribute(Self.tipSpan, value: ChipSpan(start: chipStart, end: end),
+                                  range: NSRange(location: line.length - 1, length: 1))
+            }
         }
         let start = line.length
         gap(line, CGFloat(theme.space3))
         line.addAttribute(Self.chipsEnd, value: end + CGFloat(theme.space3),
                           range: NSRange(location: start, length: line.length - start))
+    }
+
+    static let tipSpan = NSAttributedString.Key("oh.row.tipSpan")
+
+    final class ChipSpan: NSObject {
+        let start: CGFloat
+        let end: CGFloat
+        init(start: CGFloat, end: CGFloat) {
+            self.start = start
+            self.end = end
+        }
     }
 
     static let chipEnd = NSAttributedString.Key("oh.row.chipEnd")

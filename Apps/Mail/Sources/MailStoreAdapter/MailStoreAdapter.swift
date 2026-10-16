@@ -352,7 +352,7 @@ public final class MailStoreAdapter: MailDataSource, Sendable {
             lastMessageAt: item.lastMessageAt, sortAt: item.sortAt, snoozedUntil: item.snoozedUntil,
             reminderAt: item.reminderAt, scheduledSendAt: item.scheduledSendAt, hasPendingChanges: item.hasPendingChanges,
             categoryLabelIDs: item.categoryLabelIDs.filter { $0 != hiddenCategory }.map(\.rawValue),
-            returnedByReminder: item.returnedByReminder)
+            returnedByReminder: item.returnedByReminder, isPlacedImportant: item.importance == .important)
     }
 
     static func pageCursor(_ cursor: ThreadCursor) -> PageCursor {

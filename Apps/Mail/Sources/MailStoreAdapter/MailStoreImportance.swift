@@ -45,7 +45,8 @@ public final class MailStoreImportance: ImportanceRulesPort, Sendable {
         let reason = try Self.mapping { try store.importanceReason(Self.ref(thread)) }
         return ImportanceExplanation(isImportant: reason.importance == .important,
                                      placement: reason.isInInbox ? reason.placementName : "Not in the inbox",
-                                     reason: reason.reasonText, ruleID: reason.rule.map { String($0.id.rawValue) })
+                                     reason: reason.reasonText, ruleID: reason.rule.map { String($0.id.rawValue) },
+                                     gmailImportant: reason.gmailImportant)
     }
 
     public func replyCounters(_ account: AccountID, since: Date) async throws -> [ContactReplyCounter] {

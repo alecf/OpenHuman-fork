@@ -36,7 +36,19 @@ extension ThreadRow {
             attachmentCount: attachmentCount, isUnread: isUnread, isStarred: isStarred, isImportant: isImportant,
             userLabelIDs: userLabelIDs, lastMessageAt: lastMessageAt, sortAt: sortAt, snoozedUntil: snoozedUntil,
             reminderAt: reminderAt, scheduledSendAt: scheduledSendAt, hasPendingChanges: hasPendingChanges,
-            categoryLabelIDs: categoryLabelIDs, searchMatch: searchMatch, returnedByReminder: returnedByReminder)
+            categoryLabelIDs: categoryLabelIDs, searchMatch: searchMatch, returnedByReminder: returnedByReminder,
+            isPlacedImportant: isPlacedImportant)
+    }
+
+    func with(placedImportant: Bool) -> ThreadRow {
+        placedImportant == isPlacedImportant ? self : ThreadRow(
+            id: id, subject: subject, snippet: snippet, participantsDisplay: participantsDisplay,
+            participants: participants, messageCount: messageCount, unreadCount: unreadCount, draftCount: draftCount,
+            attachmentCount: attachmentCount, isUnread: isUnread, isStarred: isStarred, isImportant: isImportant,
+            userLabelIDs: userLabelIDs, lastMessageAt: lastMessageAt, sortAt: sortAt, snoozedUntil: snoozedUntil,
+            reminderAt: reminderAt, scheduledSendAt: scheduledSendAt, hasPendingChanges: hasPendingChanges,
+            categoryLabelIDs: categoryLabelIDs, searchMatch: searchMatch, returnedByReminder: returnedByReminder,
+            isPlacedImportant: placedImportant)
     }
 }
 
@@ -136,6 +148,8 @@ extension State {
                     break
                 }
             }
+            result.row = result.row.with(
+                placedImportant: FakeLabels.placesInImportant(account.splits.first { $0.id == result.split }))
         }
         return result
     }
