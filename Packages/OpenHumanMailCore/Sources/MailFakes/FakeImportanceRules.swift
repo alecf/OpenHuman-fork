@@ -39,7 +39,6 @@ public final class FakeImportanceRules: ImportanceRulesPort, Sendable {
         var rules: [Rule] = []
         var facts: [ThreadKey: ThreadFacts] = [:]
         var nextID = 1
-        var safeMode: SafeModeInfo
         var failNext: MailPortError?
         var autoLabel: (@Sendable (ThreadKey) -> String?)?
         var observers: [UUID: (AccountID, AsyncThrowingStream<[ImportanceRuleInfo], Error>.Continuation)] = [:]
@@ -48,14 +47,14 @@ public final class FakeImportanceRules: ImportanceRulesPort, Sendable {
     private let state: Mutex<State>
     private let now: @Sendable () -> Date
 
-    public init(corpus: FakeCorpus? = nil, safeMode: SafeModeInfo = .normal, now: @escaping @Sendable () -> Date = { Date() }) {
+    public init(corpus: FakeCorpus? = nil, now: @escaping @Sendable () -> Date = { Date() }) {
         var facts: [ThreadKey: ThreadFacts] = [:]
         for thread in corpus?.mailboxes.flatMap(\.threads) ?? [] {
             let sender = thread.row.participants.first { !$0.isMe }?.email
             facts[thread.row.id] = ThreadFacts(sender: sender, gmailImportant: thread.row.isImportant,
                                                subject: thread.row.subject)
         }
-        state = Mutex(State(facts: facts, safeMode: safeMode))
+        state = Mutex(State(facts: facts))
         self.now = now
     }
 
@@ -162,8 +161,6 @@ public final class FakeImportanceRules: ImportanceRulesPort, Sendable {
 
     public var allRules: [ImportanceRuleInfo] { state.withLock { s in s.rules.map(Self.info) } }
 
-    public func setSafeMode(_ mode: SafeModeInfo) { state.withLock { $0.safeMode = mode } }
-
     public func failNext(_ error: MailPortError) { state.withLock { $0.failNext = error } }
 
     public func setAutoLabelLookup(_ lookup: (@Sendable (ThreadKey) -> String?)?) {
@@ -179,7 +176,6 @@ public final class FakeImportanceRules: ImportanceRulesPort, Sendable {
             s.failNext = nil
             throw failure
         }
-        guard s.safeMode != .readOnly else { throw MailPortError.blockedBySafeMode }
     }
 
     private static func replacedKinds(_ kind: ImportanceRuleKind) -> Set<ImportanceRuleKind> {

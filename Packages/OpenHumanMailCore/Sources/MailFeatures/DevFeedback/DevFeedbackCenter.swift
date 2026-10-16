@@ -9,7 +9,6 @@ import OpenHumanLinks
 public protocol DevFeedbackHost: AnyObject {
     var appInfo: DevFeedbackSnapshot.AppInfo { get }
     var screenName: String { get }
-    var safeMode: SafeModeInfo? { get }
     var theme: DevFeedbackSnapshot.ThemeInfo? { get }
     var extraDenylist: [String] { get }
     func accountCounters() async -> [DevFeedbackSnapshot.AccountInfo]
@@ -139,7 +138,6 @@ public final class DevFeedbackCenter {
         var list: DevFeedbackSnapshot.ListInfo?
         var reader: DevFeedbackSnapshot.ReaderInfo?
         var status: DevFeedbackSnapshot.StatusInfo?
-        var safeMode = host?.safeMode
         var errors: [DevFeedbackSnapshot.ErrorEntry] = []
         var connectivity: [AccountID: ConnectivityState] = [:]
         if let window, screen.hasPrefix("mail") {
@@ -148,10 +146,8 @@ public final class DevFeedbackCenter {
             list = Self.listInfo(window.list)
             reader = Self.readerInfo(window.reader)
             let model = window.environment.status
-            safeMode = model.safeMode
             connectivity = model.connectivity
-            status = DevFeedbackSnapshot.StatusInfo(safeModeText: model.safeModeText, syncText: model.syncText(now: date),
-                                                    blockedNotice: model.blockedNotice)
+            status = DevFeedbackSnapshot.StatusInfo(syncText: model.syncText(now: date))
             if let error = window.accountsError { errors.append(.init(at: nil, source: "accounts", message: scrubber.scrub(error))) }
             if case .failed(let reason) = window.list?.state { errors.append(.init(at: nil, source: "list", message: scrubber.scrub(reason))) }
             if case .failed(let reason) = window.reader?.state { errors.append(.init(at: nil, source: "reader", message: scrubber.scrub(reason))) }
@@ -187,7 +183,6 @@ public final class DevFeedbackCenter {
             app: host?.appInfo ?? DevFeedbackSnapshot.AppInfo(version: "unknown", build: "unknown", gitCommit: "unknown",
                                                                configuration: "unknown", dataMode: "unknown",
                                                                devFeedbackEnabledBy: availability.rawValue, os: "unknown"),
-            safeMode: safeMode.map(Self.caseName) ?? "unknown",
             screen: screen, route: route, status: status,
             accountCount: accounts.count, accounts: accounts, list: list, reader: reader, theme: host?.theme,
             recentCommands: history.commands, checklistViewing: checklist.viewingItemID,

@@ -7,10 +7,10 @@ import Testing
 @Suite struct BlockCatalogTests {
     let key = ThreadKey(account: AccountID(1), rowID: 1, gmailThreadID: GmailThreadID("t1"))
 
-    func context(_ scope: ActionScope = .list, location: MailLocation = .system(.inbox), sender: String? = "dana@acme.example",
-                 safeMode: SafeModeInfo = .normal) -> ActionContext {
+    func context(_ scope: ActionScope = .list, location: MailLocation = .system(.inbox),
+                 sender: String? = "dana@acme.example") -> ActionContext {
         ActionContext(scope: scope, account: AccountID(1), accountCount: 1, location: location, selection: [key],
-                      focusedThread: key, sender: sender, hasRows: true, safeMode: safeMode)
+                      focusedThread: key, sender: sender, hasRows: true)
     }
 
     func availability(_ id: ActionID, _ c: ActionContext) -> ActionAvailability {
@@ -40,13 +40,10 @@ import Testing
         }
     }
 
-    @Test func readOnlySafeModeDisablesBlockingWithTheUsualReason() {
-        let c = context(safeMode: .readOnly)
-        #expect(availability(.blockSender, c) == .disabled(.safeMode))
-        #expect(availability(.blockDomain, c) == .disabled(.safeMode))
+    @Test func blockingAndTheBlockedListAreAvailableForASender() {
         #expect(availability(.blockSender, context()) == .enabled)
         #expect(availability(.blockDomain, context(.reader)) == .enabled)
-        #expect(availability(.goBlocked, c) == .enabled, "the list works in every mode")
+        #expect(availability(.goBlocked, context()) == .enabled)
     }
 
     @Test func notOfferedWhereTheMailIsTheAuthorsOwnOrAlreadyGone() {

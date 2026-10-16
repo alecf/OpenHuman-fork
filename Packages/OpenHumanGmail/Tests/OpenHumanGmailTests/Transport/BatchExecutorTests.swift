@@ -229,7 +229,7 @@ final class BatchStub: Sendable {
         for r in results { if case .failure = r.result { Issue.record("\(r.id) failed") } }
     }
 
-    @Test func aBatchOutsideTheTransportIsRefusedBySafeModeOnlyWhenNotAllGETs() async throws {
+    @Test func aBatchOutsideTheTransportIsRefusedByTheReadOnlyGuardOnlyWhenNotAllGETs() async throws {
         let h = Harness()
         BatchStub { id, _ in Self.ok(id) }.install(on: h.http)
         let readOnly = ReadOnlyTransport(wrapping: h.http)
@@ -239,15 +239,15 @@ final class BatchStub: Sendable {
         let request = HTTPRequest(method: "POST", url: BatchCodec.endpoint,
                                   headers: ["Content-Type": "multipart/mixed; boundary=b"],
                                   body: Data("--b\r\nContent-Type: application/http\r\n\r\nPOST /gmail/v1/users/me/messages/x/trash HTTP/1.1\r\n\r\n--b--\r\n".utf8))
-        await #expect(throws: TransportError.blockedBySafeMode("POST /batch/gmail/v1")) { _ = try await blocked.send(request) }
+        await #expect(throws: TransportError.refusedByGuard("POST /batch/gmail/v1")) { _ = try await blocked.send(request) }
     }
 
-    @Test func safeModeRefusalOfTheWholeBatchIsNotRetried() async throws {
+    @Test func aGuardRefusalOfTheWholeBatchIsNotRetried() async throws {
         let h = Harness()
         struct Refusing: HTTPTransport {
-            func send(_ request: HTTPRequest) async throws -> HTTPResponse { throw TransportError.blockedBySafeMode("POST /batch/gmail/v1") }
+            func send(_ request: HTTPRequest) async throws -> HTTPResponse { throw TransportError.refusedByGuard("POST /batch/gmail/v1") }
         }
-        await #expect(throws: GmailError.transport(.blockedBySafeMode("POST /batch/gmail/v1"))) {
+        await #expect(throws: GmailError.transport(.refusedByGuard("POST /batch/gmail/v1"))) {
             _ = try await h.client(transport: Refusing()).getMessages(ids: ["a", "b"], format: .full, metadataHeaders: [], priority: .sync)
         }
         #expect(h.metrics.totalUnits == 0 && h.clock.sleeps.isEmpty)

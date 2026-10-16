@@ -9,8 +9,8 @@ import Testing
     private static let list = "/calendar/v3/calendars/robin@example.com/events"
     private static let start = ISO8601DateFormatter().date(from: "2026-10-21T17:00:00Z")!
 
-    private func client(_ mode: SafeMode, _ http: FakeHTTPTransport) -> GoogleCalendarClient {
-        GoogleCalendarClient(calendarID: Self.me, mode: mode, grantedScopes: CalendarScopes.requested(for: mode),
+    private func client(_ scopes: [String], _ http: FakeHTTPTransport) -> GoogleCalendarClient {
+        GoogleCalendarClient(calendarID: Self.me, grantedScopes: scopes,
                              tokens: StaticTokenProvider(token: "synthetic-cal-access"), transport: http,
                              clock: InstantClock(), timeZone: TimeZone(identifier: "UTC")!)
     }
@@ -19,8 +19,8 @@ import Testing
         request.flatMap { URLComponents(url: $0.url, resolvingAgainstBaseURL: false)?.queryItems } ?? []
     }
 
-    @Test func theListingIsAGetOfTheWindowInEveryModeWithEachEventsUIDAndOrganizer() async throws {
-        for mode in [SafeMode.readOnly, .writeAllowlist, .normal] {
+    @Test func theListingIsAGetOfTheWindowWithEitherGrantWithEachEventsUIDAndOrganizer() async throws {
+        for scopes in [CalendarScopes.request.read, CalendarScopes.request.write] {
             let http = FakeHTTPTransport()
             http.on("GET", Self.list) { _ in
                 FakeHTTPTransport.json(200, ["items": [
@@ -32,16 +32,16 @@ import Testing
                      "end": ["dateTime": "2026-10-21T17:30:00Z"]],
                 ]])
             }
-            let found = try await client(mode, http).inviteCandidates(iCalUID: "weekly+1@example.com",
+            let found = try await client(scopes, http).inviteCandidates(iCalUID: "weekly+1@example.com",
                                                                      from: Self.start.addingTimeInterval(-60),
                                                                      to: Self.start.addingTimeInterval(60))
-            #expect(found.map(\.event.id) == ["other", "series1_20261021T170000Z"], "\(mode): soonest first")
+            #expect(found.map(\.event.id) == ["other", "series1_20261021T170000Z"], "\(scopes): soonest first")
             let occurrence = try #require(found.last)
             #expect(occurrence.iCalUID == "weekly+1@example.com" && occurrence.organizerEmail == "dana@example.com")
             #expect(occurrence.event.recurringEventID == "series1" && occurrence.event.selfResponse == "needsAction")
             #expect(found.first?.iCalUID == nil && found.first?.organizerEmail == nil, "absent fields stay nil")
             let request = try #require(http.requests.first)
-            #expect(request.method == "GET" && request.body == nil, "\(mode)")
+            #expect(request.method == "GET" && request.body == nil, "\(scopes)")
             let query = items(request)
             #expect(query.contains(URLQueryItem(name: "iCalUID", value: "weekly+1@example.com")))
             #expect(request.url.absoluteString.contains("weekly%2B1"), "a + in the UID is encoded (Google would read a space)")
@@ -53,7 +53,7 @@ import Testing
     @Test func withoutAUIDOnlyTheWindowIsAskedFor() async throws {
         let http = FakeHTTPTransport()
         http.on("GET", Self.list) { _ in FakeHTTPTransport.json(200, ["items": [[String: Any]]()]) }
-        let found = try await client(.readOnly, http).inviteCandidates(iCalUID: nil, from: Self.start,
+        let found = try await client(CalendarScopes.request.read, http).inviteCandidates(iCalUID: nil, from: Self.start,
                                                                        to: Self.start.addingTimeInterval(60))
         #expect(found.isEmpty)
         let query = items(http.requests.first)

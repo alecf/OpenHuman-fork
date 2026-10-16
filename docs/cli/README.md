@@ -1,7 +1,7 @@
 # `openhuman`: Mail by OpenHuman on the command line
 
-The CLI reads the same local cache as the Mac app and writes changes to the local queue the app applies. It holds no
-tokens, never calls Gmail and never sends mail. Contract: `docs/cli/schema.json`. For AI agents and MCP clients:
+The CLI reads the same local cache as the Mac app and saves agent drafts for the user to review there; mail changes
+are made in the app. It holds no tokens, never calls Gmail and never sends mail. Contract: `docs/cli/schema.json`. For AI agents and MCP clients:
 `docs/cli/AGENTS.md`. Every command as data: `docs/cli/schema.json` (`openhuman schema --json`).
 
 ## Install
@@ -25,7 +25,7 @@ openhuman --generate-completion-script fish > ~/.config/fish/completions/openhum
 |---|---|---|
 | Accounts and sync | `accounts list/alias/default`, `auth status`, `sync status/run` | local settings only |
 | Read | `gmail search/list/inbox/get`, `gmail thread get`, `gmail labels list`, `gmail counts`, `gmail splits list/show` | no |
-| Triage | `gmail done` (`archive`), `move-to-inbox` (`unarchive`), `read`, `unread`, `star`, `unstar`, `snooze`, `unsnooze`, `remind`, `unremind`, `undo` | queued for the app |
+| Triage | `gmail done` (`archive`), `move-to-inbox` (`unarchive`), `read`, `unread`, `star`, `unstar`, `snooze`, `unsnooze`, `remind`, `unremind`, `undo` | none: exit 5 `mail_changes_in_app`, make mail changes in the app; `--dry-run` previews and exits 0 |
 | Drafts | `gmail drafts list/get` (`show`)`/create/update/reply/forward/delete` | drafts for review; never sent |
 | Review queue | `gmail review list/show [--diff]/open`, `gmail review approve/reject` (a person at a terminal only) | review state |
 | Snippets | `gmail snippets list/show/render/add/delete/export/import` (the app's `openhuman-snippets` file) | local snippets |

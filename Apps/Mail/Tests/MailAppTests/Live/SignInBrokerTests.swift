@@ -70,7 +70,7 @@ private func tokenEndpoint() -> FakeHTTPTransport {
     let http = FakeHTTPTransport()
     http.on("POST", "/token") { _ in
         FakeHTTPTransport.json(200, ["access_token": "synthetic-access", "refresh_token": "synthetic-refresh",
-                                     "expires_in": 3600, "scope": CalendarScopes.requested(for: .readOnly).joined(separator: " "),
+                                     "expires_in": 3600, "scope": CalendarScopes.request.write.joined(separator: " "),
                                      "token_type": "Bearer"])
     }
     return http
@@ -78,8 +78,7 @@ private func tokenEndpoint() -> FakeHTTPTransport {
 
 private func consent(_ broker: SignInBroker, _ receiver: ScriptedReceiver, http: FakeHTTPTransport,
                      clock: any OHClock = SystemClock()) -> CalendarConsent {
-    CalendarConsent(client: client, mode: .readOnly, transport: http, receiver: broker.wrap(receiver), browser: broker,
-                    clock: clock)
+    CalendarConsent(client: client, transport: http, receiver: broker.wrap(receiver), browser: broker, clock: clock)
 }
 
 private func firstPending(_ broker: SignInBroker) async -> PendingSignIn? {

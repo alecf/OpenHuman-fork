@@ -18,7 +18,7 @@ private let now = Date(timeIntervalSince1970: 1_791_000_000)
                                                              effect: .neverImportant))
     _ = try store.addImportanceRule(ImportanceRuleDefinition(accountID: account, kind: .matcher, value: "keyword:urgent",
                                                              effect: .important, source: .ai))
-    let port = MailStoreImportance(store: store, safeMode: .normal)
+    let port = MailStoreImportance(store: store)
     let rules = try await firstValue(port.rules(account)) { $0.count == 4 }
     let byValue = Dictionary(rules.map { ($0.value, $0) }, uniquingKeysWith: { first, _ in first })
     let keyword = try #require(byValue["invoice"])
@@ -39,7 +39,7 @@ private let now = Date(timeIntervalSince1970: 1_791_000_000)
     let row = try #require(window.rows.first { !$0.isImportant && !$0.participants.allSatisfy(\.isMe) })
     let sender = try #require(row.participants.first { !$0.isMe }?.email.lowercased())
     let domain = String(try #require(sender.split(separator: "@").last))
-    let port = MailStoreImportance(store: store, safeMode: .normal)
+    let port = MailStoreImportance(store: store)
 
     _ = try await port.apply(ImportanceChange(kind: .neverDomain, account: account, value: domain, thread: row.id))
     var why = try await port.explain(row.id)
@@ -55,7 +55,7 @@ private let now = Date(timeIntervalSince1970: 1_791_000_000)
 
 @Test(.timeLimit(.minutes(1))) func settingsEditsKeepTheIdAndScopeAndDeletesUndo() async throws {
     let (store, account) = try FixtureStoreSeeder.makeStore(corpus: FakeCorpus.make(threadCount: 5, now: now))
-    let port = MailStoreImportance(store: store, safeMode: .normal)
+    let port = MailStoreImportance(store: store)
     _ = try store.addImportanceRule(ImportanceRuleDefinition(accountID: nil, kind: .domain, value: "example.org",
                                                              effect: .important, source: .ai))
     let everyAccount = try #require(try store.importanceRules(account: account).first)
@@ -87,28 +87,13 @@ private let now = Date(timeIntervalSince1970: 1_791_000_000)
     }
 }
 
-@Test(.timeLimit(.minutes(1))) func readOnlyRefusesEveryEditBeforeTheStoreAndStillLists() async throws {
-    let (store, account) = try FixtureStoreSeeder.makeStore(corpus: FakeCorpus.make(threadCount: 3, now: now))
-    _ = try store.addImportanceRule(ImportanceRuleDefinition(accountID: account, kind: .sender, value: "dana@example.com",
-                                                             effect: .important))
-    let id = try #require(try store.importanceRules(account: account).first?.id.rawValue)
-    let readOnly = MailStoreImportance(store: store, safeMode: .readOnly)
-    let change = ImportanceChange(kind: .neverDomain, account: account, value: "example.com")
-    await #expect(throws: MailPortError.blockedBySafeMode) { try await readOnly.apply(change) }
-    await #expect(throws: MailPortError.blockedBySafeMode) { try await readOnly.update(String(id), to: change) }
-    await #expect(throws: MailPortError.blockedBySafeMode) { try await readOnly.delete([String(id)]) }
-    #expect(try store.importanceRules(account: account).map(\.definition.kind) == [.sender], "nothing changed")
-    let listed = try await firstValue(readOnly.rules(account)) { !$0.isEmpty }
-    #expect(listed.map(\.kind) == [.alwaysSender], "the list works in read-only")
-}
-
 @Test(.timeLimit(.minutes(1))) func movingOneConversationIsAThreadRuleThatASenderRuleOutranks() async throws {
     let (store, account) = try FixtureStoreSeeder.makeStore(corpus: FakeCorpus.make(threadCount: 10, now: now))
     let data = MailStoreAdapter(store: store)
     let window = try await firstValue(data.threadWindow(.system(.inbox), account: account, limit: 20)) { !$0.rows.isEmpty }
     let row = try #require(window.rows.first { !$0.isImportant && !$0.participants.allSatisfy(\.isMe) })
     let sender = try #require(row.participants.first { !$0.isMe }?.email.lowercased())
-    let port = MailStoreImportance(store: store, safeMode: .normal)
+    let port = MailStoreImportance(store: store)
 
     let moved = try await port.apply(ImportanceChange(kind: .alwaysThread, account: account,
                                                       value: row.id.gmailThreadID.rawValue, thread: row.id))
@@ -123,22 +108,14 @@ private let now = Date(timeIntervalSince1970: 1_791_000_000)
     _ = try await port.apply(ImportanceChange(kind: .neverSender, account: account, value: sender, thread: row.id))
     why = try await port.explain(row.id)
     #expect(!why.isImportant && why.reason == "never important from \(sender)", "thread scope is below sender")
-
-    let readOnly = MailStoreImportance(store: store, safeMode: .readOnly)
-    await #expect(throws: MailPortError.blockedBySafeMode) {
-        try await readOnly.apply(ImportanceChange(kind: .neverThread, account: account,
-                                                  value: row.id.gmailThreadID.rawValue, thread: row.id))
-    }
     _ = moved
 }
 
-@Test(.timeLimit(.minutes(1))) func replyCountersAreTheStoresSentRepliesInEveryMode() async throws {
+@Test(.timeLimit(.minutes(1))) func replyCountersAreTheStoresSentReplies() async throws {
     let (store, account) = try FixtureStoreSeeder.makeStore(corpus: FakeCorpus.make(threadCount: 12, now: now))
     let expected = try store.sentReplies(account: account, since: .distantPast)
-    for mode in [SafeModeInfo.normal, .readOnly] {
-        let counters = try await MailStoreImportance(store: store, safeMode: mode).replyCounters(account, since: .distantPast)
-        #expect(counters.map(\.email) == expected.map(\.email))
-        #expect(counters.map(\.repliedAt) == expected.map(\.sentAt))
-        #expect(counters.map(\.name) == expected.map(\.name))
-    }
+    let counters = try await MailStoreImportance(store: store).replyCounters(account, since: .distantPast)
+    #expect(counters.map(\.email) == expected.map(\.email))
+    #expect(counters.map(\.repliedAt) == expected.map(\.sentAt))
+    #expect(counters.map(\.name) == expected.map(\.name))
 }

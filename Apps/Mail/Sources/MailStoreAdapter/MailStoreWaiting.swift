@@ -12,21 +12,17 @@ extension MailStore: WaitingOverrideStoring {}
 
 public final class MailStoreWaiting: WaitingPort, Sendable {
     private let store: any WaitingOverrideStoring
-    private let allowsChanges: Bool
 
-    public init(store: any WaitingOverrideStoring, safeMode: SafeModeInfo) {
+    public init(store: any WaitingOverrideStoring) {
         self.store = store
-        self.allowsChanges = safeMode != .readOnly
     }
 
     public func setChoice(_ choice: WaitingChoice?, for thread: ThreadKey) async throws -> UndoToken {
-        guard allowsChanges else { throw MailPortError.blockedBySafeMode }
         let previous = try Self.mapping { try store.setWaitingOverride(Self.ref(thread), choice.map(Self.override)) }
         return try WaitingReceipt(thread: thread, restore: previous.map(Self.choice)).token()
     }
 
     public func undo(_ token: UndoToken) async throws -> UndoToken? {
-        guard allowsChanges else { throw MailPortError.blockedBySafeMode }
         let receipt = try WaitingReceipt(token: token)
         let current = try Self.mapping { try store.setWaitingOverride(Self.ref(receipt.thread), receipt.restore.map(Self.override)) }
         return try WaitingReceipt(thread: receipt.thread, restore: current.map(Self.choice)).token()

@@ -14,10 +14,17 @@ struct OverlayFixture {
     let center: OverlayCenter
 
     init(corpus: FakeCorpus = .make(threadCount: 10, now: fixedNow), options: FakeMailStore.Options = .init(remoteAck: .immediate),
-         flags: FeatureFlags = FeatureFlags(), now: @escaping @Sendable () -> Date = { fixedNow }) {
-        env = AppEnvironment.fake(corpus: corpus, options: options, featureFlags: flags,
-                                  notices: NoticeCenter(autoExpire: false))
-        store = env.commands as! FakeMailStore
+         flags: FeatureFlags = FeatureFlags(), writePort: Bool = true, now: @escaping @Sendable () -> Date = { fixedNow }) {
+        if writePort {
+            env = AppEnvironment.fake(corpus: corpus, options: options, featureFlags: flags,
+                                      notices: NoticeCenter(autoExpire: false))
+        } else {
+            let store = FakeMailStore(corpus: corpus, options: options)
+            env = AppEnvironment(data: store, accounts: store, settings: store, isFake: true,
+                                 notices: NoticeCenter(autoExpire: false),
+                                 importance: FakeImportanceRules(corpus: corpus), featureFlags: flags)
+        }
+        store = env.data as! FakeMailStore
         router = env.router
         center = env.overlays
         center.timeZone = TimeZone(identifier: "UTC")!

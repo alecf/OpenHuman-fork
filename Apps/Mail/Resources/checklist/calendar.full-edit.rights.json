@@ -5,11 +5,10 @@
   "steps": [
     "With -UseFakeData -UseFakeCalendar open Calendar (2) and click an afternoon meeting with Sam Rivera (someone else organizes it)",
     "Look at each row: title, time, repeat and visibility are disabled; reminders, Busy or Free and colour still work",
-    "Switch Settings to read-only safe mode (or use the launch variable) and open any event",
     "Try to type in any field, then hold the pointer over a dimmed row"
   ],
   "deepLink": null,
-  "expected": "Rows you cannot change are dimmed and do nothing; no amber or lock sentence shows anywhere in the card. Holding the pointer over a dimmed row shows why (for example that someone else organizes the event); VoiceOver reads the same. Decline replaces the trash. In read-only safe mode every field is dimmed and its tooltip gives the safe-mode sentence.",
+  "expected": "Rows you cannot change are dimmed and do nothing; no amber or lock sentence shows anywhere in the card. Holding the pointer over a dimmed row shows why (for example that someone else organizes the event); VoiceOver reads the same. Decline replaces the trash.",
   "requires": "fake",
   "addedIn": "2026-10-13"
 }

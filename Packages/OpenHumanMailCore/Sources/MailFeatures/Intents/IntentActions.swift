@@ -10,7 +10,6 @@ public enum IntentError: Error, Equatable, Sendable, CustomStringConvertible, Cu
     case noAccount
     case unknownAccount
     case moduleOff(String)
-    case readOnly
     case changesOff
     case declined
     case nothingGiven
@@ -30,7 +29,6 @@ public enum IntentError: Error, Equatable, Sendable, CustomStringConvertible, Cu
         case .noAccount: "No account is open in Mail."
         case .unknownAccount: "That account isn't signed in to Mail. Nothing was changed."
         case .moduleOff(let what): "\(what) isn't turned on in Mail."
-        case .readOnly: "Mail is in read-only safe mode. Nothing was changed."
         case .changesOff: "Shortcuts can't change mail. Turn on “Let Shortcuts change mail” in Settings › Platform features."
         case .declined: "Nothing was changed."
         case .nothingGiven: "No conversations were given. Nothing was changed."
@@ -52,7 +50,6 @@ public enum IntentError: Error, Equatable, Sendable, CustomStringConvertible, Cu
         case .noAccount: "no account"
         case .unknownAccount: "unknown account"
         case .moduleOff: "module off"
-        case .readOnly: "read-only"
         case .changesOff: "changes off"
         case .declined: "declined"
         case .nothingGiven: "nothing given"
@@ -408,8 +405,6 @@ public final class IntentActions: IntentPerforming {
             case .hidden:
                 throw IntentError.moduleOff(ActionCatalog.descriptor(id)?.title.replacingOccurrences(of: "…", with: "")
                                             ?? "This action")
-            case .disabled(.safeMode):
-                throw IntentError.readOnly
             case .disabled(.unavailable(let what)):
                 throw IntentError.unavailable(what.replacingOccurrences(of: "…", with: ""))
             case .disabled(let reason):
@@ -455,7 +450,7 @@ public final class IntentActions: IntentPerforming {
         let environment = router.environment
         return ActionContext(scope: .list, account: group.state.id, accountCount: router.accounts.count,
                              location: group.state.location, selection: group.keys, focusedThread: group.keys.first,
-                             hasRows: true, safeMode: environment.status.safeMode, canWrite: environment.commands != nil,
+                             hasRows: true, canWrite: environment.commands != nil,
                              canUndo: environment.undo?.canUndo ?? false, canRedo: environment.undo?.canRedo ?? false)
     }
 

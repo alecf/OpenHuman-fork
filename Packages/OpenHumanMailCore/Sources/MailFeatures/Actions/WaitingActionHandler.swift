@@ -31,14 +31,11 @@ public final class WaitingActionHandler: ActionHandler {
             reopens = ThreadActionHandler.advance(past: [thread], in: state, router: router)
         }
         let feedback = self.feedback
-        let id = request.id
         return .started(Task {
             do {
                 try await undo.perform(title, threads: [thread], via: port, reopens: reopens) {
                     try await port.setChoice(choice, for: thread)
                 }
-            } catch MailPortError.blockedBySafeMode {
-                feedback.refuse(id, .safeMode)
             } catch {
                 feedback.failed(leaving ? "Couldn't mark the conversation as not waiting" : "Couldn't mark the conversation as waiting")
             }

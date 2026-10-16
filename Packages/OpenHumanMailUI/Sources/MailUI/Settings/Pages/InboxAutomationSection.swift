@@ -53,7 +53,7 @@ struct InboxAutomationSection: View {
                             Button("Check Now") { Task { await model.catchUp() } }
                                 .disabled(model.isCatchingUp)
                         }
-                        .disabled(!model.availability.canEditStoredItems)
+                        .disabled(!model.availability.hasCommands)
                     }
                     SettingsRow("Wait", selection: binding(model.autoRemindDays)) {
                         ForEach(InboxAutomationSettingsModel.dayChoices, id: \.self) {

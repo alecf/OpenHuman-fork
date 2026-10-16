@@ -212,8 +212,8 @@ private let full: CalendarAbilities = [.respond, .editDetails, .remove, .editFul
         }
     }
 
-    @Test func safeModeLocksEveryFieldWithTheSameVisibleReason() {
-        let why = "Read-only safe mode: Mail never changes your calendar."
+    @Test func aRefusalLocksEveryFieldWithTheSameVisibleReason() {
+        let why = "Reconnect Google Calendar to change events."
         let rights = CalendarFieldRights.make(for: event(), abilities: full, refusal: why)
         for field in CalendarFormField.allCases { #expect(rights.access(field) == .readOnly(why)) }
         #expect(rights.delete == .unavailable(why) && rights.summary == why && !rights.hasAnyEditable)

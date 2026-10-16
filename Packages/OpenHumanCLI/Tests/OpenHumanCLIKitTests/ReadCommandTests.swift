@@ -216,8 +216,8 @@ import Testing
         let r = await h.run(["gmail", "inbox", "--json"])
         #expect(r.code == 0)
         #expect((r.meta["warnings"] as? [String])?.contains { $0.contains("reauthorized") } == true)
-        let write = await h.run(["gmail", "done", "t1", "--json"], environment: Harness.write)
-        #expect(write.code == 4)
+        let write = await h.run(["gmail", "drafts", "create", "--to", "a@example.com", "--subject", "S", "--body", "x", "--json"])
+        #expect(write.code == 4 && write.errorCode == "auth_required")
     }
 
     @Test func missingStoreAndAccountsAreExit4() async throws {

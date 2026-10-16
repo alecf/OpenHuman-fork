@@ -122,7 +122,6 @@ final class AskTestSource: MailDataSource, Sendable {
     func failedOperations(_ account: AccountID?) -> AsyncThrowingStream<[FailedOperationInfo], Error> {
         store.failedOperations(account)
     }
-    func safeMode() -> SafeModeInfo { store.safeMode() }
     func unsubscribeInfo(_ key: MessageKey) async throws -> UnsubscribeInfo? { try await store.unsubscribeInfo(key) }
     func diagnosticsSnapshot() async throws -> DiagnosticsSnapshot { try await store.diagnosticsSnapshot() }
 }
@@ -142,13 +141,12 @@ final class AskFixture {
     let clock = TestClock()
     let pasteboard = RecordingPasteboard()
 
-    init(providers: [any AIProvider]? = nil, settings: AISettings = AISettings(), safeMode: SafeModeInfo = .normal,
-         liveConnectivity: Bool = false, planner: (any AskPlanning)? = nil, flags: FeatureFlags = FeatureFlags(),
-         withAI: Bool = true, navigationStore: (any NavigationStateStoring)? = nil,
-         calendar: (any CalendarProviding)? = nil) {
+    init(providers: [any AIProvider]? = nil, settings: AISettings = AISettings(), liveConnectivity: Bool = false,
+         planner: (any AskPlanning)? = nil, flags: FeatureFlags = FeatureFlags(), withAI: Bool = true,
+         navigationStore: (any NavigationStateStoring)? = nil, calendar: (any CalendarProviding)? = nil) {
         store = FakeMailStore(corpus: .rich(threadCount: 60, now: fixedNow),
                               options: .init(remoteAck: .immediate, heldSends: .manual, liveConnectivity: liveConnectivity,
-                                             safeMode: safeMode, now: { fixedNow }))
+                                             now: { fixedNow }))
         source = AskTestSource(store)
         let registry = ProviderRegistry(providers: providers ?? [ScriptedProvider()])
         center = AICenter.make(registry: registry, settings: AISettingsBox(store: InMemoryAISettingsStore(settings)))

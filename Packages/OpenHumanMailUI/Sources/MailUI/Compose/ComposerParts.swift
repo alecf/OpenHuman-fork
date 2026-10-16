@@ -408,8 +408,7 @@ struct ComposerBanners: View {
     }
 
     private func localOnlyText(_ why: String) -> String {
-        if manager.isReadOnly { return String(localized: "Mail is read-only, so it can't save or send this message.") }
-        return manager.canSendInThisProcess
+        manager.canSendInThisProcess
             ? why
             : String(localized: "\(why). Sending is off: Send is refused and nothing is queued.")
     }
@@ -688,10 +687,7 @@ struct ComposerActionBar: View {
     }
 
     private var sendHelp: String {
-        guard manager.canSendInThisProcess else {
-            return manager.isReadOnly ? String(localized: "Mail is read-only, so it can't save or send this message.")
-                                      : String(localized: "Sending isn't available here")
-        }
+        guard manager.canSendInThisProcess else { return String(localized: "Sending isn't available here") }
         let seconds = manager.undoSendSeconds
         return seconds > 0 ? String(localized: "Send  ⌘↵. Undo is there for \(seconds) s after sending.")
                            : String(localized: "Send  ⌘↵")

@@ -22,16 +22,15 @@ extension MailStoreAdapter {
 
     public func diagnosticsSnapshot() async throws -> DiagnosticsSnapshot {
         let store = self.store
-        let mode = safeModeValue
         let live = await Self.firstValue(connectivitySource?(), within: .seconds(2)) ?? [:]
         return try await Task.detached {
-            try Self.diagnostics(store, safeMode: mode, connectivity: live, now: Date())
+            try Self.diagnostics(store, connectivity: live, now: Date())
         }.value
     }
 
     static let diagnosticsPageLimit = 100
 
-    static func diagnostics(_ store: any Store, safeMode: SafeModeInfo, connectivity live: [AccountID: ConnectivityState],
+    static func diagnostics(_ store: any Store, connectivity live: [AccountID: ConnectivityState],
                             now: Date) throws -> DiagnosticsSnapshot {
         let items = try store.accounts().sorted { $0.id < $1.id }
         var errors: [String: (count: Int, lastAt: Date?)] = [:]
@@ -66,7 +65,7 @@ extension MailStoreAdapter {
             report.appliedMigrations.compactMap { $0.hasPrefix("v") ? Int($0.dropFirst()) : nil }.max()
         }
         return DiagnosticsSnapshot(
-            generatedAt: now, safeMode: "\(safeMode)", schemaVersion: schema, accounts: entries,
+            generatedAt: now, schemaVersion: schema, accounts: entries,
             operations: tallies.keys.sorted().map { key in
                 let parts = key.split(separator: "|", maxSplits: 1).map(String.init)
                 return DiagnosticsSnapshot.OperationTally(kind: parts[0], status: parts.count > 1 ? parts[1] : "",

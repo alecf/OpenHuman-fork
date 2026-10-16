@@ -16,8 +16,8 @@ private func at(_ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0) ->
     private static let me = "robin@example.com"
     private static let eventsPath = "/calendar/v3/calendars/robin@example.com/events"
 
-    private func client(_ http: FakeHTTPTransport, mode: SafeMode = .readOnly) -> GoogleCalendarClient {
-        GoogleCalendarClient(calendarID: Self.me, mode: mode, grantedScopes: CalendarScopes.requested(for: mode),
+    private func client(_ http: FakeHTTPTransport) -> GoogleCalendarClient {
+        GoogleCalendarClient(calendarID: Self.me, grantedScopes: CalendarScopes.request.read,
                              tokens: StaticTokenProvider(token: "synthetic-cal-access"), transport: http,
                              clock: InstantClock(), timeZone: newYork)
     }
@@ -145,9 +145,9 @@ private func at(_ month: Int, _ day: Int, _ hour: Int = 0, _ minute: Int = 0) ->
         #expect(empty.isComplete && empty.nextSyncToken == nil && empty.events.isEmpty)
     }
 
-    @Test func bothReadsPassTheReadOnlyGuardAndNothingIsWidened() throws {
-        let guardian = CalendarGuardTransport(wrapping: FakeHTTPTransport(), calendarID: Self.me, mode: .readOnly,
-                                              grantedScopes: CalendarScopes.requested(for: .readOnly))
+    @Test func bothReadsPassTheGuardOnAReadGrantAndNothingIsWidened() throws {
+        let guardian = CalendarGuardTransport(wrapping: FakeHTTPTransport(), calendarID: Self.me,
+                                              grantedScopes: CalendarScopes.request.read)
         let client = client(FakeHTTPTransport())
         let window = client.url(["calendars", Self.me, "events"],
                                 query: [URLQueryItem(name: "syncToken", value: "synthetic"),

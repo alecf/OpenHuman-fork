@@ -43,10 +43,11 @@ import Testing
         #expect(await set.history().first?.origin == "revert")
     }
 
-    @Test func aChangeWorksInReadOnlySafeMode() async throws {
-        let f = F(safeMode: .readOnly, writes: true)
+    @Test func aChangeStaysOnThisMacAndWritesNoMail() async throws {
+        let f = F(writes: true)
         #expect(await f.env.classification.add(Self.rule))
         #expect(f.env.classification.config.rules.count == 1)
+        #expect(f.recorder.calls.isEmpty)
     }
 
     @Test func historyIsBoundedAndAStoredHeadIsRead() async throws {

@@ -5,9 +5,6 @@ import Testing
 
 @Suite struct CalendarParityScopeTests {
     @Test func theScopeListIsOneConstant() {
-        #expect(CalendarScopes.requested(for: .normal) == CalendarScopes.request.write)
-        #expect(CalendarScopes.requested(for: .readOnly) == CalendarScopes.request.read)
-        #expect(CalendarScopes.requested(for: .writeAllowlist) == CalendarScopes.request.read)
         #expect(CalendarScopes.all == Set(CalendarScopes.request.write + CalendarScopes.request.read))
     }
 

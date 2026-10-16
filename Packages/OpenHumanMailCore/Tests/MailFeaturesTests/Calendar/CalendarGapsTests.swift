@@ -21,10 +21,10 @@ private struct GapsFixture {
     let corpus: FakeCorpus
     let thread: ThreadKey
 
-    init(safeMode: SafeModeInfo = .normal, events: [CalendarEvent] = [], ai: AICenter? = nil) {
+    init(events: [CalendarEvent] = [], ai: AICenter? = nil) {
         corpus = .make(threadCount: 6, now: fixedNow)
         calendar = FakeCalendar(events: events)
-        env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate, safeMode: safeMode),
+        env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate),
                                   featureFlags: FeatureFlags(), ai: ai, calendar: calendar)
         thread = corpus.threads[0].row.id
     }
@@ -71,10 +71,10 @@ private struct GapsFixture {
         #expect(f.calendar.createCalls == 0)
     }
 
-    @Test func thePaletteEntriesMoveTheDayInReadOnlyToo() async throws {
-        let f = GapsFixture(safeMode: .readOnly)
+    @Test func thePaletteEntriesMoveTheDay() async throws {
+        let f = GapsFixture()
         let model = f.sidebar()
-        let context = ActionContext(scope: .list, safeMode: .readOnly)
+        let context = ActionContext(scope: .list)
         for id in [ActionID.calendarPreviousDay, .calendarNextDay, .calendarToday] {
             #expect(f.env.actions.availability(id, host: nil, context: context) == .enabled, "\(id)")
         }
@@ -195,8 +195,8 @@ private struct GapsFixture {
         #expect(slots.first?.start == on(10, 12, 11, 30), "only times still ahead")
     }
 
-    @Test func shiftCommandAPutsTheTimesAtTheCaretInReadOnlyAndCreatesNothing() async throws {
-        let f = GapsFixture(safeMode: .readOnly, events: [mondayMorning])
+    @Test func shiftCommandAPutsTheTimesAtTheCaretAndCreatesNothing() async throws {
+        let f = GapsFixture(events: [mondayMorning])
         _ = f.sidebar()
         f.env.router.start()
         await eventually { f.env.router.active != nil }

@@ -14,7 +14,7 @@ import Testing
         let google = FakeGoogleSignIn(gmail: gmail, clock: clock)
         let tokens = InMemoryTokenStore()
         let wire = FakeGmailTransport(gmail)
-        let factory = DefaultGmailClientFactory(safeMode: .normal, tokenStore: tokens, oauthClient: FakeGoogleSignIn.client,
+        let factory = DefaultGmailClientFactory(tokenStore: tokens, oauthClient: FakeGoogleSignIn.client,
                                                 apiTransport: wire, tokenTransport: google.transport,
                                                 config: engineGmailConfig, clock: clock)
         let store = try MailStore.openInMemoryForTesting()
@@ -24,7 +24,7 @@ import Testing
                                 systemEvents: nil)
         await engine.start()
 
-        let account = try await engine.addAccount(using: google.flow(.normal), loginHint: nil)
+        let account = try await engine.addAccount(using: google.flow(), loginHint: nil)
         #expect(account.email == "me@example.com")
         #expect(account.grantedScopes == [GmailScope.modify])
         #expect(try tokens.load(account: "me@example.com")?.refreshToken == "synthetic-refresh")
@@ -89,7 +89,7 @@ import Testing
         let app = h.engine()
         await app.start()
         try await eventually("the app's drainer refused it") { try h.store.operation(upload.id)?.status == .failed }
-        #expect(try h.store.operation(upload.id)?.lastErrorCode == "safe_mode_blocked")
+        #expect(try h.store.operation(upload.id)?.lastErrorCode == "not_applied_outside_app")
         #expect(await h.gmail.callCount(.createDraft) == 0)
         #expect(await h.gmail.callCount(.updateDraft) == 0)
         #expect(try h.store.reviewQueue(account: h.account).map(\.id) == [draft])

@@ -29,21 +29,21 @@ import Testing
         }
     }
 
-    private func flow(_ mode: SafeMode, transport: ScriptedTransport, receiver: FakeReceiver = FakeReceiver(),
+    private func flow(transport: ScriptedTransport, receiver: FakeReceiver = FakeReceiver(),
                       browser: FakeBrowser = FakeBrowser(), clock: TestClock = TestClock()) -> OAuthFlow {
-        OAuthFlow(client: Synthetic.client, mode: mode, transport: transport, receiver: receiver, browser: browser,
-                  clock: clock)
+        OAuthFlow(client: Synthetic.client, scopes: OAuthScopes.mailRequest, transport: transport, receiver: receiver,
+                  browser: browser, clock: clock)
     }
 
-    @Test func readOnlyModeRequestsExactlyGmailReadonlyAndNoEarlierGrants() {
-        let f = flow(.readOnly, transport: ScriptedTransport())
-        #expect(f.scopes == ["https://www.googleapis.com/auth/gmail.readonly"])
-        #expect(f.scopes == SafeMode.readOnly.oauthScopes)
-        #expect(f.isReadOnlyProfile)
+    // Why: the client may hold broader grants from other tools, so the request is exactly gmail.modify
+    @Test func theMailRequestIsExactlyGmailModifyAndNoEarlierGrants() {
+        let f = flow(transport: ScriptedTransport())
+        #expect(f.scopes == ["https://www.googleapis.com/auth/gmail.modify"])
+        #expect(!f.isReadOnlyProfile)
         let url = f.authorizationURL(redirectURI: URL(string: "http://127.0.0.1:5000/oauth2callback")!,
-                                     challenge: "chal", state: "st", loginHint: nil)
+                                     challenge: "chal", state: "st", loginHint: "first+tag@example.com")
         #expect(url.host == "accounts.example.invalid")
-        #expect(queryValue(url, "scope") == "https://www.googleapis.com/auth/gmail.readonly")
+        #expect(queryValue(url, "scope") == "https://www.googleapis.com/auth/gmail.modify")
         #expect(queryValue(url, "include_granted_scopes") == nil)
         #expect(queryValue(url, "response_type") == "code")
         #expect(queryValue(url, "client_id") == Synthetic.clientID)
@@ -53,35 +53,21 @@ import Testing
         #expect(queryValue(url, "state") == "st")
         #expect(queryValue(url, "access_type") == "offline")
         #expect(queryValue(url, "prompt") == "consent")
-        #expect(queryValue(url, "login_hint") == nil)
+        #expect(queryValue(url, "login_hint") == "first+tag@example.com")
+        #expect(url.absoluteString.contains("login_hint=first%2Btag@example.com"))
         #expect(!url.absoluteString.contains(Synthetic.clientSecret))
     }
 
-    // Why: the client may hold broader grants from other tools, so the write profile asks for exactly gmail.modify
-    @Test func normalAndWriteAllowlistRequestExactlyGmailModifyAndNoEarlierGrants() {
-        for mode in [SafeMode.normal, .writeAllowlist] {
-            let f = flow(mode, transport: ScriptedTransport())
-            #expect(f.scopes == ["https://www.googleapis.com/auth/gmail.modify"])
-            #expect(!f.isReadOnlyProfile)
-            let url = f.authorizationURL(redirectURI: URL(string: "http://127.0.0.1:5000/oauth2callback")!,
-                                         challenge: "c", state: "s", loginHint: "first+tag@example.com")
-            #expect(queryValue(url, "scope") == "https://www.googleapis.com/auth/gmail.modify")
-            #expect(queryValue(url, "include_granted_scopes") == nil)
-            #expect(queryValue(url, "login_hint") == "first+tag@example.com")
-            #expect(url.absoluteString.contains("login_hint=first%2Btag@example.com"))
-        }
-    }
-
-    @Test func readOnlyAuthorizeHappyPath() async throws {
-        let transport = googleFake(scope: GmailScope.readonly)
+    @Test func authorizeHappyPath() async throws {
+        let transport = googleFake(scope: GmailScope.modify)
         let receiver = FakeReceiver()
         let browser = consenting(receiver)
         let clock = TestClock()
-        let result = try await flow(.readOnly, transport: transport, receiver: receiver, browser: browser, clock: clock)
+        let result = try await flow(transport: transport, receiver: receiver, browser: browser, clock: clock)
             .authorize(loginHint: nil, timeout: .seconds(300))
 
         #expect(result.email == "someone@example.com")
-        #expect(result.token.grantedScopes == [GmailScope.readonly])
+        #expect(result.token.grantedScopes == [GmailScope.modify])
         #expect(result.token.refreshToken == "synthetic-refresh-1")
         #expect(result.token.accessToken == "synthetic-access-1")
         #expect(result.token.accessTokenExpiry == clock.now.addingTimeInterval(3599))
@@ -113,9 +99,9 @@ import Testing
     }
 
     @Test func stateMismatchStopsBeforeAnyRequest() async throws {
-        let transport = googleFake(scope: GmailScope.readonly)
+        let transport = googleFake(scope: GmailScope.modify)
         let receiver = FakeReceiver()
-        let f = flow(.readOnly, transport: transport, receiver: receiver,
+        let f = flow(transport: transport, receiver: receiver,
                      browser: consenting(receiver, state: "forged-state"))
         await #expect(throws: OAuthError.stateMismatch) { _ = try await f.authorize(loginHint: nil, timeout: .seconds(300)) }
         #expect(transport.requests.isEmpty)
@@ -128,7 +114,7 @@ import Testing
         let browser = FakeBrowser { _ in
             receiver.deliver(URLComponents(string: "http://127.0.0.1:53682/oauth2callback?error=access_denied")!)
         }
-        let f = flow(.readOnly, transport: transport, receiver: receiver, browser: browser)
+        let f = flow(transport: transport, receiver: receiver, browser: browser)
         await #expect(throws: OAuthError.stateMismatch) { _ = try await f.authorize(loginHint: nil, timeout: .seconds(300)) }
         #expect(transport.requests.isEmpty)
     }
@@ -142,7 +128,7 @@ import Testing
                             URLQueryItem(name: "state", value: queryValue(url, "state"))]
             receiver.deliver(c)
         }
-        let f = flow(.readOnly, transport: transport, receiver: receiver, browser: browser)
+        let f = flow(transport: transport, receiver: receiver, browser: browser)
         await #expect(throws: OAuthError.denied("access_denied")) {
             _ = try await f.authorize(loginHint: nil, timeout: .seconds(300))
         }
@@ -153,7 +139,7 @@ import Testing
         let transport = googleFake(scope: GmailScope.readonly)
         let receiver = FakeReceiver()
         let clock = TestClock()
-        let f = flow(.readOnly, transport: transport, receiver: receiver, browser: FakeBrowser(), clock: clock)
+        let f = flow(transport: transport, receiver: receiver, browser: FakeBrowser(), clock: clock)
         let task = Task { try await f.authorize(loginHint: nil, timeout: .seconds(300)) }
         #expect(await eventually { clock.sleeperCount == 1 })
         #expect(clock.nextDeadline == clock.now.addingTimeInterval(300))
@@ -166,7 +152,7 @@ import Testing
     @Test func cancellationIsReportedAsCancelled() async throws {
         let receiver = FakeReceiver()
         let clock = TestClock()
-        let f = flow(.readOnly, transport: ScriptedTransport(), receiver: receiver, browser: FakeBrowser(), clock: clock)
+        let f = flow(transport: ScriptedTransport(), receiver: receiver, browser: FakeBrowser(), clock: clock)
         let task = Task { try await f.authorize(loginHint: nil, timeout: .seconds(300)) }
         #expect(await eventually { clock.sleeperCount == 1 })
         task.cancel()
@@ -177,41 +163,28 @@ import Testing
     @Test func browserFailureStopsTheReceiver() async throws {
         struct BrowserDown: Error {}
         let receiver = FakeReceiver()
-        let f = flow(.readOnly, transport: ScriptedTransport(), receiver: receiver,
+        let f = flow(transport: ScriptedTransport(), receiver: receiver,
                      browser: FakeBrowser { _ in throw BrowserDown() })
         await #expect(throws: BrowserDown.self) { _ = try await f.authorize(loginHint: nil, timeout: .seconds(300)) }
         #expect(receiver.stopCount == 1)
     }
 
-    @Test func normalModeRejectsAReadonlyOnlyGrant() async throws {
+    @Test func rejectsAReadonlyOnlyGrant() async throws {
         let transport = googleFake(scope: GmailScope.readonly)
         let receiver = FakeReceiver()
-        let f = flow(.normal, transport: transport, receiver: receiver, browser: consenting(receiver))
+        let f = flow(transport: transport, receiver: receiver, browser: consenting(receiver))
         await #expect(throws: OAuthError.insufficientScopes(missing: [GmailScope.modify])) {
             _ = try await f.authorize(loginHint: nil, timeout: .seconds(300))
         }
         #expect(transport.requests.count == 1)
     }
 
-    @Test func readOnlyModeRefusesATokenCarryingWriteScopes() async throws {
-        let transport = googleFake(scope: "\(GmailScope.readonly) \(GmailScope.modify)")
-        let receiver = FakeReceiver()
-        let f = flow(.readOnly, transport: transport, receiver: receiver, browser: consenting(receiver))
-        do {
-            _ = try await f.authorize(loginHint: nil, timeout: .seconds(300))
-            Issue.record("expected a refusal")
-        } catch let OAuthError.denied(reason) {
-            #expect(reason.contains("read-only"))
-        }
-        #expect(transport.requests.count == 1)
-    }
-
-    @Test func normalModeRefusesATokenCarryingBroaderScopes() async throws {
+    @Test func refusesATokenCarryingBroaderScopes() async throws {
         for broader in ["https://mail.google.com/", "https://www.googleapis.com/auth/gmail.settings.basic",
                         "https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/calendar"] {
             let transport = googleFake(scope: "\(GmailScope.modify) \(broader)")
             let receiver = FakeReceiver()
-            let f = flow(.normal, transport: transport, receiver: receiver, browser: consenting(receiver))
+            let f = flow(transport: transport, receiver: receiver, browser: consenting(receiver))
             do {
                 _ = try await f.authorize(loginHint: nil, timeout: .seconds(300))
                 Issue.record("expected a refusal for \(broader)")
@@ -222,17 +195,9 @@ import Testing
         }
         let tolerated = googleFake(scope: "openid \(GmailScope.readonly) \(GmailScope.modify)")
         let receiver = FakeReceiver()
-        let result = try await flow(.normal, transport: tolerated, receiver: receiver, browser: consenting(receiver))
+        let result = try await flow(transport: tolerated, receiver: receiver, browser: consenting(receiver))
             .authorize(loginHint: nil, timeout: .seconds(300))
         #expect(result.token.grantedScopes.contains(GmailScope.modify))
-    }
-
-    @Test func readOnlyModeToleratesIdentityScopes() async throws {
-        let transport = googleFake(scope: "openid \(GmailScope.readonly) https://www.googleapis.com/auth/userinfo.email")
-        let receiver = FakeReceiver()
-        let result = try await flow(.readOnly, transport: transport, receiver: receiver, browser: consenting(receiver))
-            .authorize(loginHint: nil, timeout: .seconds(300))
-        #expect(result.token.grantedScopes.contains(GmailScope.readonly))
     }
 
     @Test func tokenEndpointErrorsMapToTokenEndpoint() async throws {
@@ -240,27 +205,27 @@ import Testing
         let failing = googleFake(scope: "", tokenStatus: 400,
                                  tokenBody: ["error": "invalid_grant", "error_description": "Bad Request"])
         await #expect(throws: OAuthError.tokenEndpoint(status: 400, error: "invalid_grant", description: "Bad Request")) {
-            _ = try await flow(.readOnly, transport: failing, receiver: receiver, browser: consenting(receiver))
+            _ = try await flow(transport: failing, receiver: receiver, browser: consenting(receiver))
                 .authorize(loginHint: nil, timeout: .seconds(300))
         }
         let receiver2 = FakeReceiver()
-        let noRefresh = googleFake(scope: GmailScope.readonly, tokenBody: [
-            "access_token": "synthetic-access-1", "expires_in": 3599, "scope": GmailScope.readonly,
+        let noRefresh = googleFake(scope: GmailScope.modify, tokenBody: [
+            "access_token": "synthetic-access-1", "expires_in": 3599, "scope": GmailScope.modify,
         ])
         await #expect(throws: OAuthError.tokenEndpoint(status: 200, error: "missing_refresh_token", description: nil)) {
-            _ = try await flow(.readOnly, transport: noRefresh, receiver: receiver2, browser: consenting(receiver2))
+            _ = try await flow(transport: noRefresh, receiver: receiver2, browser: consenting(receiver2))
                 .authorize(loginHint: nil, timeout: .seconds(300))
         }
     }
 
     @Test func manualFlowRoundTrip() async throws {
-        let transport = googleFake(scope: GmailScope.readonly)
-        let f = flow(.readOnly, transport: transport)
+        let transport = googleFake(scope: GmailScope.modify)
+        let f = flow(transport: transport)
         let redirect = URL(string: "http://127.0.0.1:1/oauth2callback")!
         let (url, verifier, state) = f.manualAuthorizationURL(redirectURI: redirect)
         #expect(queryValue(url, "state") == state)
         #expect(queryValue(url, "code_challenge") == PKCE.challenge(for: verifier))
-        #expect(queryValue(url, "scope") == GmailScope.readonly)
+        #expect(queryValue(url, "scope") == GmailScope.modify)
 
         let forged = URL(string: "http://127.0.0.1:1/oauth2callback?code=c&state=forged")!
         await #expect(throws: OAuthError.stateMismatch) {
@@ -277,11 +242,11 @@ import Testing
 
     @Test func apiTransportIsReadOnly() async throws {
         let transport = ScriptedTransport()
-        let f = flow(.normal, transport: transport)
+        let f = flow(transport: transport)
         #expect(f.apiTransport is ReadOnlyTransport)
         let write = HTTPRequest(method: "POST", url: URL(string: "https://gmail.googleapis.com/gmail/v1/users/me/messages/send")!,
                                 headers: [:])
-        await #expect(throws: TransportError.blockedBySafeMode("POST /gmail/v1/users/me/messages/send")) {
+        await #expect(throws: TransportError.refusedByGuard("POST /gmail/v1/users/me/messages/send")) {
             _ = try await f.apiTransport.send(write)
         }
         #expect(transport.requests.isEmpty)

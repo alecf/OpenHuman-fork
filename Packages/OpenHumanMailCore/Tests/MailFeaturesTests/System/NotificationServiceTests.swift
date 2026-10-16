@@ -80,7 +80,7 @@ struct NotificationServiceTests {
         await service.flushNow()
         #expect(f.notifier.delivered.count == 1)
         #expect(f.notifier.delivered.first?.title == "2 new important messages")
-        #expect(f.notifier.delivered.first?.category == .readOnly, "a group offers no mark-done button")
+        #expect(f.notifier.delivered.first?.category == nil, "a group offers no mark-done button")
     }
 
     @Test func aNewerMessageInAKnownThreadNotifiesAgain() async throws {
@@ -224,14 +224,6 @@ struct NotificationServiceTests {
         await service.flushNow()
         #expect(f.notifier.delivered.isEmpty)
         #expect(f.notifier.authorizationRequests == 0)
-    }
-
-    @Test func readOnlyModeOffersNoActionButtons() async throws {
-        let f = SystemFixture(options: .init(remoteAck: .immediate, safeMode: .readOnly))
-        _ = await started(f)
-        f.store.deliverMessage(account: f.account, from: sender, subject: "Read only", important: true)
-        await f.delivered(count: 1)
-        #expect(f.notifier.delivered.first?.category == .readOnly)
     }
 
     @Test func agentDraftsReadyNotifyOnceWhenTheQueueGrows() async throws {

@@ -6,38 +6,21 @@ import OpenHumanSync
 
 public final class MailStoreCommands: MailCommanding, Sendable {
     private let engine: @Sendable () throws -> any MailEngineWriting
-    private let safeMode: SafeModeInfo
     private let oneClick: (@Sendable (MessageKey) async throws -> Void)?
 
-    init(engine: @escaping @Sendable () throws -> any MailEngineWriting, safeMode: SafeModeInfo,
+    init(engine: @escaping @Sendable () throws -> any MailEngineWriting,
          oneClick: (@Sendable (MessageKey) async throws -> Void)? = nil) {
         self.engine = engine
-        self.safeMode = safeMode
         self.oneClick = oneClick
     }
 
-    private func requireChanges(_ what: String) throws {
-        guard safeMode != .readOnly else { throw Self.refusal(what, mode: safeMode) }
-    }
-
-    private func requireSending(_ what: String) throws {
-        guard safeMode == .normal else { throw Self.refusal(what, mode: safeMode) }
-    }
-
-    private static func refusal(_ what: String, mode: SafeModeInfo) -> MailPortError {
-        Log(.app).notice("write port: \(what) refused in safe mode \(String(describing: mode))")
-        return .blockedBySafeMode
-    }
-
     public func apply(_ command: MailCommand) async throws -> UndoToken {
-        try requireChanges(command.name)
         let action = Self.action(command)
         let receipt = try await Self.mapping("the conversation") { try await engine().perform(action, origin: .app) }
         return try Self.token(receipt)
     }
 
     public func undo(_ token: UndoToken) async throws -> UndoToken? {
-        try requireChanges("undo")
         let receipt = try Self.receipt(token)
         guard let redo = try await Self.mapping("the conversation", { try await engine().undo(receipt) }) else {
             return nil
@@ -46,7 +29,6 @@ public final class MailStoreCommands: MailCommanding, Sendable {
     }
 
     public func createLabel(_ account: AccountID, name: String, applyTo: [ThreadKey]) async throws -> UndoToken {
-        try requireChanges("createLabel")
         let refs = applyTo.map(MailStoreAdapter.threadRef)
         let receipt = try await Self.mapping("the label") {
             try await engine().createLabel(account: account, name: name, applyTo: refs)
@@ -55,7 +37,6 @@ public final class MailStoreCommands: MailCommanding, Sendable {
     }
 
     public func createDraft(_ input: DraftInput) async throws -> (key: DraftKey, version: Int) {
-        try requireChanges("createDraft")
         let mode = MailStoreAdapter.composeMode(input.mode)
         let initial = input.content.map(MailStoreAdapter.content)
         let made = try await Self.mapping("the draft") {
@@ -66,7 +47,6 @@ public final class MailStoreCommands: MailCommanding, Sendable {
     }
 
     public func updateDraft(_ key: DraftKey, _ fields: DraftFields, expectedVersion: Int?) async throws -> Int {
-        try requireChanges("updateDraft")
         let content = MailStoreAdapter.content(fields)
         return try await Self.mapping("the draft") {
             try await engine().saveDraft(key, content: content, expectedVersion: expectedVersion)
@@ -74,17 +54,14 @@ public final class MailStoreCommands: MailCommanding, Sendable {
     }
 
     public func flushDraft(_ key: DraftKey) async throws {
-        try requireChanges("flushDraft")
         try await Self.mapping("the draft") { try await engine().flushDraft(key) }
     }
 
     public func discardDraft(_ key: DraftKey) async throws {
-        try requireChanges("discardDraft")
         try await Self.mapping("the draft") { try await engine().discardDraft(key) }
     }
 
     public func setReviewState(_ key: DraftKey, _ state: DraftReview) async throws {
-        try requireChanges("setReviewState")
         let review: DraftReviewState = switch state {
         case .none: .none
         case .pending: .pending
@@ -95,13 +72,11 @@ public final class MailStoreCommands: MailCommanding, Sendable {
     }
 
     public func resolveDraftConflict(_ key: DraftKey, _ resolution: DraftConflictResolution) async throws {
-        try requireChanges("resolveDraftConflict")
         let choice: DraftConflictChoice = resolution == .keepLocal ? .keepLocal : .takeRemote
         try await Self.mapping("the draft") { try await engine().resolveDraftConflict(key, keep: choice) }
     }
 
     public func send(_ key: DraftKey, undoWindow: Duration) async throws -> SendToken {
-        try requireSending("send")
         let receipt = try await Self.mapping("the draft") {
             try await engine().send(key, authorization: .userConfirmed, undoWindow: undoWindow)
         }
@@ -109,36 +84,30 @@ public final class MailStoreCommands: MailCommanding, Sendable {
     }
 
     public func cancelSend(_ token: SendToken) async throws -> Bool {
-        try requireChanges("cancelSend")
         let receipt = try Self.sendReceipt(token)
         return try await Self.mapping("the draft") { try await engine().cancelSend(receipt) }
     }
 
     public func sendNow(_ token: SendToken) async throws -> Bool {
-        try requireSending("sendNow")
         let receipt = try Self.sendReceipt(token)
         return try await Self.mapping("the draft") { try await engine().sendNow(receipt) }
     }
 
     public func scheduleSend(_ key: DraftKey, at: Date) async throws {
-        try requireSending("scheduleSend")
         try await Self.mapping("the draft") { try await engine().scheduleSend(key, at: at) }
     }
 
     public func scheduleSend(_ key: DraftKey, at: Date, condition: SendLaterCondition) async throws {
-        try requireSending("scheduleSend")
         try await Self.mapping("the draft") {
             try await engine().scheduleSend(key, at: at, onlyIfNoReply: condition == .ifNoReply)
         }
     }
 
     public func cancelScheduledSend(_ key: DraftKey) async throws {
-        try requireChanges("cancelScheduledSend")
         try await Self.mapping("the draft") { try await engine().cancelScheduledSend(key) }
     }
 
     public func unsubscribe(_ key: MessageKey) async throws {
-        try requireSending("unsubscribe")
         guard let oneClick else { throw MailPortError.unsupported("one-click unsubscribe") }
         try await oneClick(key)
     }
@@ -155,30 +124,25 @@ public final class MailStoreCommands: MailCommanding, Sendable {
     }
 
     public func upsertSnippet(_ snippet: SnippetInfo) async throws -> SnippetInfo {
-        try requireChanges("upsertSnippet")
         let item = MailStoreAdapter.snippetItem(snippet)
         return MailStoreAdapter.snippet(try await Self.mapping("the snippet") { try await engine().upsertSnippet(item) })
     }
 
     public func deleteSnippet(_ id: SnippetInfo.ID) async throws {
-        try requireChanges("deleteSnippet")
         try await Self.mapping("the snippet") { try await engine().deleteSnippet(id: id) }
     }
 
     public func recordSnippetUse(_ id: SnippetInfo.ID) async throws {
-        try requireChanges("recordSnippetUse")
         try await Self.mapping("the snippet") { try await engine().recordSnippetUse(id: id) }
     }
 
     public func storeSnippetAttachment(_ file: URL, mimeType: String) async throws -> SnippetAttachmentInfo {
-        try requireChanges("storeSnippetAttachment")
         let writer = try self.engine()
         let stored = try await Self.mapping("the snippet file") { try await writer.storeSnippetAttachment(file: file, mimeType: mimeType) }
         return MailStoreAdapter.snippetAttachment(stored, fileURL: writer.snippetFileURL(stored))
     }
 
     public func storeSnippetAttachment(data: Data, filename: String, mimeType: String) async throws -> SnippetAttachmentInfo {
-        try requireChanges("storeSnippetAttachment")
         let writer = try self.engine()
         let stored = try await Self.mapping("the snippet file") {
             try await writer.storeSnippetAttachment(data: data, filename: filename, mimeType: mimeType)
@@ -187,7 +151,6 @@ public final class MailStoreCommands: MailCommanding, Sendable {
     }
 
     public func upsertSplit(_ split: SplitDefinition) async throws -> SplitKey {
-        try requireChanges("upsertSplit")
         return try await Self.mapping("the split") {
             try await engine().upsertSplit(account: split.account, id: split.id, name: split.name,
                                            ruleText: split.ruleText, position: split.position, enabled: split.enabled)
@@ -195,17 +158,14 @@ public final class MailStoreCommands: MailCommanding, Sendable {
     }
 
     public func deleteSplit(_ account: AccountID, _ key: SplitKey) async throws {
-        try requireChanges("deleteSplit")
         try await Self.mapping("the split") { try await engine().deleteSplit(key) }
     }
 
     public func reorderSplits(_ account: AccountID, _ order: [SplitKey]) async throws {
-        try requireChanges("reorderSplits")
         try await Self.mapping("the split") { try await engine().reorderSplits(account: account, order) }
     }
 
     public func dismissFailedOperation(_ id: FailedOperationInfo.ID) async throws {
-        try requireChanges("dismissFailedOperation")
         try await Self.mapping("the notice") { try await engine().dismissFailedOperation(OperationID(rawValue: id)) }
     }
 
@@ -257,7 +217,7 @@ public final class MailStoreCommands: MailCommanding, Sendable {
             throw error
         } catch let error as EngineError {
             switch error {
-            case .blockedBySafeMode: throw MailPortError.blockedBySafeMode
+            case .writeAccessMissing: throw MailPortError.unavailable("the account needs to sign in again")
             case .sendNotAllowed, .requiresApp: throw MailPortError.unavailable("Mail can't make changes")
             case .oauthClientMissing: throw MailPortError.unavailable("sign in again")
             }

@@ -13,7 +13,7 @@ extension MailEngine {
     public func addAccount(using flow: OAuthFlow, loginHint: String?) async throws -> AccountItem {
         let (key, result) = try await authorize(flow, loginHint: loginHint, expected: nil)
         let id = try store.addAccount(email: key, displayName: nil, scopes: result.token.grantedScopes)
-        log.notice("account \(id.rawValue): added (scopes \(OAuthScopes.carriesMailWrite(result.token.grantedScopes) ? "write" : "read-only"))")
+        log.notice("account \(id.rawValue): added")
         guard let item = try store.accounts().first(where: { $0.id == id }) else {
             throw StoreError.notFound("account \(id.rawValue)")
         }
@@ -61,8 +61,17 @@ extension MailEngine {
         case let .scopesChanged(email, scopes):
             guard let item = accounts.first(where: { AccountCredentials.accountKey($0.email) == email }) else { return }
             let couldWrite = EnginePolicy.grantAllowsWrites(item)
+            let canWrite = scopes.contains(GmailScope.modify)
             _ = try? store.addAccount(email: item.email, displayName: nil, scopes: scopes)
-            guard couldWrite != scopes.contains(GmailScope.modify), started,
+            if couldWrite, !canWrite {
+                log.notice("account \(item.id.rawValue): needs reauth (gmail.modify no longer granted)")
+                if let runtime = runtimes.removeValue(forKey: item.id) { await runtime.stop() }
+                try? store.setAccountStatus(item.id, .needsReauth)
+                connectivity.set(item.id, .needsReauth)
+                eventSink.yield(.accountNeedsReauth(item.id))
+                return
+            }
+            guard !couldWrite, canWrite, started,
                   let fresh = try? store.accounts().first(where: { $0.id == item.id }) else { return }
             if let runtime = runtimes.removeValue(forKey: item.id) { await runtime.stop() }
             await launchRuntimeAfterReauth(fresh)
@@ -76,17 +85,10 @@ extension MailEngine {
         try EnginePolicy.checkNetwork(role: configuration.role, what: "sign-in")
         guard let tokenStore else { throw EngineError.requiresApp("sign-in needs the app's token store") }
         guard oauthClient != nil || !flow.client.clientID.isEmpty else { throw EngineError.oauthClientMissing }
-        let mode = configuration.safeMode
-        guard Set(flow.scopes) == Set(mode.oauthScopes) else {
-            throw EngineError.blockedBySafeMode("sign-in must request exactly the \(mode.rawValue) scope")
-        }
+        guard Set(flow.scopes) == Set(OAuthScopes.mailRequest) else { throw OAuthError.denied("scope_mismatch") }
         let result = try await flow.authorize(loginHint: loginHint, timeout: Self.signInTimeout)
-        let granted = result.token.grantedScopes
-        let missing = OAuthScopes.missing(mode.oauthScopes, in: granted)
+        let missing = OAuthScopes.missing(OAuthScopes.mailRequest, in: result.token.grantedScopes)
         if !missing.isEmpty { throw OAuthError.insufficientScopes(missing: missing) }
-        if mode == .readOnly, OAuthScopes.carriesMailWrite(granted) {
-            throw EngineError.blockedBySafeMode("the token carries a write scope; read-only mode refuses it")
-        }
         let key = AccountCredentials.accountKey(result.email)
         guard !key.isEmpty else { throw OAuthError.denied("invalid_account") }
         if let expected, AccountCredentials.accountKey(expected) != key {

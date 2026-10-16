@@ -17,19 +17,17 @@ struct ArchiveSuggestionBanner: View {
                     .font(theme.typeLabel.swiftUIFont)
                     .foregroundStyle(theme.textPrimary.color)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(model.isReadOnly ? ArchiveSuggestionModel.readOnlyNote : ArchiveSuggestionModel.footnote)
+                Text(ArchiveSuggestionModel.footnote)
                     .font(theme.typeCaption.swiftUIFont)
-                    .foregroundStyle((model.isReadOnly ? theme.textWarning : theme.textTertiary).color)
+                    .foregroundStyle(theme.textTertiary.color)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: theme.space3)
-            if !model.isReadOnly {
-                Button("\(suggestion.confirmTitle)  ⌥⌘E") { Task { await model.confirm() } }
-                    .ohLinkButtonStyle()
-                    .font(theme.typeLabel.swiftUIFont)
-                    .accessibilityLabel(suggestion.confirmTitle)
-                    .accessibilityHint("Archives them. Undo with Command Z.")
-            }
+            Button("\(suggestion.confirmTitle)  ⌥⌘E") { Task { await model.confirm() } }
+                .ohLinkButtonStyle()
+                .font(theme.typeLabel.swiftUIFont)
+                .accessibilityLabel(suggestion.confirmTitle)
+                .accessibilityHint("Archives them. Undo with Command Z.")
             if model.canEditRules {
                 Button("Always / Never…") { model.openRules() }
                     .ohLinkButtonStyle()

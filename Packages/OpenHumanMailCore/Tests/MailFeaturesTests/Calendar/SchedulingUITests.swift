@@ -22,10 +22,10 @@ struct SchedulingUIFixture {
     let calendar: FakeCalendar
     let thread: ThreadKey
 
-    init(events: [CalendarEvent] = [], safeMode: SafeModeInfo = .normal) {
+    init(events: [CalendarEvent] = []) {
         let corpus = FakeCorpus.make(threadCount: 4, now: fixedNow)
         calendar = FakeCalendar(events: events)
-        env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate, safeMode: safeMode),
+        env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate),
                                   featureFlags: FeatureFlags(), calendar: calendar)
         thread = corpus.threads[0].row.id
     }

@@ -199,17 +199,16 @@ import Testing
         #expect(checked.selectionCount == 3)
     }
 
-    @Test func readOnlyListsMatchingActionsAsNotAvailableWithTheReason() async throws {
-        var options = FakeMailStore.Options(remoteAck: .immediate)
-        options.safeMode = .readOnly
-        let f = OverlayFixture(options: options)
+    @Test func withoutAWritePortMatchingActionsAreListedAsNotAvailableWithTheReason() async throws {
+        let f = OverlayFixture(writePort: false)
         await f.loaded(10)
         await f.run(.commandPalette)
         let palette = try #require(f.palette)
         palette.query = "done"
         let unavailable = palette.entries.filter { $0.group == .unavailable }
         let markDone = try #require(unavailable.first { $0.kind == .action(.markDone) })
-        #expect(markDone.unavailableReason == "Off in read-only mode" && markDone.detail == "Off in read-only mode")
+        let reason = "Not available with this mail source yet"
+        #expect(markDone.unavailableReason == reason && markDone.detail == reason)
         #expect(markDone.keycaps.isEmpty && unavailable.count <= PaletteController.maxUnavailable)
         #expect(palette.entries.last?.group == .unavailable, "listed last")
         #expect(palette.entries[palette.cursor].isAvailable, "the cursor starts on a row that runs")
@@ -220,8 +219,7 @@ import Testing
         palette.moveCursor(to: try #require(palette.entries.firstIndex { $0.id == markDone.id }))
         #expect(palette.entries[palette.cursor].isAvailable, "a click cannot put the cursor there either")
         #expect(!palette.perform(markDone) && f.center.isShowing)
-        #expect(PaletteController.unavailableText(.noSelection, safeMode: .readOnly) == "Select a conversation first")
-        #expect(PaletteController.unavailableText(.safeMode, safeMode: .writeAllowlist) == "Off in safe mode")
+        #expect(PaletteController.unavailableText(.noSelection) == "Select a conversation first")
     }
 
     @Test func aStaleMailAnswerIsDropped() async throws {

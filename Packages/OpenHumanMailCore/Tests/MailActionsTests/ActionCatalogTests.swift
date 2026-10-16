@@ -68,6 +68,8 @@ import Testing
     #expect(ActionID.markDone.isViewOnly == false)
     #expect(ActionID.goInbox.isViewOnly)
     #expect(!ActionID("not.inTheCatalog").isViewOnly, "unknown ids fail closed")
+    #expect(ActionID.viewOnly.isSuperset(of: [.nextThread, .previousThread, .openThread, .backToList, .nextSplit, .goInbox]))
+    #expect(!ActionID.viewOnly.contains(.markDone))
 }
 
 @Test func noKeyIsBoundTwiceInOverlappingScopes() {
@@ -184,7 +186,7 @@ import Testing
     let labels = try #require(ActionCatalog.descriptor(.toggleLabelSidebar))
     #expect(labels.scopes(of: labels.defaultBindings[1]) == [.list])
     let unsubscribe = try #require(ActionCatalog.descriptor(.unsubscribe))
-    #expect(unsubscribe.scopes == [.list, .reader] && unsubscribe.effect == .external, "still refused in read-only")
+    #expect(unsubscribe.scopes == [.list, .reader] && unsubscribe.effect == .external)
 }
 
 @Test func theComposerKeysAreCatalogEntries() {

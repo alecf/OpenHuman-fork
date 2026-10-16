@@ -229,7 +229,7 @@ import Testing
         let (_, session) = try await reply(f)
         #expect(f.env.actions.availability(.showSending, host: f.router) == .hidden)
         #expect(ActionCatalog.descriptor(.showSending)?.title == "Show sending message")
-        #expect(ActionCatalog.descriptor(.showSending)?.changesMail == false, "it only shows: every safe mode")
+        #expect(ActionCatalog.descriptor(.showSending)?.changesMail == false, "it only shows")
         #expect(await f.run(.send, in: session))
         await f.toast("Reply sent.")
         #expect(f.env.actions.availability(.showSending, host: f.router) == .enabled)

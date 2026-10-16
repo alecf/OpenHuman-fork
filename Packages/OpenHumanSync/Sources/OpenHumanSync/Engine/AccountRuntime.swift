@@ -29,7 +29,6 @@ actor AccountRuntime {
     nonisolated let syncer: AccountSyncer
     nonisolated let gate: BackfillGate
     nonisolated let writable: Bool
-    nonisolated let drainsExternalOps: Bool
     nonisolated let schedulerKinds: Set<ScheduleKind>
     private let env: RuntimeEnvironment
     private let log = Log(.sync)
@@ -51,13 +50,12 @@ actor AccountRuntime {
     private var lastReportedOldest: Date?
     private var budgetWarned = false
 
-    init(account: AccountItem, api: any GmailAPI, writable: Bool, drainsExternalOps: Bool = false,
-         schedulerKinds: Set<ScheduleKind>, env: RuntimeEnvironment) {
+    init(account: AccountItem, api: any GmailAPI, writable: Bool, schedulerKinds: Set<ScheduleKind>,
+         env: RuntimeEnvironment) {
         self.account = account.id
         self.email = account.email
         self.api = api
         self.writable = writable
-        self.drainsExternalOps = drainsExternalOps
         self.schedulerKinds = schedulerKinds
         self.env = env
         let reachability = env.reachability
@@ -86,7 +84,7 @@ actor AccountRuntime {
                                            onApplied: { [weak self] appliedAt in
                                                Task { await self?.syncSoon(after: appliedAt) }
                                            },
-                                           gate: gate, drainsExternalOps: drainsExternalOps)
+                                           gate: gate)
             self.drainer = drainer
             await drainer.start()
         }

@@ -22,9 +22,10 @@ For a development team override, copy
 `Apps/Mail/Config/Local.xcconfig.example` to `Local.xcconfig` and edit that local
 file. Do not commit signing credentials or OAuth clients.
 
-Open the generated project in Xcode and run the `Mail` scheme. Use `-UseFakeData`
-for UI fixtures, or `-UseFakeGmail` for the fake mail backend. First-launch
-onboarding explains Google client setup for a real account.
+Open the generated project in Xcode and run the `Mail` scheme. It starts with
+`-UseFakeGmail`, the fake mail backend; use `-UseFakeData` for UI fixtures. Untick
+`-UseFakeGmail` to sign in to a real account: changes you make there reach Gmail.
+First-launch onboarding explains Google client setup for a real account.
 
 ```sh
 Tools/ci/check-imports.sh

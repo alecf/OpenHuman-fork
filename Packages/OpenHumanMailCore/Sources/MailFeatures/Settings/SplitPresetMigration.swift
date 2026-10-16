@@ -17,7 +17,7 @@ public enum SplitPresetMigration {
     @discardableResult
     public static func runAtLaunch(data: any MailDataSource, commands: (any MailCommanding)?,
                                    availability: SettingsAvailability) async -> Int {
-        guard availability.canEditStoredItems, let commands else { return 0 }
+        guard availability.hasCommands, let commands else { return 0 }
         var accounts: [Account] = []
         do { for try await list in data.accounts() { accounts = list; break } } catch { return 0 }
         var total = 0

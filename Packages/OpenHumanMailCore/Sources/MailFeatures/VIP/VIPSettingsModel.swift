@@ -30,9 +30,7 @@ public final class VIPSettingsModel {
     }
 
     public convenience init(environment: AppEnvironment) {
-        self.init(center: environment.vips, data: environment.data,
-                  canMarkVIPs: environment.importance != nil
-                    && SettingsAvailability(environment: environment).safeMode.allowsMailChanges)
+        self.init(center: environment.vips, data: environment.data, canMarkVIPs: environment.importance != nil)
     }
 
     isolated deinit {
@@ -45,6 +43,7 @@ public final class VIPSettingsModel {
         + "on this Mac. Nothing changes until you say yes; a VIP's mail is always important."
     public static let emptyText = "No suggestions right now."
     public static let resetDetail = "People you answered Not now for can be suggested again. VIPs stay."
+    public static let cantMarkText = "VIPs need importance rules, which aren't available here."
 
     public func start() {
         center.start()
@@ -81,7 +80,7 @@ public final class VIPSettingsModel {
 
     public func accept(_ suggestion: VIPSuggestion) async {
         guard canMarkVIPs else {
-            errorMessage = DisabledReason.safeModeText
+            errorMessage = Self.cantMarkText
             return
         }
         await change("\(suggestion.displayName) is a VIP. Their mail is always important.") {
@@ -119,8 +118,6 @@ public final class VIPSettingsModel {
         do {
             try await work()
             notice = done
-        } catch MailPortError.blockedBySafeMode {
-            errorMessage = DisabledReason.safeModeText
         } catch {
             errorMessage = (error as? MailPortError)?.description ?? "That change couldn't be saved."
         }

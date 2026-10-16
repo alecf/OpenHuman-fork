@@ -7,15 +7,12 @@ final class ReaderTestSource: MailDataSource, @unchecked Sendable {
     private var details: [ThreadKey: ConversationDetail]
     private var bodies: [MessageKey: MessageContent]
     private var files: [Int64: URL]
-    private let mode: SafeModeInfo
     private(set) var bodyRequests: [MessageKey] = []
 
-    init(details: [ConversationDetail], bodies: [MessageKey: MessageContent], files: [Int64: URL] = [:],
-         safeMode: SafeModeInfo = .normal) {
+    init(details: [ConversationDetail], bodies: [MessageKey: MessageContent], files: [Int64: URL] = [:]) {
         self.details = Dictionary(uniqueKeysWithValues: details.map { ($0.id, $0) })
         self.bodies = bodies
         self.files = files
-        mode = safeMode
     }
 
     func accounts() -> AsyncThrowingStream<[Account], Error> {
@@ -57,8 +54,6 @@ final class ReaderTestSource: MailDataSource, @unchecked Sendable {
         guard let url = lock.withLock({ files[attachment.id] }) else { throw MailPortError.notFound("attachment") }
         return url
     }
-
-    func safeMode() -> SafeModeInfo { mode }
 
     var requestedBodies: [MessageKey] { lock.withLock { bodyRequests } }
 }

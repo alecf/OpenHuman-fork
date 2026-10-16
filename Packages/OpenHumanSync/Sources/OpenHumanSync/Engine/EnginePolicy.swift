@@ -4,22 +4,16 @@ import OpenHumanGmail
 import OpenHumanStore
 
 enum EnginePolicy {
-    static func checkMailWrite(role: EngineRole, safeMode: SafeMode, what: String) throws {
+    static func checkMailWrite(role: EngineRole, what: String) throws {
         if role == .readOnly { throw EngineError.requiresApp("\(what) on a read-only engine") }
-        if safeMode == .readOnly {
-            throw EngineError.blockedBySafeMode("\(what): mail changes are off in read-only safe mode")
-        }
     }
 
     static func checkLocalWrite(role: EngineRole, what: String) throws {
         if role == .readOnly { throw EngineError.requiresApp("\(what) on a read-only engine") }
     }
 
-    static func checkSend(role: EngineRole, safeMode: SafeMode, what: String) throws {
+    static func checkSend(role: EngineRole, what: String) throws {
         guard role == .app else { throw EngineError.sendNotAllowed }
-        if safeMode != .normal {
-            throw EngineError.blockedBySafeMode("\(what): sending is off in \(safeMode.rawValue) safe mode")
-        }
     }
 
     static func checkNetwork(role: EngineRole, what: String) throws {
@@ -30,26 +24,12 @@ enum EnginePolicy {
         account.grantedScopes.contains(GmailScope.modify)
     }
 
-    static func runsDrainer(safeMode: SafeMode, account: AccountItem) -> Bool {
-        safeMode != .readOnly && grantAllowsWrites(account)
-            && (account.status == .active || account.status == .needsReauth)
+    static func runsDrainer(account: AccountItem) -> Bool {
+        grantAllowsWrites(account) && (account.status == .active || account.status == .needsReauth)
     }
 
-    // Never in normal mode: those ops have no user action and no undo entry behind them
-    static func drainsExternalOps(safeMode: SafeMode, factory: GmailClientFactory?, account: AccountItem) -> Bool {
-        guard runsDrainer(safeMode: safeMode, account: account), safeMode == .writeAllowlist else { return false }
-        if let factory = factory as? DefaultGmailClientFactory { return factory.safeMode == .writeAllowlist }
-        return true
-    }
-
-    static func schedulerKinds(safeMode: SafeMode, configured: Set<ScheduleKind>,
-                               account: AccountItem) -> Set<ScheduleKind> {
-        guard runsDrainer(safeMode: safeMode, account: account) else { return [] }
-        switch safeMode {
-        case .readOnly: return []
-        case .writeAllowlist: return configured.intersection([.reminder, .snooze])
-        case .normal: return configured
-        }
+    static func schedulerKinds(configured: Set<ScheduleKind>, account: AccountItem) -> Set<ScheduleKind> {
+        runsDrainer(account: account) ? configured : []
     }
 
     static func settingKey(_ kind: ScheduleKind) -> SettingKey<Bool> {

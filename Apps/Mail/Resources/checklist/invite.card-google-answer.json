@@ -1,15 +1,15 @@
 {
   "id": "invite.card-google-answer",
   "area": "Calendar",
-  "title": "Answer an invitation from its email card (write mode)",
+  "title": "Answer an invitation from its email card",
   "steps": [
-    "Launch in write mode with the work calendar connected; open a test invitation email a colleague sent you",
+    "Launch with the work calendar connected; open a test invitation email a colleague sent you",
     "Press YES on the card (or ⇧A), then ⌘Z within 6 s",
     "Press YES again and wait 10 s; look at the event in Google Calendar",
     "Open an invitation sent to an account whose calendar is not connected and press YES"
   ],
   "deepLink": null,
   "expected": "YES marks the email done at once ('Accepted — Done' with Undo); ⌘Z within 6 s puts it back in the Inbox and sends nothing. The second YES shows as Yes in Google Calendar after about 6 s, nobody else's answer changed. Without a connected calendar the card says 'Connect calendar to respond' and nothing is marked done.",
-  "requires": "real-write",
+  "requires": "real",
   "addedIn": "2026-10-13"
 }

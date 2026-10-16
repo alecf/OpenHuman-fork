@@ -162,15 +162,9 @@ public final class ImportanceSettingsModel {
         })
     }
 
-    public var canEdit: Bool { port != nil && availability.safeMode.allowsMailChanges }
+    public var canEdit: Bool { port != nil }
 
-    public var editNote: String? {
-        if port == nil { return "Importance rules aren't available with this mail source." }
-        if !availability.safeMode.allowsMailChanges {
-            return "Read-only safe mode: rules can't be changed here. They still decide what is important."
-        }
-        return nil
-    }
+    public var editNote: String? { port == nil ? "Importance rules aren't available with this mail source." : nil }
 
     public func beginAdd(_ match: ImportanceRuleMatch = .sender) {
         guard canEdit else { return }
@@ -274,8 +268,6 @@ public final class ImportanceSettingsModel {
                 lastChange = LastChange(title: title, entryID: nil, token: token)
             }
             return true
-        } catch MailPortError.blockedBySafeMode {
-            errorMessage = DisabledReason.safeModeText
         } catch {
             errorMessage = Self.message(error)
         }

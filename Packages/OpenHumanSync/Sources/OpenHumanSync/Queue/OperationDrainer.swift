@@ -25,7 +25,6 @@ public actor OperationDrainer {
     public static let maxSendAttempts = 5
     public static let unconfirmedRetry: Duration = .seconds(30)
     public static let staleScheduleAge: Duration = .seconds(120)
-    public static let externalMaxAge: Duration = .seconds(86_400)
     static let maxBisectionDepth = 6
     static let perMessageConcurrency = 4
 
@@ -39,7 +38,6 @@ public actor OperationDrainer {
     private let onApplied: @Sendable (Date) -> Void
     private let context: DrainContext
     private let gate: BackfillGate?
-    private let drainsExternalOps: Bool
     private let log = Log(.queue)
 
     private var loopTask: Task<Void, Never>?
@@ -51,10 +49,8 @@ public actor OperationDrainer {
     public init(account: AccountID, store: MailStore, api: any GmailAPI, clock: any OHClock,
                 storeClock: any OHClock = SystemClock(), ownerID: String? = nil,
                 emit: @escaping @Sendable (EngineEvent) -> Void = { _ in },
-                onApplied: @escaping @Sendable (_ appliedAt: Date) -> Void = { _ in }, gate: BackfillGate? = nil,
-                drainsExternalOps: Bool = false) {
+                onApplied: @escaping @Sendable (_ appliedAt: Date) -> Void = { _ in }, gate: BackfillGate? = nil) {
         self.gate = gate
-        self.drainsExternalOps = drainsExternalOps
         self.account = account
         self.store = store
         self.api = api
@@ -172,15 +168,10 @@ public actor OperationDrainer {
         return label.name == OHGmailLabels.muted
     }
 
+    // Why: no user action or undo entry stands behind a mail change queued by the CLI or an agent
     func externalRefusal(_ op: OperationItem) -> Decision? {
         guard op.origin == .cli || op.origin == .agent, !reviewedByUser(op) else { return nil }
-        if storeClock.now.timeIntervalSince(op.createdAt) > Self.externalMaxAge.timeInterval {
-            return Decision(.fail(code: "expired", message: "queued outside the app more than 24 hours ago"))
-        }
-        guard drainsExternalOps else {
-            return Decision(.fail(code: "safe_mode_blocked", message: "queued outside the app: not sent to Gmail"))
-        }
-        return nil
+        return Decision(.fail(code: "not_applied_outside_app", message: "queued outside the app: not sent to Gmail"))
     }
 
     private func reviewedByUser(_ op: OperationItem) -> Bool {

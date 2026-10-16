@@ -299,8 +299,8 @@ import Testing
         #expect(f.rows.isEmpty)
     }
 
-    @Test func searchGmailRunsInReadOnlySafeMode() async throws {
-        let f = OverlayFixture(options: .init(remoteAck: .immediate, safeMode: .readOnly))
+    @Test func searchGmailNeedsNoWritePort() async throws {
+        let f = OverlayFixture(writePort: false)
         await f.loaded()
         let account = try #require(f.router.active?.id)
         f.store.setSearchIncomplete([.olderMailNotLocal(searchedBack: nil)], account: account)

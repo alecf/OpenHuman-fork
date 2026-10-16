@@ -1,5 +1,6 @@
 import Foundation
 import MailActions
+import MailFakes
 import MailModel
 import OpenHumanCore
 import Testing
@@ -65,7 +66,7 @@ struct ConversationDebugReportTests {
         ]
         return ConversationDebugInput(
             app: DiagnosticsAppInfo(version: "1.2", build: "34", gitCommit: "abc1234", os: "Version 27.0", dataMode: "live"),
-            now: now.addingTimeInterval(600), accountIndex: 1, writeMode: "safe=normal session=read",
+            now: now.addingTimeInterval(600), accountIndex: 1, isLiveAccount: false,
             sync: DiagnosticsSnapshot.AccountEntry(index: 1, health: "active", connectivity: "online", lastSyncAt: now,
                                                    threadCount: 40, messageCount: 90, draftCount: 0, pendingOperations: 0,
                                                    failedOperations: 0),
@@ -160,6 +161,23 @@ struct ConversationDebugReportTests {
         let account = try #require(json["account"] as? [String: Any])
         #expect(account["index"] as? Int == 1)
         #expect(account["lastSyncAgeSeconds"] as? Int == 600)
+        #expect(account["liveAccount"] as? Bool == false)
+    }
+
+    @Test func theReportSaysWhetherTheSessionIsALiveAccount() async throws {
+        let corpus = FakeCorpus.make(threadCount: 3, now: Self.now)
+        let thread = try #require(corpus.mailboxes.first?.threads.first?.row.id)
+        let live = AppEnvironment(data: FakeMailStore(corpus: corpus), isFake: true, isLiveAccount: true)
+        let fake = AppEnvironment.fake(corpus: corpus)
+        let options = ConversationDebugOptions()
+        let liveInput = try #require(await ConversationDebugCollector(environment: live).collect(thread, options: options))
+        let fakeInput = try #require(await ConversationDebugCollector(environment: fake).collect(thread, options: options))
+        #expect(liveInput.isLiveAccount && !fakeInput.isLiveAccount)
+        let liveAccount = try #require(try Self.decode(ConversationDebugReport.build(liveInput))["account"] as? [String: Any])
+        let fakeAccount = try #require(try Self.decode(ConversationDebugReport.build(fakeInput))["account"] as? [String: Any])
+        #expect(liveAccount["liveAccount"] as? Bool == true)
+        #expect(fakeAccount["liveAccount"] as? Bool == false)
+        #expect(ConversationDebugReport.build(liveInput) != ConversationDebugReport.build(fakeInput))
     }
 
     @Test func logKeepsOnlyScrubbedLinesForThisThreadAtMostTwenty() throws {

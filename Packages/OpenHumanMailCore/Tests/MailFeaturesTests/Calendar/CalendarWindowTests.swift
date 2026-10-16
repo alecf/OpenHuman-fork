@@ -38,7 +38,7 @@ private struct CalendarWindowFixture {
     var workEmail: String { corpus.accounts[0].email.lowercased() }
     var homeEmail: String { corpus.accounts[1].email.lowercased() }
 
-    init(work: [CalendarEvent] = [], home: [CalendarEvent] = [], safeMode: SafeModeInfo = .normal,
+    init(work: [CalendarEvent] = [], home: [CalendarEvent] = [],
          workAbilities: CalendarAbilities = [.respond, .editDetails, .remove], cache: InMemoryCalendarCache? = nil) {
         corpus = .rich(threadCount: 12, now: fixedNow)
         let accounts = corpus.accounts
@@ -46,7 +46,7 @@ private struct CalendarWindowFixture {
                                  abilities: workAbilities)
         self.home = FakeCalendar(events: home, info: CalendarProviderInfo(name: "Google Calendar", account: accounts[1].email))
         let connections = FakeCalendarConnections(providers: [accounts[0].email: self.work, accounts[1].email: self.home])
-        env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate, safeMode: safeMode),
+        env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate),
                                   featureFlags: FeatureFlags(), calendar: self.work, calendarConnections: connections,
                                   calendarCache: cache)
     }
@@ -431,18 +431,9 @@ private struct CalendarWindowFixture {
         #expect(f.work.moveCalls == 1 && model.heldCount == 0)
     }
 
-    @Test func answersAreHeldBehindUndoAndRefusedInReadOnly() async throws {
+    @Test func answersAreHeldBehindUndo() async throws {
         let invite = event("inv", la(10, 15, 9), la(10, 15, 10), attendees: [sam, FakeCorpus.me], organizerIsMe: false,
                            response: .needsAction)
-        let readOnly = CalendarWindowFixture(work: [invite], safeMode: .readOnly)
-        let locked = readOnly.window()
-        await locked.open()
-        locked.openEvent(try #require(locked.events.first))
-        #expect(locked.card?.canRespond == false && locked.card?.reason?.hasPrefix("Read-only") == true)
-        await locked.respond(.accepted)
-        #expect(!readOnly.work.calls.contains { if case .respond = $0 { true } else { false } }, "refused before the provider")
-        #expect(locked.card?.note?.hasPrefix("Read-only") == true)
-
         let f = CalendarWindowFixture(work: [invite])
         let model = f.window()
         let gate = TestGate()
@@ -587,14 +578,8 @@ private struct CalendarWindowFixture {
         await eventually { model.shownEvents.contains { $0.title == "Event own" } }
     }
 
-    @Test func nothingIsAskedInReadOnlyOrOnACalendarThatCannotRemove() async throws {
+    @Test func nothingIsAskedOnACalendarThatCannotRemove() async throws {
         let own = event("own", la(10, 13, 9), la(10, 13, 10), organizerIsMe: true)
-        let readOnly = CalendarWindowFixture(work: [own], safeMode: .readOnly)
-        let locked = readOnly.window()
-        await locked.open()
-        locked.openEvent(try #require(locked.events.first))
-        locked.askToRemoveCardEvent()
-        #expect(locked.removeQuestion == nil && locked.card?.note?.hasPrefix("Read-only") == true)
         let limited = CalendarWindowFixture(work: [own], workAbilities: [.respond])
         let model = limited.window()
         await model.open()
@@ -1009,20 +994,6 @@ private final class StoreChanges {
         model.card?.form?.title = "Mine now"
         await model.saveCard()
         #expect(model.card?.note == "Someone else organizes this event: only they can change it." && patches(f).isEmpty)
-    }
-
-    @Test func readOnlySafeModeLocksEveryFieldWithAVisibleReason() async throws {
-        let own = event("own", la(10, 13, 9), la(10, 13, 10), organizerIsMe: true)
-        let f = CalendarWindowFixture(work: [own], safeMode: .readOnly, workAbilities: fullAbilities)
-        let model = f.window()
-        await model.open()
-        model.openEvent(try #require(model.events.first))
-        let why = "Read-only safe mode: Mail never changes your calendar."
-        #expect(model.card?.rights.access(.title) == .readOnly(why) && model.card?.rights.summary == why)
-        #expect(model.card?.reason == why)
-        model.card?.form?.title = "x"
-        await model.saveCard()
-        #expect(model.card?.note == why && patches(f).isEmpty)
     }
 
     @Test func aDropOpensTheEditPaneAndNothingIsWrittenUntilAccept() async throws {

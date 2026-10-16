@@ -85,7 +85,7 @@ final class RouterThreadListHost: ThreadListHost {
         }
         let context = router.contentContext()
         let availability = router.environment.actions.availability(action, host: router, context: context)
-        let reason = availability.reason.map { PaletteController.unavailableText($0, safeMode: context.safeMode) ?? $0.description }
+        let reason = availability.reason.map { PaletteController.unavailableText($0) ?? $0.description }
         return ThreadListMenuEntry(title: ActionRules.title(for: descriptor, in: context), availability: availability,
                                    reason: reason)
     }

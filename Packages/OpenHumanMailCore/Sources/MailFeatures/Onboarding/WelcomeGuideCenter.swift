@@ -36,7 +36,7 @@ public final class WelcomeGuideCenter {
             ports: OnboardingModel.Ports(
                 data: environment.data, accounts: environment.accounts,
                 ai: environment.aiOnboarding ?? UnavailableAIOnboarding(), notifier: system.platform.notifier,
-                loginItem: system.platform.loginItem, safeMode: environment.status.safeMode,
+                loginItem: system.platform.loginItem,
                 signedIn: { true },
                 calendars: environment.calendarConnections, settings: environment.settings))
         self.model = model

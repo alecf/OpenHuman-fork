@@ -107,11 +107,6 @@ extension CalendarWindowModel {
 
     public func duplicateCardEvent() async {
         guard let current = card, let form = current.form else { return }
-        if let refusal = safeModeRefusal {
-            card?.note = refusal
-            environment.actions.refuse(.calendarNewEvent, .safeMode)
-            return
-        }
         let copy = form.duplicateDraft()
         closeCard()
         await newEvent(start: copy.start, end: copy.end)

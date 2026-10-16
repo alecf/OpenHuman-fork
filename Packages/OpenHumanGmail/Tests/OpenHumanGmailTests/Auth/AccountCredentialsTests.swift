@@ -107,15 +107,14 @@ import Testing
         let clock = TestClock()
         let store = InMemoryTokenStore([
             "work@example.com": Synthetic.token(refresh: "w", access: "aw", expiry: clock.now.addingTimeInterval(3600),
-                                                scopes: [GmailScope.readonly]),
+                                                scopes: [GmailScope.modify]),
         ])
         let tokenEndpoint = ScriptedTransport()
         let credentials = registry(store, tokenEndpoint, clock)
         let api = ScriptedTransport { _ in jsonResponse(200, ["labels": []]) }
-        let factory = DefaultGmailClientFactory(safeMode: .normal, accountCredentials: credentials,
+        let factory = DefaultGmailClientFactory(accountCredentials: credentials,
                                                 apiTransport: api, config: GmailClientConfig(userAgent: "t"),
                                                 clock: clock)
-        #expect(try factory.effectiveMode(for: "Work@Example.com") == .readOnly)
         #expect(throws: GmailError.reauthRequired) { _ = try factory.client(for: "nobody@example.com") }
         let client = try factory.client(for: "work@example.com")
         _ = try await client.listLabels()

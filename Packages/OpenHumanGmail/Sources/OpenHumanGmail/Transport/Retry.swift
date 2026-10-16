@@ -24,7 +24,7 @@ enum RetryRules {
             switch t {
             case .timedOut, .connectionLost: return idempotent
             case .cannotConnect, .notConnected: return true
-            case .blockedBySafeMode, .cancelled, .tls, .other: return false
+            case .refusedByGuard, .cancelled, .tls, .other: return false
             }
         default:
             return false

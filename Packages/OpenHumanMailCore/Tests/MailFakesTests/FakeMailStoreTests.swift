@@ -158,8 +158,6 @@ import Testing
     try await store.unsubscribe(oneClick)
     #expect(store.unsubscribeRequests == [oneClick])
     await #expect(throws: MailPortError.self) { try await store.unsubscribe(mailto) }
-    store.setSafeMode(.writeAllowlist)
-    await #expect(throws: MailPortError.blockedBySafeMode) { try await store.unsubscribe(oneClick) }
 }
 
 @Test func contactSuggestionsRankByPrefix() async throws {

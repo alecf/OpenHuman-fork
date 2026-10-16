@@ -27,7 +27,7 @@ struct FullSetupFixture {
     func model() -> OnboardingModel {
         OnboardingModel(store: progress, ports: OnboardingModel.Ports(
             data: store, accounts: accounts, ai: FakeAIOnboarding(), notifier: FakeSystemNotifier(),
-            loginItem: FakeLoginItem(), safeMode: .normal, calendars: calendars, settings: store))
+            loginItem: FakeLoginItem(), calendars: calendars, settings: store))
     }
 
     func inboxes() async throws -> [Account] {
@@ -184,7 +184,7 @@ struct OnboardingFullSetupTests {
         let store = FakeMailStore(corpus: .make(threadCount: 3), options: .init(remoteAck: .immediate))
         let model = OnboardingModel(store: InMemoryOnboardingProgress(), ports: OnboardingModel.Ports(
             data: store, accounts: store, ai: FakeAIOnboarding(), notifier: FakeSystemNotifier(),
-            loginItem: FakeLoginItem(), safeMode: .normal))
+            loginItem: FakeLoginItem()))
         await model.go(to: .calendar)
         #expect(model.setupCalendar?.canConnect == false)
         #expect(model.inboxRows.first?.calendar == .unavailable && model.inboxRows.first?.isComplete == true)

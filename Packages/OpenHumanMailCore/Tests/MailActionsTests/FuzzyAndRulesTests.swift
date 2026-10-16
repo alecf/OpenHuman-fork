@@ -58,34 +58,13 @@ import Testing
 @Suite struct ActionRulesTests {
     let key = ThreadKey(account: AccountID(1), rowID: 1, gmailThreadID: GmailThreadID("t1"))
 
-    func context(_ scope: ActionScope = .list, safeMode: SafeModeInfo = .normal) -> ActionContext {
+    func context(_ scope: ActionScope = .list) -> ActionContext {
         ActionContext(scope: scope, account: AccountID(1), accountCount: 2, location: .system(.inbox), selection: [key],
-                      focusedThread: key, sender: "dana@acme.example", hasRows: true, safeMode: safeMode)
+                      focusedThread: key, sender: "dana@acme.example", hasRows: true)
     }
 
     func availability(_ id: ActionID, _ context: ActionContext) -> ActionAvailability {
         ActionRules.availability(ActionCatalog.descriptor(id)!, in: context)
-    }
-
-    @Test func readOnlyDisablesEveryChangeWithTheSafeModeReason() {
-        let c = context(safeMode: .readOnly)
-        for descriptor in ActionCatalog.all where descriptor.changesMail && ActionRules.isInScope(descriptor, .list) {
-            let result = ActionRules.availability(descriptor, in: c)
-            #expect(result == .disabled(.safeMode) || result == .hidden, "\(descriptor.id): \(result)")
-        }
-        #expect(availability(.markDone, c) == .disabled(.safeMode))
-        #expect(availability(.markDone, c).reason?.description == "Read-only: Mail can't change your mail")
-        #expect(availability(.markDone, c).reason?.announces == true)
-        #expect(availability(.nextThread, c) == .enabled)
-        #expect(availability(.explainPlacement, c) == .enabled, "explaining only reads")
-    }
-
-    @Test func writeAllowlistRefusesOnlySendsAndThirdPartyRequests() {
-        var c = context(safeMode: .writeAllowlist)
-        c.focusedMessage = MessageKey(account: AccountID(1), rowID: 5, gmailMessageID: GmailMessageID("m5"))
-        #expect(availability(.markDone, c) == .enabled)
-        #expect(availability(.unsubscribe, c) == .disabled(.safeMode))
-        #expect(availability(.send, ActionContext(scope: .composer, safeMode: .writeAllowlist)) == .disabled(.safeMode))
     }
 
     @Test func scopesTargetsAndWritePort() {

@@ -22,13 +22,13 @@ public final class CalendarGuardTransport: HTTPTransport {
     }
     private let created = Mutex<[String: Created]>([:])
 
-    public init(wrapping transport: any HTTPTransport, calendarID: String, mode: SafeMode, grantedScopes: [String],
+    public init(wrapping transport: any HTTPTransport, calendarID: String, grantedScopes: [String],
                 clock: any OHClock = SystemClock(), verifiesOwnedEventRemoval: Bool = false) {
         self.verifiesOwnedEventRemoval = verifiesOwnedEventRemoval
         wrapped = transport
         self.calendarID = calendarID
         self.clock = clock
-        allowsWrites = CalendarScopes.allowsWrites(mode: mode, granted: grantedScopes)
+        allowsWrites = CalendarScopes.allowsWrites(granted: grantedScopes)
     }
 
     public func send(_ request: HTTPRequest) async throws -> HTTPResponse {
@@ -38,11 +38,11 @@ public final class CalendarGuardTransport: HTTPTransport {
                   request.headers[Self.removalRuleHeader] == Self.removalRuleValue,
                   refusalReason(for: request, ownerVerified: true) == nil else {
                 Log(.gmail).notice("calendar guard refused \(summary): \(reason)")
-                throw TransportError.blockedBySafeMode(summary)
+                throw TransportError.refusedByGuard(summary)
             }
             if let why = await ownedRemovalRefusal(for: request) {
                 Log(.gmail).notice("calendar guard refused \(summary): \(why)")
-                throw TransportError.blockedBySafeMode(summary)
+                throw TransportError.refusedByGuard(summary)
             }
         }
         var forwarded = request
@@ -79,9 +79,9 @@ public final class CalendarGuardTransport: HTTPTransport {
         case "POST" where rest == ["freeBusy"]:
             return nil
         case "POST" where isEventsCollection(rest):
-            return allowsWrites ? nil : "creating events needs write mode and calendar.events"
+            return allowsWrites ? nil : "creating events needs calendar.events"
         case "PATCH" where isEvent(rest):
-            guard allowsWrites else { return "moving events needs write mode and calendar.events" }
+            guard allowsWrites else { return "moving events needs calendar.events" }
             guard Self.isTimeOnlyPatch(request.body) || Self.isResponsePatch(request.body, calendarID: calendarID)
                     || (request.headers[Self.editRuleHeader] == Self.editRuleValue && Self.isDetailPatch(request.body)) else {
                 return "an event patch may change only fields on the edit list, or the account's own answer"
@@ -89,7 +89,7 @@ public final class CalendarGuardTransport: HTTPTransport {
             guard Self.hasSendUpdates(url) else { return "an event patch must say whom Google emails (sendUpdates)" }
             return nil
         case "DELETE" where isEvent(rest):
-            guard allowsWrites else { return "deleting events needs write mode and calendar.events" }
+            guard allowsWrites else { return "deleting events needs calendar.events" }
             if ownerVerified { return Self.hasSendUpdates(url) ? nil : "a delete must say whom Google emails (sendUpdates)" }
             let id = rest[3]
             guard let made = created.withLock({ $0[id] }) else { return "only an event Mail created in this run can be deleted" }

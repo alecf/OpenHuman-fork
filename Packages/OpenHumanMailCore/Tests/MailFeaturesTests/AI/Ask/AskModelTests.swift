@@ -42,7 +42,7 @@ import Testing
         #expect(f.env.actions.availability(.aiRewrite, host: session) == .enabled)
     }
 
-    @Test func askAIIsAbsentWithoutAIOrWithTheModuleOffAndWorksInReadOnly() async throws {
+    @Test func askAIIsAbsentWithoutAIOrWithTheModuleOffAndChangesNoMail() async throws {
         let none = AskFixture(withAI: false)
         await none.loaded()
         #expect(none.env.actions.availability(.aiAskInbox, host: none.router) == .hidden)
@@ -52,11 +52,15 @@ import Testing
         await off.loaded()
         #expect(off.env.actions.availability(.aiAskInbox, host: off.router) == .hidden)
 
-        let readOnly = AskFixture(safeMode: .readOnly)
-        await readOnly.loaded()
-        #expect(readOnly.env.actions.availability(.aiAskInbox, host: readOnly.router) == .enabled, "it changes no mail")
-        await readOnly.ask("offsite planning")
-        #expect(readOnly.model.phase == .done)
+        let f = AskFixture()
+        await f.loaded()
+        #expect(f.env.actions.availability(.aiAskInbox, host: f.router) == .enabled)
+        let before = try await f.store.threadPage(.system(.inbox), account: AskFixture.work, after: nil, limit: 1_000).rows
+        await f.ask("offsite planning")
+        #expect(f.model.phase == .done)
+        let after = try await f.store.threadPage(.system(.inbox), account: AskFixture.work, after: nil, limit: 1_000).rows
+        #expect(after == before, "asking changes no mail")
+        #expect(f.env.undo?.stack.isEmpty == true && f.store.sentMessages.isEmpty)
     }
 
     @Test func anAnswerStreamsWithItsSourcesInCitationOrder() async throws {

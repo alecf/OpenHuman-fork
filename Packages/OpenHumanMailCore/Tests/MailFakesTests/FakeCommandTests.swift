@@ -110,27 +110,6 @@ import Testing
     #expect(store.pendingOperationCount == 0)
 }
 
-@Test func safeModeRefusesWritesButNotReads() async throws {
-    let store = makeStore(safeMode: .readOnly)
-    #expect(store.safeMode() == .readOnly)
-    let target = special(0).row.id
-    await #expect(throws: MailPortError.blockedBySafeMode) { _ = try await store.apply(.markDone([target])) }
-    await #expect(throws: MailPortError.blockedBySafeMode) {
-        _ = try await store.createDraft(DraftInput(account: work, mode: .new))
-    }
-    await #expect(throws: MailPortError.blockedBySafeMode) {
-        _ = try await store.createLabel(work, name: "X", applyTo: [])
-    }
-    #expect(try await keys(store, .system(.inbox)).contains(target))
-    try await store.set(AppSettings.undoSendSeconds, 5)
-
-    store.setSafeMode(.writeAllowlist)
-    _ = try await store.apply(.markDone([target]))
-    let draft = try #require(special(0).detail.messages.last?.id)
-    let (key, _) = try await store.createDraft(DraftInput(account: work, mode: .reply, replyTo: draft))
-    await #expect(throws: MailPortError.blockedBySafeMode) { _ = try await store.send(key, undoWindow: .seconds(5)) }
-}
-
 @Test func readAndStarChangeTheRow() async throws {
     let store = makeStore(ack: .immediate)
     let target = special(0).row.id

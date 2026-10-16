@@ -86,7 +86,7 @@ public final class AutoLabelSettingsModel {
 
     public var canUseSwitch: Bool { availability.canEditSettings && unavailableText == nil }
     public var canAct: Bool { canUseSwitch && enabled.value && !isBusy }
-    public var canPlace: Bool { importance != nil && availability.safeMode.allowsMailChanges && !isBusy }
+    public var canPlace: Bool { importance != nil && !isBusy }
 
     public var statusText: String? { center?.lastMessage }
 
@@ -141,8 +141,6 @@ public final class AutoLabelSettingsModel {
                 }
             }
             placements[category] = placement
-        } catch MailPortError.blockedBySafeMode {
-            errorText = String(localized: "Mail can't change importance rules while it may not change your mailbox.")
         } catch {
             errorText = String(localized: "The rule for \(category) couldn't be saved.")
         }

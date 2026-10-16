@@ -125,10 +125,10 @@ import Testing
         #expect(h.http.requests.isEmpty)
     }
 
-    @Test func safeModeRefusalIsNeverRetriedAndCostsNothing() async throws {
+    @Test func aGuardRefusalIsNeverRetriedAndCostsNothing() async throws {
         let h = Harness()
         let client = h.client(transport: ReadOnlyTransport(wrapping: h.http))
-        await #expect(throws: GmailError.transport(.blockedBySafeMode("POST /gmail/v1/users/me/messages/batchModify"))) {
+        await #expect(throws: GmailError.transport(.refusedByGuard("POST /gmail/v1/users/me/messages/batchModify"))) {
             try await client.batchModifyMessages(ids: ["m1"], add: [], remove: ["INBOX"])
         }
         #expect(h.http.requests.isEmpty)

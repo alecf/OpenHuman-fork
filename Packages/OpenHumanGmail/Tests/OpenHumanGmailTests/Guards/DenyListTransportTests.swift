@@ -5,8 +5,8 @@ import Testing
 @testable import OpenHumanGmail
 
 @Suite struct DenyListTransportTests {
-    private static let api = WG.api
-    private static let upload = WG.upload
+    private static let api = GmailRequests.api
+    private static let upload = GmailRequests.upload
 
     private static let denied: [(String, String, String)] = [
         ("DELETE", api + "messages/m1", "permanent delete"),
@@ -75,11 +75,11 @@ import Testing
         for (method, url, word) in Self.denied {
             let inner = ScriptedTransport()
             let transport = DenyListTransport(wrapping: inner, recipients: SendRecipientGate())
-            let request = WG.request(method, url, body: method == "GET" ? nil : Data("{}".utf8))
+            let request = GmailRequests.request(method, url, body: method == "GET" ? nil : Data("{}".utf8))
             let reason = DenyListTransport.refusalReason(for: request)
             #expect(reason?.contains(word) == true, "\(method) \(url): \(reason ?? "passed")")
             let path = request.url.path(percentEncoded: true)
-            await #expect(throws: TransportError.blockedBySafeMode("\(method) \(path)"), "\(method) \(url)") {
+            await #expect(throws: TransportError.refusedByGuard("\(method) \(path)"), "\(method) \(url)") {
                 _ = try await transport.send(request)
             }
             #expect(inner.requests.isEmpty, "\(method) \(url) reached the wire")
@@ -88,12 +88,12 @@ import Testing
 
     @Test func methodOverridesAndWriteBatchesAreRefused() async {
         let overrides = [
-            WG.request("POST", Self.api + "messages/m1/modify", body: Data("{}".utf8),
+            GmailRequests.request("POST", Self.api + "messages/m1/modify", body: Data("{}".utf8),
                        extraHeaders: ["X-HTTP-Method-Override": "DELETE"]),
-            WG.request("POST", Self.api + "messages/m1/modify?$httpMethod=DELETE", body: Data("{}".utf8)),
+            GmailRequests.request("POST", Self.api + "messages/m1/modify?$httpMethod=DELETE", body: Data("{}".utf8)),
         ]
         let boundary = "batch_ab12"
-        let writeBatch = WG.request("POST", "https://gmail.googleapis.com/batch/gmail/v1", body: Data("""
+        let writeBatch = GmailRequests.request("POST", "https://gmail.googleapis.com/batch/gmail/v1", body: Data("""
             --\(boundary)\r
             Content-Type: application/http\r
             \r
@@ -108,7 +108,7 @@ import Testing
             await #expect(throws: TransportError.self) { _ = try await DenyListTransport(wrapping: inner).send(request) }
             #expect(inner.requests.isEmpty)
         }
-        let readBatch = WG.request("POST", "https://gmail.googleapis.com/batch/gmail/v1", body: Data("""
+        let readBatch = GmailRequests.request("POST", "https://gmail.googleapis.com/batch/gmail/v1", body: Data("""
             --\(boundary)\r
             Content-Type: application/http\r
             \r
@@ -121,43 +121,31 @@ import Testing
     }
 
     @Test func theAppsOwnWritesPass() async throws {
-        let message = WG.message(["From: me@example.com", "To: dana@example.org", "Subject: Synthetic"])
+        let message = GmailRequests.message(["From: me@example.com", "To: dana@example.org", "Subject: Synthetic"])
         let draftMeta = #"{"message":{}}"#
         let allowed: [HTTPRequest] = [
-            WG.request("GET", Self.api + "threads/t1?format=metadata"),
-            WG.request("GET", Self.api + "settings/sendAs"),
-            WG.json("POST", Self.api + "messages/batchModify", ["ids": ["m1"], "removeLabelIds": ["INBOX"]]),
-            WG.json("POST", Self.api + "messages/m1/modify", ["addLabelIds": ["STARRED"]]),
-            WG.json("POST", Self.api + "threads/t1/modify", ["addLabelIds": ["STARRED"]]),
-            WG.request("POST", Self.api + "messages/m1/trash"),
-            WG.request("POST", Self.api + "threads/t1/trash"),
-            WG.request("POST", Self.api + "threads/t1/untrash"),
-            WG.json("POST", Self.api + "labels", ["name": "OpenHuman/Snoozed/20261012T0900Z"]),
-            WG.upload("POST", Self.upload + "drafts?uploadType=multipart", metadata: draftMeta, message: message),
-            WG.upload("PUT", Self.upload + "drafts/d1?uploadType=multipart", metadata: #"{"id":"d1","message":{}}"#,
+            GmailRequests.request("GET", Self.api + "threads/t1?format=metadata"),
+            GmailRequests.request("GET", Self.api + "settings/sendAs"),
+            GmailRequests.json("POST", Self.api + "messages/batchModify", ["ids": ["m1"], "removeLabelIds": ["INBOX"]]),
+            GmailRequests.json("POST", Self.api + "messages/m1/modify", ["addLabelIds": ["STARRED"]]),
+            GmailRequests.json("POST", Self.api + "threads/t1/modify", ["addLabelIds": ["STARRED"]]),
+            GmailRequests.request("POST", Self.api + "messages/m1/trash"),
+            GmailRequests.request("POST", Self.api + "threads/t1/trash"),
+            GmailRequests.request("POST", Self.api + "threads/t1/untrash"),
+            GmailRequests.json("POST", Self.api + "labels", ["name": "OpenHuman/Snoozed/20261012T0900Z"]),
+            GmailRequests.upload("POST", Self.upload + "drafts?uploadType=multipart", metadata: draftMeta, message: message),
+            GmailRequests.upload("PUT", Self.upload + "drafts/d1?uploadType=multipart", metadata: #"{"id":"d1","message":{}}"#,
                       message: message),
-            WG.request("DELETE", Self.api + "drafts/d1"),
-            WG.json("POST", Self.api + "drafts/send", ["id": "d1"]),
-            WG.upload("POST", Self.upload + "messages/send?uploadType=multipart", metadata: "{}", message: message),
+            GmailRequests.request("DELETE", Self.api + "drafts/d1"),
+            GmailRequests.json("POST", Self.api + "drafts/send", ["id": "d1"]),
+            GmailRequests.upload("POST", Self.upload + "messages/send?uploadType=multipart", metadata: "{}", message: message),
         ]
         for request in allowed {
-            let inner = ScriptedTransport { _ in WG.genericResponse }
+            let inner = ScriptedTransport { _ in GmailRequests.genericResponse }
             #expect(DenyListTransport.refusalReason(for: request) == nil, "\(request.method) \(request.url)")
             _ = try await DenyListTransport(wrapping: inner, recipients: SendRecipientGate()).send(request)
             #expect(inner.requests == [request], "\(request.method) \(request.url) is forwarded unchanged")
         }
-    }
-
-    @Test func normalModeWrapsTheDenyListAndNothingElse() {
-        let gate = SendRecipientGate()
-        let wrapped = SafeModeTransport.wrap(ScriptedTransport(), mode: .normal, grantedScopes: [GmailScope.modify],
-                                             allowlist: nil, recipients: gate)
-        #expect((wrapped as? DenyListTransport)?.recipients === gate)
-        let again = SafeModeTransport.wrap(wrapped, mode: .normal, grantedScopes: [GmailScope.modify], allowlist: nil,
-                                           recipients: gate)
-        #expect((again as? DenyListTransport)?.recipients === gate, "not stacked twice")
-        #expect(SafeModeTransport.wrap(ScriptedTransport(), mode: .normal, grantedScopes: [GmailScope.modify]) is DenyListTransport)
-        #expect(SafeModeTransport.wrap(ScriptedTransport(), mode: .normal, grantedScopes: [GmailScope.readonly]) is ReadOnlyTransport)
     }
 
     private static func addresses(_ n: Int, domain: String = "example.org") -> [String] {
@@ -169,7 +157,7 @@ import Testing
         if !cc.isEmpty { lines.append("Cc: " + cc.joined(separator: ",\r\n ")) }
         if !bcc.isEmpty { lines.append("Bcc: " + bcc.joined(separator: ", ")) }
         lines.append("Subject: Synthetic")
-        return WG.message(lines)
+        return GmailRequests.message(lines)
     }
 
     @Test func aSendOverTheLimitNeedsTheUsersConfirmation() async throws {
@@ -178,12 +166,12 @@ import Testing
         let transport = DenyListTransport(wrapping: inner, recipients: gate)
         let four = Self.addresses(4)
         func send(_ raw: Data) -> HTTPRequest {
-            WG.upload("POST", Self.upload + "messages/send?uploadType=multipart", metadata: "{}", message: raw)
+            GmailRequests.upload("POST", Self.upload + "messages/send?uploadType=multipart", metadata: "{}", message: raw)
         }
 
         _ = try await transport.send(send(Self.raw(to: Array(four.prefix(2)), cc: [four[2]])))
         let over = send(Self.raw(to: [four[0]], cc: [four[1], four[2]], bcc: [four[3]]))
-        await #expect(throws: TransportError.blockedBySafeMode("POST /upload/gmail/v1/users/me/messages/send")) {
+        await #expect(throws: TransportError.refusedByGuard("POST /upload/gmail/v1/users/me/messages/send")) {
             _ = try await transport.send(over)
         }
         #expect(gate.refusalReason(for: over)?.contains("4 recipients is over the limit of 3") == true)
@@ -192,21 +180,21 @@ import Testing
         #expect(inner.requests.count == 2)
         let other = send(Self.raw(to: Self.addresses(4, domain: "example.net")))
         await #expect(throws: TransportError.self) { _ = try await transport.send(other) }
-        let unreadable = WG.request("POST", Self.upload + "messages/send", body: Data("not an upload".utf8))
+        let unreadable = GmailRequests.request("POST", Self.upload + "messages/send", body: Data("not an upload".utf8))
         await #expect(throws: TransportError.self) { _ = try await transport.send(unreadable) }
 
         let five = Self.addresses(5)
-        let created = WG.upload("POST", Self.upload + "drafts?uploadType=multipart", metadata: #"{"message":{}}"#,
+        let created = GmailRequests.upload("POST", Self.upload + "drafts?uploadType=multipart", metadata: #"{"message":{}}"#,
                                 message: Self.raw(to: five))
         _ = try await transport.send(created)
         #expect(gate.recipients(ofDraft: "d1") == .some(.some(five)))
-        let sendDraft = WG.json("POST", Self.api + "drafts/send", ["id": "d1"])
-        await #expect(throws: TransportError.blockedBySafeMode("POST /gmail/v1/users/me/drafts/send")) {
+        let sendDraft = GmailRequests.json("POST", Self.api + "drafts/send", ["id": "d1"])
+        await #expect(throws: TransportError.refusedByGuard("POST /gmail/v1/users/me/drafts/send")) {
             _ = try await transport.send(sendDraft)
         }
         gate.confirm(five)
         _ = try await transport.send(sendDraft)
-        _ = try await transport.send(WG.json("POST", Self.api + "drafts/send", ["id": "d-from-another-launch"]))
+        _ = try await transport.send(GmailRequests.json("POST", Self.api + "drafts/send", ["id": "d-from-another-launch"]))
         _ = try await DenyListTransport(wrapping: ScriptedTransport()).send(other)
     }
 
@@ -223,13 +211,12 @@ import Testing
         #expect(SendRecipientGate(limit: 0).limit == 1)
     }
 
-    @Test func theClientStackInNormalModeReachesFakeGmail() async throws {
+    @Test func theClientStackReachesFakeGmail() async throws {
         let clock = InstantClock()
         let gmail = FakeGmail(clock: clock)
         let wire = FakeGmailWire(gmail)
         let gate = SendRecipientGate(limit: 20)
-        let transport = SafeModeTransport.wrap(wire, mode: .normal, grantedScopes: [GmailScope.modify], allowlist: nil,
-                                               recipients: gate)
+        let transport = DenyListTransport(wrapping: wire, recipients: gate)
         let client = GmailClient(accountEmail: "me@example.com", tokens: StaticTokenProvider(), transport: transport,
                                  config: GmailClientConfig(userAgent: "OpenHumanMail/test"), clock: clock, metrics: nil,
                                  limiter: QuotaLimiter(unitsPerMinute: 1_000_000, maxConcurrent: 8, clock: clock),
@@ -243,9 +230,9 @@ import Testing
         _ = try await client.sendDraft(id: draft.id)
         #expect(wire.nonGETRequests.count == 5)
         do {
-            _ = try await transport.send(WG.request("DELETE", Self.api + "messages/\(threads[2])"))
+            _ = try await transport.send(GmailRequests.request("DELETE", Self.api + "messages/\(threads[2])"))
             Issue.record("a permanent delete passed")
-        } catch TransportError.blockedBySafeMode {}
+        } catch TransportError.refusedByGuard {}
         #expect(wire.nonGETRequests.count == 5, "the forged delete never reached the fake")
     }
 }

@@ -24,7 +24,7 @@ private struct InviteFixture {
     let calendar: FakeCalendar?
     let corpus: FakeCorpus
 
-    init(events: [CalendarEvent]? = [], safeMode: SafeModeInfo = .normal, calendarRefusal: String? = nil) {
+    init(events: [CalendarEvent]? = [], calendarRefusal: String? = nil) {
         corpus = .rich(threadCount: 12, now: fixedNow)
         let accounts = corpus.accounts
         if let events {
@@ -32,11 +32,11 @@ private struct InviteFixture {
                                                                                createRefusal: calendarRefusal))
             calendar = made
             let connections = FakeCalendarConnections(providers: [accounts[0].email: made])
-            env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate, safeMode: safeMode),
+            env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate),
                                       featureFlags: FeatureFlags(), calendar: made, calendarConnections: connections)
         } else {
             calendar = nil
-            env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate, safeMode: safeMode),
+            env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate),
                                       featureFlags: FeatureFlags())
         }
         env.invites.timeZone = utc
@@ -117,7 +117,7 @@ private struct InviteFixture {
         #expect(card.join?.title == "Join with Google Meet" && card.location == "Room 4, Example Building")
         #expect(card.notes?.contains("agree on next steps.") == true, "the folded line is joined")
         #expect(f.center.showsCard(message.id))
-        #expect(f.center.answerBlock(for: message.id) == nil, "write mode, invited, a calendar that answers: answers on")
+        #expect(f.center.answerBlock(for: message.id) == nil, "invited, a calendar that answers: answers on")
         f.center.toggleOriginal(message.id)
         #expect(!f.center.showsCard(message.id), "Show original: the sender's HTML")
         f.center.toggleOriginal(message.id)
@@ -212,24 +212,7 @@ private struct InviteFixture {
         #expect(f.center.connectPrompt == nil)
     }
 
-    @Test func safeModeTurnsTheAnswersOffWithTheReasonInView() async throws {
-        for (mode, words) in [(SafeModeInfo.readOnly, "Read-only safe mode"), (.writeAllowlist, "Test-writes safe mode")] {
-            let f = InviteFixture(safeMode: mode)
-            let (thread, message) = try await f.invitation()
-            let card = try await f.card(thread, message)
-            f.addInvitedEvent(card)
-            let block = try #require(f.center.answerBlock(for: message.id), "\(mode)")
-            #expect(block.hasPrefix(words), "\(mode)")
-            await f.center.respond(.accepted, to: message.id)
-            #expect(f.center.notes[message.id] == block && f.center.heldCount == 0, "\(mode)")
-            #expect(f.center.card(for: message.id)?.response == nil)
-            #expect(try await f.inInbox(thread))
-            #expect(f.env.undo?.stack.isEmpty == true)
-            #expect(!f.lookedUp() && f.answered().isEmpty)
-        }
-    }
-
-    @Test func aReadOnlyCalendarAndANotInvitedCardShowWhyUpFront() async throws {
+    @Test func aCalendarThatCannotCreateAndANotInvitedCardShowWhyUpFront() async throws {
         let refusal = "Mail can't create events with this calendar connection."
         let f = InviteFixture(calendarRefusal: refusal)
         let (thread, message) = try await f.invitation()

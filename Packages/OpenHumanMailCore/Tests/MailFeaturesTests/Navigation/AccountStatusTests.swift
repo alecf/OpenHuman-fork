@@ -16,7 +16,6 @@ private struct TwoAccountStatusSource: MailDataSource {
     }
     func threadDetail(_ key: ThreadKey) -> AsyncThrowingStream<ConversationDetail?, Error> { base.threadDetail(key) }
     func body(_ key: MessageKey) -> AsyncThrowingStream<BodyLoadState, Error> { base.body(key) }
-    func safeMode() -> SafeModeInfo { .readOnly }
     func connectivity() -> AsyncStream<[AccountID: ConnectivityState]> {
         let states = self.states
         return AsyncStream { continuation in

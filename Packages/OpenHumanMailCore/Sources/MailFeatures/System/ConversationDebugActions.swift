@@ -25,9 +25,9 @@ struct ConversationDebugCollector {
         let index = (position ?? 0) + 1
         let importance = try? await environment.importance?.explain(thread)
         let store = try? await data.conversationDebugFacts(thread)
-        let mode = "safe=\(data.safeMode()) session=\(environment.writeMode != nil ? "write" : "read")"
         return ConversationDebugInput(
-            app: SystemCenter.appInfo(isFake: environment.isFake), now: Date(), accountIndex: index, writeMode: mode,
+            app: SystemCenter.appInfo(isFake: environment.isFake), now: Date(), accountIndex: index,
+            isLiveAccount: environment.isLiveAccount,
             sync: snapshot?.accounts.first { $0.index == index }, detail: detail, row: row ?? nil, labels: labels,
             splits: splits, importance: importance, ownAddresses: own, store: store ?? nil,
             logLines: environment.system.logLines(), options: options)

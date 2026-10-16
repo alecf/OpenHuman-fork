@@ -9,13 +9,13 @@ import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
 
-private func synthetic(_ scopes: [String] = [GmailScope.readonly]) -> StoredToken {
+private func synthetic(_ scopes: [String] = [GmailScope.modify]) -> StoredToken {
     StoredToken(refreshToken: "synthetic-refresh", grantedScopes: scopes, clientID: SyntheticClient.clientID)
 }
 
 private func manager(store: MailStore, tokens: InMemoryTokenStore, transport: FakeHTTPTransport) throws -> LiveAccountManager {
     LiveAccountManager(
-        safeMode: .readOnly, store: store,
+        store: store,
         dependencies: LiveAccountManager.Dependencies(
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()],
             storeDirectory: FileManager.default.temporaryDirectory.appendingPathComponent("oh-none-\(UUID().uuidString)"), tokenStore: tokens, transport: transport,
@@ -28,8 +28,8 @@ private func manager(store: MailStore, tokens: InMemoryTokenStore, transport: Fa
     defer { try? FileManager.default.removeItem(at: directory) }
     let store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: .test,
                                                 appVersion: "0.0.0-test"))
-    let gone = try store.addAccount(email: "robin@example.com", displayName: nil, scopes: [GmailScope.readonly])
-    let kept = try store.addAccount(email: "sam@example.com", displayName: nil, scopes: [GmailScope.readonly])
+    let gone = try store.addAccount(email: "robin@example.com", displayName: nil, scopes: [GmailScope.modify])
+    let kept = try store.addAccount(email: "sam@example.com", displayName: nil, scopes: [GmailScope.modify])
     let tokens = InMemoryTokenStore(["robin@example.com": synthetic(), "sam@example.com": synthetic()])
     let content = DraftContent(from: EmailAddress(email: "robin@example.com"), to: [], cc: [], bcc: [],
                                subject: "Synthetic", bodyHTML: "<p>Synthetic</p>", bodyText: "Synthetic", attachments: [])
@@ -110,7 +110,7 @@ private func signedInApp(google: FakeGoogle, store: MailStore, tokens: InMemoryT
     #expect(signIn.notice == AppModel.signedOutNotice)
     #expect(app.session == nil)
     for request in google.http.requests where request.url.path(percentEncoded: false) != "/token" {
-        #expect(isReadOnlyOnTheWire(request))
+        #expect(isReadOnTheWire(request))
     }
     #expect(!google.http.requests.contains { $0.url.path(percentEncoded: false).contains("revoke") })
 }
@@ -134,9 +134,9 @@ private func signedInApp(google: FakeGoogle, store: MailStore, tokens: InMemoryT
     #expect(browser.urls.count == 2, "a second consent page for the same account")
     let consent = try #require(browser.urls.last)
     let query = URLComponents(url: consent, resolvingAgainstBaseURL: false)?.queryItems ?? []
-    #expect(query.first { $0.name == "scope" }?.value == GmailScope.readonly)
+    #expect(query.first { $0.name == "scope" }?.value == GmailScope.modify)
     #expect(query.first { $0.name == "login_hint" }?.value == corpus.account.email)
-    #expect(try tokens.load(account: corpus.account.email)?.grantedScopes == [GmailScope.readonly])
+    #expect(try tokens.load(account: corpus.account.email)?.grantedScopes == [GmailScope.modify])
 
     try await accounts.setAlias(session.account, "  Work  ")
     #expect(try store.accounts().first?.alias == "Work")
@@ -154,7 +154,7 @@ private func signedInApp(google: FakeGoogle, store: MailStore, tokens: InMemoryT
         try? files.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path)
         try? files.removeItem(at: directory)
     }
-    let account = try store.addAccount(email: "robin@example.com", displayName: nil, scopes: [GmailScope.readonly])
+    let account = try store.addAccount(email: "robin@example.com", displayName: nil, scopes: [GmailScope.modify])
     let folder = locked.appendingPathComponent(String(account.rawValue), isDirectory: true)
     try files.createDirectory(at: folder, withIntermediateDirectories: true)
     try Data("synthetic".utf8).write(to: folder.appendingPathComponent("file.bin"))

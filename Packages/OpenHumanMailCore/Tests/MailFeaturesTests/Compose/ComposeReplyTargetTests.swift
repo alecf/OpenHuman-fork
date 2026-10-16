@@ -69,8 +69,8 @@ import Testing
         #expect(f.compose.windowSession === all && all.plainText == "Typed")
     }
 
-    @Test func readOnlyPrefillsFromTheSkeletonAndWritesNothing() async throws {
-        let f = ComposeFixture(safeMode: .readOnly)
+    @Test func withoutAWritePortAReplyPrefillsFromTheSkeletonAndWritesNothing() async throws {
+        let f = ComposeFixture(writePort: false)
         await f.loaded()
         let (thread, messages) = try await Self.conversation(f)
         let account = try #require(f.router.accounts.first { $0.id == ComposeFixture.work }?.account)
@@ -81,7 +81,7 @@ import Testing
         #expect(reply.draftKey == nil && !reply.canPersist)
         let sender = try #require(last.from)
         let expectedTo = account.isMe(sender.email) ? last.to.map { $0.email.lowercased() } : [sender.email.lowercased()]
-        #expect(reply.to.tokens.map { $0.email.lowercased() } == expectedTo, "To is prefilled in read-only")
+        #expect(reply.to.tokens.map { $0.email.lowercased() } == expectedTo, "To is prefilled")
         #expect(reply.subject.hasPrefix("Re: ") && reply.notice == nil)
         #expect(QuoteSplit.quoteBlockCount(reply.quotedHTML) == 1)
         #expect(QuoteSplit.quoteBlockCount(reply.assembledFields().bodyHTML) == 1, "the quote, once, in what would be sent")
@@ -124,7 +124,7 @@ import Testing
     }
 
     @Test func theFakeSkeletonIsWhatADraftWouldStart() async throws {
-        let f = ComposeFixture(safeMode: .readOnly)
+        let f = ComposeFixture()
         await f.loaded()
         let (_, messages) = try await Self.conversation(f)
         let middle = messages[messages.count - 2]

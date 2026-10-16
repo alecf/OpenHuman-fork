@@ -20,20 +20,18 @@ public final class FakeMailStore: MailDataSource, MailCommanding, AccountManagin
         public var heldSends: HeldSends
         public var bodyDelay: Duration?
         public var liveConnectivity: Bool
-        public var safeMode: SafeModeInfo
         public var oauthClient: OAuthClientStatus
         public var now: @Sendable () -> Date
         public var relatedSearchMatches: Bool
 
         public init(remoteAck: RemoteAck = .after(.milliseconds(400)), heldSends: HeldSends = .realTime,
-                    bodyDelay: Duration? = nil, liveConnectivity: Bool = false, safeMode: SafeModeInfo = .normal,
+                    bodyDelay: Duration? = nil, liveConnectivity: Bool = false,
                     oauthClient: OAuthClientStatus = .configured(source: .file),
                     now: @escaping @Sendable () -> Date = { Date() }, relatedSearchMatches: Bool = false) {
             self.remoteAck = remoteAck
             self.heldSends = heldSends
             self.bodyDelay = bodyDelay
             self.liveConnectivity = liveConnectivity
-            self.safeMode = safeMode
             self.oauthClient = oauthClient
             self.now = now
             self.relatedSearchMatches = relatedSearchMatches
@@ -107,15 +105,10 @@ public final class FakeMailStore: MailDataSource, MailCommanding, AccountManagin
         }
     }
 
-    func checkWritable(_ s: inout State, send: Bool = false) throws {
+    func checkWritable(_ s: inout State) throws {
         if let failure = s.failNextCommand {
             s.failNextCommand = nil
             throw failure
-        }
-        switch s.safeMode {
-        case .normal: return
-        case .readOnly: throw MailPortError.blockedBySafeMode
-        case .writeAllowlist: if send { throw MailPortError.blockedBySafeMode }
         }
     }
 }
@@ -331,7 +324,6 @@ struct State: Sendable {
     var nextHeld: Int64 = 1
     var settings: [SettingSlot: Data] = [:]
     var oauthClient: OAuthClientStatus
-    var safeMode: SafeModeInfo
     var offline = false
     var offlineSince: Date?
     var ids: FakeIDs
@@ -359,7 +351,6 @@ struct State: Sendable {
 
     init(corpus: FakeCorpus, options: FakeMailStore.Options) {
         oauthClient = options.oauthClient
-        safeMode = options.safeMode
         relatedSearchMatches = options.relatedSearchMatches
         smartSearch = options.relatedSearchMatches ? .ready : .off
         ids = FakeIDs()

@@ -272,9 +272,6 @@ public final class LearnedBehaviourCenter {
             } else {
                 _ = try await port.apply(change)
             }
-        } catch MailPortError.blockedBySafeMode {
-            errorMessage = DisabledReason.safeModeText
-            return false
         } catch {
             errorMessage = (error as? MailPortError)?.description ?? "That change couldn't be saved."
             return false

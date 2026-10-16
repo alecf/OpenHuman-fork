@@ -284,18 +284,15 @@ import Testing
         #expect(!session.isOpen)
     }
 
-    @Test func readOnlyInsertsLocallyAndWritesNothing() async throws {
-        let f = AIFixture(safeMode: .readOnly, settings: .stripOn)
+    @Test func usingAQuickReplySendsNothing() async throws {
+        let f = AIFixture(settings: .stripOn)
         f.holdStripClock()
         let (session, editor, model) = try await f.readyStrip()
-        #expect(!session.canPersist)
         #expect(model.handle(.next) && model.handle(.use))
         #expect(editor.text == Self.first)
         await session.settle()
-        #expect(f.recorder.calls.isEmpty, "no write port call at all: nothing saved, sent or written to Gmail")
-        #expect(f.env.actions.availability(.send, host: session) == .disabled(.safeMode))
-        #expect(await f.run(.send, in: session), "refused out loud, as today")
-        #expect(f.recorder.calls.isEmpty && f.store.sentMessages.isEmpty)
+        #expect(!f.recorder.calls.contains { ["send", "sendNow", "scheduleSend"].contains($0) }, "\(f.recorder.calls)")
+        #expect(f.store.sentMessages.isEmpty && f.store.heldSendCount == 0)
     }
 
     @Test func automaticRequestsNeverLeaveTheMacWithoutTheSeparateOptIn() async throws {
@@ -549,10 +546,6 @@ import Testing
         #expect(ActionRules.title(for: toggle, in: f.router.actionContext()) == "Stop showing quick replies when replying")
         #expect(await f.run(.aiToggleInstantReply))
         #expect(!f.center.settings.instantReplyStrip)
-
-        let r = AIFixture(safeMode: .readOnly, settings: AISettings(draftReplies: .onDeviceAuto))
-        await r.loaded()
-        #expect(r.env.actions.availability(.aiToggleInstantReply, host: r.router) == .enabled)
 
         let g = AIFixture(settings: AISettings(draftReplies: .onDemand))
         await g.loaded()

@@ -54,20 +54,6 @@ final class SettingsWindowRecorder {
         #expect(f.registry.availability(.settingsPage("notifications"), host: f.router) == .hidden, "its module is off")
     }
 
-    @Test func theyWorkInReadOnlySafeModeAndTheReadOnlyPaletteStillOffersNoChanges() async {
-        let f = ActionFixture(options: .init(safeMode: .readOnly))
-        await f.loaded()
-        SettingsWindowRecorder().install(on: f.env.settingsNavigator)
-        for id in [ActionID.refresh, .addAccount, .settingsPage("accounts")] {
-            #expect(f.registry.availability(id, host: f.router) == .enabled, "\(id)")
-        }
-        let palette = f.registry.palette
-        palette.open(host: f.router)
-        palette.query = "settings"
-        #expect(palette.rows.contains { $0.action == .settingsPage("general") })
-        #expect(palette.rows.allSatisfy { ActionCatalog.descriptor($0.action)?.changesMail == false })
-    }
-
     @Test func addAccountOpensAccountsAndTheAccountsPageStartsTheSignInOnce() async throws {
         let f = SettingsFixture()
         let navigator = f.env.settingsNavigator
@@ -113,12 +99,7 @@ final class SettingsWindowRecorder {
         #expect(f.toastMessages.isEmpty, "the status area shows the sync; no toast")
     }
 
-    @Test func refreshWorksInReadOnlySafeModeAndIsHiddenWithoutASettingsPort() async throws {
-        let f = ActionFixture(options: .init(safeMode: .readOnly))
-        await f.loaded()
-        #expect(await f.run(.refresh))
-        #expect(try await f.store.get(AppSettings.syncRequestAt) != nil, "a local setting: allowed in read-only")
-        #expect(f.env.status.blockedNotice == nil)
+    @Test func refreshIsHiddenWithoutASettingsPort() async throws {
         let bare = AppEnvironment(data: FakeMailStore(corpus: .make(threadCount: 3, now: fixedNow), options: .init()),
                                   isFake: true, featureFlags: FeatureFlags())
         #expect(bare.actions.availability(.refresh, host: nil) == .hidden, "no settings port, no engine to ask")

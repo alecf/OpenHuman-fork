@@ -42,8 +42,8 @@ struct GeneralSettingsTests {
         #expect(BodyDownloadEstimate.bytes(messages: 10_000) == 10_000 * BodyDownloadEstimate.bytesPerMessage)
     }
 
-    @Test func localSettingsStillWorkInReadOnlySafeMode() async throws {
-        let f = SettingsFixture(safeMode: .readOnly)
+    @Test func localSettingsNeedNoWritePort() async throws {
+        let f = SettingsFixture(writePort: false)
         let model = GeneralSettingsModel(environment: f.env)
         #expect(model.availability.canEditSettings)
         await model.undoSend.set(0)
@@ -51,19 +51,39 @@ struct GeneralSettingsTests {
         #expect(model.errorMessage == nil)
     }
 
+    @Test func confirmBeforeSendingIsOfferedOnALiveAccountOnly() async throws {
+        #expect(!GeneralSettingsModel(environment: SettingsFixture().env).showsConfirmBeforeSending, "fake data")
+        let store = FakeMailStore(corpus: .small)
+        let live = AppEnvironment(data: store, commands: store, accounts: store, settings: store, isFake: true,
+                                  isLiveAccount: true)
+        let model = GeneralSettingsModel(environment: live)
+        #expect(model.showsConfirmBeforeSending)
+        #expect(model.confirmEverySend.value == false, "off by default")
+        await model.confirmEverySend.set(true)
+        #expect(try await store.get(SendSettings.confirmEverySend) == true)
+        let noPort = AppEnvironment(data: store, settings: store, isFake: true, isLiveAccount: true)
+        #expect(!GeneralSettingsModel(environment: noPort).showsConfirmBeforeSending, "nothing can be sent")
+    }
+
+    @Test func confirmEverySendKeepsItsStoredKey() {
+        #expect(SendSettings.confirmEverySend.name == "write_mode.confirm_every_send")
+        #expect(SendSettings.confirmEverySend.scope == .global && SendSettings.confirmEverySend.defaultValue == false)
+        #expect(!SendSettings.confirmEverySend.isSafetyKey)
+    }
+
     @Test func aRefusedWriteRestoresTheOldValueAndSaysWhy() async throws {
         let f = SettingsFixture()
         let setting = StoredSetting(AppSettings.undoSendSeconds, port: RefusingSettings())
         await setting.set(30)
         #expect(setting.value == 10)
-        #expect(setting.errorMessage == "Read-only: Mail can't change your mail")
+        #expect(setting.errorMessage == "Not available right now: settings")
     }
 }
 
 private struct RefusingSettings: SettingsPort {
     func observe<V>(_ key: AppSettingKey<V>) -> AsyncStream<V> { AsyncStream { $0.yield(key.defaultValue); $0.finish() } }
     func get<V>(_ key: AppSettingKey<V>) async throws -> V { key.defaultValue }
-    func set<V>(_ key: AppSettingKey<V>, _ value: V) async throws { throw MailPortError.blockedBySafeMode }
+    func set<V>(_ key: AppSettingKey<V>, _ value: V) async throws { throw MailPortError.unavailable("settings") }
 }
 
 @MainActor

@@ -69,13 +69,8 @@ public struct SettingsShellView: View {
         HStack(spacing: 0) {
             SettingsSidebar(pages: pages, selection: $shell.selected, build: hosting.build)
             Rectangle().fill(theme.borderHairline.color).frame(width: theme.borderWidthHairline)
-            VStack(spacing: 0) {
-                if environment != nil, let banner = shell.availability.banner {
-                    bannerLine(banner)
-                }
-                page
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            }
+            page
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .background(theme.bgWindow.color)
         .navigationTitle(shell.selectedEntry?.title ?? "Settings")
@@ -86,22 +81,6 @@ public struct SettingsShellView: View {
     private func followRequest() {
         guard let navigator = environment?.settingsNavigator else { return }
         shell.takeRequest(from: navigator)
-    }
-
-    private func bannerLine(_ banner: String) -> some View {
-        Label(banner, systemImage: "lock.fill")
-            .themeFont(theme.typeMeta)
-            .foregroundStyle(theme.textPrimary.color)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.vertical, theme.space4)
-            .padding(.horizontal, theme.space8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.bgWarningSubtle.color)
-            .overlay(alignment: .bottom) {
-                Rectangle().fill(theme.borderHairline.color).frame(height: theme.borderWidthHairline)
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("settings.safeModeBanner")
     }
 
     @ViewBuilder

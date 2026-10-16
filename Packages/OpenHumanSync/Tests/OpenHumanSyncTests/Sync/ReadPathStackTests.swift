@@ -6,25 +6,24 @@ import OpenHumanStore
 import Testing
 @testable import OpenHumanSync
 
-@Suite struct ReadOnlyStackTests {
-    @Test func everyRequestOfTheSliceIsAGETThroughReadOnlyTransport() async throws {
+@Suite struct ReadPathStackTests {
+    @Test func syncResyncAndBodiesSendOnlyGETsThroughTheLiveStack() async throws {
         let clock = InstantClock(now: testNow)
         let metrics = SyncMetricsCollector()
         var wireBox: FakeGmailTransport?
         var factoryBox: DefaultGmailClientFactory?
         let h = try SyncHarness(clock: clock, onDisk: true) { gmail in
             let wire = FakeGmailTransport(gmail)
-            let factory = DefaultGmailClientFactory(safeMode: .normal, apiTransport: wire,
+            let factory = DefaultGmailClientFactory(apiTransport: wire,
                                                     config: GmailClientConfig(userAgent: "OpenHumanMail/test"),
                                                     clock: clock, metrics: { _ in metrics }) { _ in
-                (StaticTokenProvider(), [GmailScope.readonly])
+                (StaticTokenProvider(), [GmailScope.modify])
             }
             wireBox = wire
             factoryBox = factory
             return try! factory.client(for: "me@example.com")
         }
         let wire = try #require(wireBox), factory = try #require(factoryBox)
-        #expect(try factory.effectiveMode(for: "me@example.com") == .readOnly)
 
         let threads = await h.gmail.seedInbox(count: 12)
         await h.gmail.deliver(subject: "Re", threadID: threads[3])
@@ -42,27 +41,21 @@ import Testing
         #expect(try h.inbox() == (try await h.serverInbox()))
         #expect(!wire.requests.isEmpty && wire.nonGETRequests.isEmpty)
         #expect(wire.requests.allSatisfy { $0.headers["Authorization"] == "Bearer test-access-token" })
-        let api = try factory.client(for: "me@example.com")
-        let before = wire.requests.count
-        await #expect(throws: GmailError.transport(.blockedBySafeMode("POST /gmail/v1/users/me/messages/batchModify"))) {
-            try await api.batchModifyMessages(ids: [threads[1]], add: [], remove: ["INBOX"])
-        }
-        #expect(wire.requests.count == before)
         #expect(metrics.snapshot.units > 0)
         #expect(try h.store.syncLog(account: h.account, limit: 10).allSatisfy { $0.quotaUnits >= 0 })
     }
 
-    @Test func theBackfillAndRemoteSearchSendOnlyGETsThroughReadOnlyTransport() async throws {
+    @Test func theBackfillAndRemoteSearchSendOnlyGETsThroughTheLiveStack() async throws {
         let clock = InstantClock(now: testNow)
         let metrics = SyncMetricsCollector()
         var wireBox: FakeGmailTransport?
         var apiBox: (any GmailAPI)?
         let h = try SyncHarness(settings: backfillSettings(pageSize: 100), clock: clock) { gmail in
             let wire = FakeGmailTransport(gmail)
-            let factory = DefaultGmailClientFactory(safeMode: .readOnly, apiTransport: wire,
+            let factory = DefaultGmailClientFactory(apiTransport: wire,
                                                     config: GmailClientConfig(userAgent: "OpenHumanMail/test"),
                                                     clock: clock, metrics: { _ in metrics }) { _ in
-                (StaticTokenProvider(), [GmailScope.readonly])
+                (StaticTokenProvider(), [GmailScope.modify])
             }
             wireBox = wire
             let api = try! factory.client(for: "me@example.com")

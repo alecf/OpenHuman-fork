@@ -42,7 +42,7 @@ enum CompositionRoot {
                 return AppModel(screen: .mail(AppEnvironment(data: MailStoreAdapter(store: store),
                                                              settings: MailStoreSettings(store: store), isFake: true,
                                                              navigationStore: navigationStore("fixtureStore", environment),
-                                                             importance: MailStoreImportance(store: store, safeMode: .normal),
+                                                             importance: MailStoreImportance(store: store),
                                                              ai: AIServices.aiCenter(model: .fake, persistent: false,
                                                                                      environment: environment))))
             } catch {
@@ -52,8 +52,7 @@ enum CompositionRoot {
             }
         case .fakeGmail:
             do {
-                let mode = LaunchSafeMode.forFakeGmail(environment: environment)
-                let running = try FakeGmailLaunch.launch(safeMode: mode)
+                let running = try FakeGmailLaunch.launch()
                 return AppModel(screen: .mail(running.session.environment), session: running.session,
                                 platform: fakeGmailPlatform(arguments: arguments, environment: environment))
             } catch {
@@ -103,12 +102,14 @@ enum CompositionRoot {
         return platform
     }
 
+    static let testHostTitle = "Mail didn't start"
+    static let testHostMessage = "Real accounts don't open inside a test run. Nothing was read or changed."
+
     static func live(environment: [String: String], arguments: [String] = ProcessInfo.processInfo.arguments) -> AppModel {
-        let choice: WriteModeLaunchSource
-        do { choice = try LaunchSafeMode.environmentChoice(environment) } catch {
-            let given = "\(LaunchSafeMode.key)=\(environment[LaunchSafeMode.key] ?? "")"
-            return AppModel(screen: .notice(StartupProblem(title: LaunchSafeMode.refusalTitle, message: error.message,
-                                                           details: given)))
+        // Why: a test host must never reach the Keychain, the mail store or Gmail of the person running the tests
+        if environment["XCTestConfigurationFilePath"] != nil
+            || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            return AppModel(screen: .notice(StartupProblem(title: testHostTitle, message: testHostMessage)))
         }
         do {
             let location = try StoreLocation.resolve(environment: environment)
@@ -118,15 +119,12 @@ enum CompositionRoot {
             AIServices.cacheDirectory = location.directory
             let store = try MailStore.open(StoreOptions(location: location, processKind: .app, observeExternalChanges: true,
                                                         appVersion: appVersion))
-            let mode = LaunchSafeMode.forRealAccounts(
-                choice, allowsChanges: LiveWriteModeSwitch.atLaunch(store: store, environment: environment))
-            let writeModeSwitch = LiveWriteModeSwitch(store: store, launchSource: choice, reopen: { AppRelaunch.relaunch() })
             let userAgent = "OpenHumanMail/\(appVersion)"
             let tokenTransport = URLSessionTransport(userAgent: userAgent)
             let signInBroker = SignInBroker(memory: UserDefaultsSignInBrowserMemory(defaults: .standard))
             SignInPanelController.install(signInBroker)
             let backend = LiveBackend(
-                safeMode: mode, store: store, writeModeSwitch: writeModeSwitch,
+                store: store,
                 accountDependencies: LiveAccountManager.Dependencies(
                     environment: environment, storeDirectory: location.directory,
                     clientStore: KeychainClientStore(service: clientKeychainService(environment: environment,
@@ -234,13 +232,11 @@ enum CompositionRoot {
     static func environment(store: any MailStoreAdapter.Store & MailStoreSettings.Store & ImportanceRulesStoring,
                             ensureBody: (@Sendable (MessageKey) async throws -> Void)? = nil,
                             attachmentFile: (@Sendable (MessageKey, AttachmentInfo) async throws -> URL)? = nil,
-                            safeMode: SafeModeInfo = .normal,
                             connectivity: (@Sendable () -> AsyncStream<[AccountID: ConnectivityState]>)? = nil,
                             syncProgress: (@Sendable () -> AsyncStream<[AccountID: String]>)? = nil,
                             commands: (any MailCommanding)? = nil, accounts: (any AccountManaging)? = nil,
                             draftsDirectory: URL? = nil,
-                            isFake: Bool = false, writeMode: WriteModeSession? = nil,
-                            writeModeSwitch: (any WriteModeSwitching)? = nil,
+                            isFake: Bool = false, isLiveAccount: Bool = false,
                             onDemand: MailStoreAdapter.OnDemand? = nil,
                             calendar: (any CalendarProviding)? = nil,
                             calendarConnection: (any CalendarConnecting)? = nil,
@@ -259,19 +255,19 @@ enum CompositionRoot {
             try? SQLiteCalendarCache(url: $0.appendingPathComponent(SQLiteCalendarCache.fileName))
         }
         let environment = AppEnvironment(data: MailStoreAdapter(store: store, ensureBody: ensureBody, attachmentFile: attachmentFile,
-                                                     safeMode: safeMode, connectivity: connectivity, syncProgress: syncProgress,
+                                                     connectivity: connectivity, syncProgress: syncProgress,
                                                      onDemand: onDemand, semantic: semantic?.arm),
                               commands: commands, accounts: accounts, settings: MailStoreSettings(store: store),
                               isFake: isFake, navigationStore: navigationStore(isFake ? "fakeGmail" : "live"),
-                              importance: MailStoreImportance(store: store, safeMode: safeMode),
+                              importance: MailStoreImportance(store: store),
                               draftsDirectory: draftsDirectory,
                               aiOnboarding: aiOnboarding(isFake: isFake, center: ai), secrets: secretStore(isFake: isFake),
-                              ai: ai, writeMode: writeMode, calendar: calendar, writeModeSwitch: writeModeSwitch,
+                              ai: ai, isLiveAccount: isLiveAccount, calendar: calendar,
                               calendarConnection: calendarConnection, calendarConnections: calendarConnections,
                               autoLabelStore: autoLabelStore, calendarCache: calendarCache,
                               learnedBehaviourStore: isFake ? nil
                                   : AIServices.cacheDirectory.map { LearnedBehaviourFile(directory: $0) },
-                              waiting: (store as? any WaitingOverrideStoring).map { MailStoreWaiting(store: $0, safeMode: safeMode) })
+                              waiting: (store as? any WaitingOverrideStoring).map { MailStoreWaiting(store: $0) })
         attachClassification(environment, isFake: isFake)
         CategoryImportanceMatcher.install(on: environment.autoLabels, store: store)
         if let searching = store as? any MailSearching {

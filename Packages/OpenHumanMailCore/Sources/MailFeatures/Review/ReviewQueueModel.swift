@@ -316,9 +316,7 @@ public final class ReviewQueueModel {
         }
     }
 
-    private var commands: (any MailCommanding)? {
-        environment.status.safeMode.allowsMailChanges ? environment.commands : nil
-    }
+    private var commands: (any MailCommanding)? { environment.commands }
 
     @discardableResult
     public func keep() -> Task<Void, Never>? {

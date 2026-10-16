@@ -33,10 +33,10 @@ final class IntentFixture {
     static let work = AccountID(1)
     static let personal = AccountID(2)
 
-    init(safeMode: SafeModeInfo = .normal, flags: FeatureFlags = FeatureFlags(), enabled: Bool = true,
+    init(flags: FeatureFlags = FeatureFlags(), enabled: Bool = true,
          allowChanges: Bool = true, startWindow: Bool = true) {
         store = FakeMailStore(corpus: .rich(threadCount: 40, now: fixedNow),
-                              options: .init(remoteAck: .immediate, safeMode: safeMode, now: { fixedNow }))
+                              options: .init(remoteAck: .immediate, now: { fixedNow }))
         recorder = RecordingCommands(store)
         env = AppEnvironment(data: store, commands: recorder, accounts: store, settings: store, isFake: true,
                              featureFlags: flags)
@@ -257,24 +257,6 @@ final class IntentFixture {
         let row = try #require(try await f.inbox(IntentFixture.work).first)
         #expect(await f.refusal { _ = try await f.intents.markDone([f.id(row)], confirm: f.confirm) } == .changesOff)
         #expect(f.asked.isEmpty && f.writes.isEmpty)
-    }
-
-    @Test func readOnlySafeModeRefusesBeforeAnyPortOrQuestion() async throws {
-        let f = IntentFixture(safeMode: .readOnly)
-        await f.loaded()
-        let rows = try await f.inbox(IntentFixture.work)
-        let error = await f.refusal { _ = try await f.intents.markDone(rows.prefix(2).map { f.id($0) }, confirm: f.confirm) }
-        #expect(error == .readOnly)
-        #expect(error?.message == "Mail is in read-only safe mode. Nothing was changed.")
-        let until = fixedNow.addingTimeInterval(86_400)
-        #expect(await f.refusal { _ = try await f.intents.snooze([f.id(rows[0])], until: until, confirm: f.confirm) }
-                == .readOnly)
-        #expect(await f.refusal {
-            _ = try await f.intents.remind(f.id(rows[0]), at: until, onlyIfNoReply: false, confirm: f.confirm)
-        } == .readOnly)
-        #expect(f.asked.isEmpty, "nothing is asked when the answer cannot matter")
-        #expect(f.writes.isEmpty)
-        #expect(f.store.pendingOperationCount == 0)
     }
 
     @Test func aDeclinedQuestionChangesNothing() async throws {

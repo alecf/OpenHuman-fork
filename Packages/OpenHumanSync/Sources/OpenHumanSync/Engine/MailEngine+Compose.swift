@@ -47,7 +47,7 @@ extension MailEngine {
     }
 
     public func send(_ id: DraftID, authorization: SendAuthorization, undoWindow: Duration?) async throws -> SendReceipt {
-        try EnginePolicy.checkSend(role: configuration.role, safeMode: configuration.safeMode, what: "send")
+        try EnginePolicy.checkSend(role: configuration.role, what: "send")
         let draft = try requireDraft(id)
         try checkGrants([draft.accountID], what: "send")
         await cancelRemoteSave(id)
@@ -74,7 +74,7 @@ extension MailEngine {
     }
 
     public func sendNow(_ receipt: SendReceipt) async throws -> Bool {
-        try EnginePolicy.checkSend(role: configuration.role, safeMode: configuration.safeMode, what: "sendNow")
+        try EnginePolicy.checkSend(role: configuration.role, what: "sendNow")
         let done = try store.sendNow(receipt)
         if let account = try store.draft(receipt.draftID)?.accountID { await poke([account]) }
         return done
@@ -85,7 +85,7 @@ extension MailEngine {
     }
 
     public func scheduleSend(_ id: DraftID, at: Date, onlyIfNoReply: Bool) async throws {
-        try EnginePolicy.checkSend(role: configuration.role, safeMode: configuration.safeMode, what: "scheduleSend")
+        try EnginePolicy.checkSend(role: configuration.role, what: "scheduleSend")
         guard at > configuration.clock.now else { throw StoreError.conflict("the scheduled time has passed") }
         let draft = try requireDraft(id)
         try checkGrants([draft.accountID], what: "scheduleSend")

@@ -83,7 +83,7 @@ public final class SnippetSettingsModel {
         task?.cancel()
     }
 
-    public var canEdit: Bool { availability.canEditStoredItems }
+    public var canEdit: Bool { availability.hasCommands }
 
     public func start() {
         guard task == nil else { return }

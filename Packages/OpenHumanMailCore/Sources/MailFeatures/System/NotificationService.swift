@@ -66,8 +66,6 @@ public final class NotificationService {
         for task in flushTasks.values { task.cancel() }
     }
 
-    private var safeMode: SafeModeInfo { data.safeMode() }
-
     public func start() {
         guard accountsTask == nil else { return }
         notifier.setResponder { [weak self] response in self?.respond(to: response) }
@@ -161,7 +159,6 @@ public final class NotificationService {
         guard !unique.isEmpty, mode != .off, !isAppActive() else { return }
         guard await ensureAuthorized() else { return }
         let previews = !preferences.hidePreviews
-        let category: SystemNotification.Category = safeMode.allowsMailChanges ? .newMail : .readOnly
         batchCounter += 1
         let id = "newmail.\(account.rawValue).\(batchCounter)"
         if unique.count == 1, let row = unique.first {
@@ -169,14 +166,14 @@ public final class NotificationService {
             await post(SystemNotification(identifier: id, title: previews ? Self.sender(of: row) : hidden,
                                           subtitle: subtitle(for: account),
                                           body: previews ? row.subject : "", threadIdentifier: "account.\(account.rawValue)",
-                                          category: category, userInfo: NotificationRouting.userInfo(for: row.id)))
+                                          category: .newMail, userInfo: NotificationRouting.userInfo(for: row.id)))
         } else {
             let senders = unique.prefix(3).map(Self.sender(of:)).joined(separator: ", ")
             let title = mode == .allInbox ? "\(unique.count) new messages" : "\(unique.count) new important messages"
             await post(SystemNotification(identifier: id, title: title,
                                           subtitle: subtitle(for: account),
                                           body: previews ? senders : "", threadIdentifier: "account.\(account.rawValue)",
-                                          category: .readOnly, userInfo: ["account": String(account.rawValue)]))
+                                          userInfo: ["account": String(account.rawValue)]))
         }
     }
 
@@ -367,8 +364,6 @@ public final class NotificationService {
         return "\(name) stopped after repeated errors. Restart Mail to try again."
     }
 
-    static let readOnlyNoticeTitle = "Mail is read-only, so nothing changed."
-
     static let cancelledByReplyTitle = "A scheduled send was cancelled"
     static let cancelledByReplyBody = "Someone replied before it was due. It's back in Drafts."
     static let cancelledByReplyToast = "Someone replied first, so a scheduled send was cancelled. It's in Drafts."
@@ -385,10 +380,6 @@ public final class NotificationService {
             }
         case .markDone, .markRead, .snooze, .remindIfNoReply:
             guard let thread, let environment else { return }
-            guard safeMode.allowsMailChanges else {
-                Task { await postReadOnlyNotice() }
-                return
-            }
             runButton(response.action, thread: thread, environment: environment)
             Task { await notifier.remove(identifiers: [response.identifier]) }
         }
@@ -427,12 +418,6 @@ public final class NotificationService {
     static func remindTime(now: Date, calendar: Calendar, defaults: TimeDefaults = TimeDefaults()) -> Date? {
         TimePresets(timeZone: calendar.timeZone, defaults: defaults).presets(for: .remind, now: now)
             .first { $0.id == "tomorrowMorning" }?.date
-    }
-
-    private func postReadOnlyNotice() async {
-        guard systemNotifications, await ensureAuthorized() else { return }
-        await post(SystemNotification(identifier: "readonly.notice", title: Self.readOnlyNoticeTitle,
-                                      threadIdentifier: "readonly"))
     }
 
     func route(_ route: NotificationRoute) {

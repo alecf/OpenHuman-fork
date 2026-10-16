@@ -5,12 +5,6 @@ public enum ActionRules {
         guard isInScope(descriptor, context.scope) else { return .hidden }
         let state = stateRule(descriptor.id, context)
         if state == .hidden { return .hidden }
-        switch (context.safeMode, descriptor.effect) {
-        case (.readOnly, .mail), (.readOnly, .external), (.writeAllowlist, .external):
-            return .disabled(.safeMode)
-        default:
-            break
-        }
         if descriptor.changesMail, !context.canWrite { return .disabled(.unavailable(descriptor.title)) }
         switch descriptor.target {
         case .none:

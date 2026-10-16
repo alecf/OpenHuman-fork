@@ -94,10 +94,6 @@ public final class SuperhumanImportModel {
     @discardableResult
     public func importMuted() async -> Bool {
         guard let environment, let account, !toMute.isEmpty else { return false }
-        if environment.status.safeMode == .readOnly {
-            phase = .failed("Read-only: Mail can't change your mail in this session.")
-            return false
-        }
         guard environment.commands != nil, environment.actions.descriptor(.toggleMute) != nil else {
             phase = .failed("Mute is off in this build or mode.")
             return false

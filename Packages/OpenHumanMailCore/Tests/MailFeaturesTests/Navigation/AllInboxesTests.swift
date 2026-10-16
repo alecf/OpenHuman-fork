@@ -101,19 +101,6 @@ import Testing
         #expect(!page.rows.contains { $0.id == target }, "done in its own account")
     }
 
-    @Test func eIsRefusedInReadOnlyAndNothingChanges() async throws {
-        let f = OverlayFixture(corpus: .rich(threadCount: 20, now: fixedNow), options: .init(safeMode: .readOnly))
-        await f.loaded()
-        await eventually { f.router.accounts.count == 2 }
-        #expect(await f.run(.goAllInboxes), "a view: offered in read-only")
-        let model = try #require(f.router.unifiedInbox)
-        await eventually { !model.isLoading && !model.rows.isEmpty }
-        let target = try #require(model.cursor)
-        #expect(!model.markDoneAtCursor())
-        let page = try await f.store.threadPage(.system(.inbox), account: target.account, after: nil, limit: 1_000)
-        #expect(page.rows.contains { $0.id == target })
-    }
-
     private func named(_ account: AccountID, _ n: Int64, subject: String, from: String, minutesAgo: Double) -> ThreadRow {
         var r = row(account, n, minutesAgo: minutesAgo)
         r = ThreadRow(id: r.id, subject: subject, snippet: "", participantsDisplay: from, participants: [], messageCount: 1,

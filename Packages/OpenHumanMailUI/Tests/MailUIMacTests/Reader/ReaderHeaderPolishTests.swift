@@ -12,11 +12,10 @@ import Testing
 struct ReaderHeaderPolishTests {
     typealias F = UIFixtures
 
-    private func harness(subject: String, safeMode: SafeModeInfo = .normal) async throws -> ReaderHarness {
+    private func harness(subject: String) async throws -> ReaderHarness {
         let detail = F.conversation(2, count: 1, subject: subject)
-        let source = UITestSource(details: [detail], bodies: [detail.messages[0].id: MessageContent(html: nil, text: "Hi")],
-                                  safeMode: safeMode)
-        let h = try await ReaderHarness.make(source, thread: detail.id, safeMode: safeMode)
+        let source = UITestSource(details: [detail], bodies: [detail.messages[0].id: MessageContent(html: nil, text: "Hi")])
+        let h = try await ReaderHarness.make(source, thread: detail.id)
         try await until { !h.controller.threadActionButtons.isEmpty }
         h.controller.view.layoutSubtreeIfNeeded()
         return h
@@ -46,9 +45,8 @@ struct ReaderHeaderPolishTests {
         if width < 700 { #expect(subject.frame.height > 40) }
     }
 
-    @Test(arguments: [SafeModeInfo.normal, SafeModeInfo.readOnly])
-    func theActionBarNeverHoldsAnActionWithoutASymbol(safeMode: SafeModeInfo) async throws {
-        let h = try await harness(subject: "Plan", safeMode: safeMode)
+    @Test func theActionBarNeverHoldsAnActionWithoutASymbol() async throws {
+        let h = try await harness(subject: "Plan")
         defer { h.close() }
         let buttons = h.controller.threadActionButtons
         #expect(!buttons.isEmpty)

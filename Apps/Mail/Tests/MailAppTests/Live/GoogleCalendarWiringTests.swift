@@ -8,8 +8,8 @@ import OpenHumanStore
 import Testing
 @testable import OpenHumanMail
 
-private let readScopes = CalendarScopes.requested(for: .readOnly)
-private let writeScopes = CalendarScopes.requested(for: .normal)
+private let readScopes = CalendarScopes.request.read
+private let writeScopes = CalendarScopes.request.write
 
 private func query(_ url: URL?, _ name: String) -> String? {
     url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == name }?.value }
@@ -38,7 +38,7 @@ private final class CalendarHarness {
     let account: AccountItem
     let mailToken: StoredToken
 
-    init(launch: SafeMode = .readOnly, mailScopes: [String] = [GmailScope.readonly], grants: [String] = readScopes,
+    init(mailScopes: [String] = [GmailScope.modify], grants: [String] = writeScopes,
          calendarStore: (any TokenStore)? = nil) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("oh-gcal-\(UUID().uuidString)")
         let store = try MailStore.open(StoreOptions(location: StoreLocation(directory: directory), processKind: .test,
@@ -57,7 +57,7 @@ private final class CalendarHarness {
         }
         let browser = RecordingBrowser()
         let backend = LiveBackend(
-            safeMode: launch, store: store,
+            store: store,
             accountDependencies: LiveAccountManager.Dependencies(
                 environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()],
                 storeDirectory: directory.appendingPathComponent("none"), tokenStore: mailTokens,
@@ -77,8 +77,8 @@ private final class CalendarHarness {
         self.account = account
     }
 
-    func session(writes: Bool = false) throws -> SyncSession {
-        try backend.makeSession(for: account, writes: writes)
+    func session() throws -> SyncSession {
+        try backend.makeSession(for: account)
     }
 
     func storeCalendarToken(_ scopes: [String]) throws {
@@ -106,10 +106,15 @@ private final class CalendarHarness {
     let provider = try #require(connected.environment.calendar)
     #expect(connected.environment.modules.modules.contains(.calendar), "a grant stored before the session: the module runs")
     #expect(provider.info.name == "Google Calendar" && provider.info.account == h.email && !provider.info.isSample)
-    #expect(provider.info.createRefusal == "Read-only safe mode: Mail never creates calendar events.")
+    #expect(provider.info.createRefusal == GoogleCalendarSession.reconnectToCreate, "an older read grant: reconnect to create")
+    #expect(GoogleCalendarSession.reconnectToCreate.hasPrefix("Reconnect Google Calendar to create events"))
     #expect(connected.environment.calendarSidebar?.createRefusal != nil)
 
-    try h.storeCalendarToken(readScopes + [GmailScope.readonly])
+    try h.storeCalendarToken(writeScopes)
+    let writable = try #require(try h.session().environment.calendar)
+    #expect(writable.info.account == h.email && writable.info.createRefusal == nil, "a write grant creates events")
+
+    try h.storeCalendarToken(readScopes + [GmailScope.modify])
     let unusable = try h.session()
     #expect(unusable.environment.calendarConnections?.windowCalendarProvider() == nil)
     #expect(unusable.environment.calendar?.info.account == nil)
@@ -121,29 +126,29 @@ private final class CalendarHarness {
     let calendar = try #require(try h.session().calendar)
     try await calendar.connect()
     let stored = try #require(try h.calendarTokens.load(account: h.email))
-    #expect(stored.grantedScopes == readScopes && stored.clientID == SyntheticClient.clientID)
+    #expect(stored.grantedScopes == writeScopes && stored.clientID == SyntheticClient.clientID)
     #expect(try h.mailTokens.load(account: h.email) == h.mailToken, "the Gmail token and its scope are untouched")
     #expect(try h.mailTokens.allAccounts() == [h.email])
-    #expect(try h.store.accounts().first?.grantedScopes == [GmailScope.readonly], "the Store keeps the Gmail grant only")
+    #expect(try h.store.accounts().first?.grantedScopes == [GmailScope.modify], "the Store keeps the Gmail grant only")
     let consent = try #require(h.browser.urls.last)
-    #expect(query(consent, "scope") == readScopes.joined(separator: " "))
+    #expect(query(consent, "scope") == writeScopes.joined(separator: " "))
     #expect(query(consent, "include_granted_scopes") == nil && query(consent, "login_hint") == h.email)
     #expect(h.http.requests.map { $0.url.path() } == ["/token"], "the token endpoint only: no Gmail call, no calendar call")
     var states = calendar.connectionStates().makeAsyncIterator()
     let state = await states.next()
-    #expect(state?.status == .connected && state?.needsRestart == false && state?.canCreateEvents == false)
+    #expect(state?.status == .connected && state?.needsRestart == false && state?.canCreateEvents == true)
 }
 
 @MainActor
 @Test func aCalendarConnectedWhileTheSessionRunsIsUsedAtOnce() async throws {
-    let h = try CalendarHarness(launch: .normal, mailScopes: [GmailScope.modify], grants: writeScopes)
+    let h = try CalendarHarness()
     let path = "/calendar/v3/calendars/robin@example.com/events"
     h.http.on("GET", path) { _ in
         FakeHTTPTransport.json(200, ["items": [["id": "ev1", "summary": "Standup",
                                                 "start": ["dateTime": "2026-10-14T14:00:00Z"],
                                                 "end": ["dateTime": "2026-10-14T14:30:00Z"]]]])
     }
-    let session = try h.session(writes: true)
+    let session = try h.session()
     let window = try #require(session.environment.calendar)
     let calendar = try #require(session.calendar)
     #expect(session.environment.modules.modules.contains(.calendar))
@@ -152,7 +157,7 @@ private final class CalendarHarness {
     #expect(h.http.requests.isEmpty, "nothing connected: nothing contacted")
 
     try await calendar.connect()
-    #expect(window.info.account == h.email && window.info.createRefusal == nil, "write mode with a write grant")
+    #expect(window.info.account == h.email && window.info.createRefusal == nil, "a write grant")
     #expect(try await window.events(from: day, to: day.addingTimeInterval(86_400)).map(\.title) == ["Standup"])
     let account = Account(id: h.account.id, email: h.email, displayName: nil, alias: nil, health: .active)
     #expect(session.environment.calendarConnections?.calendarProvider(for: account) != nil, "the sidebar's calendar too")
@@ -193,7 +198,7 @@ private final class CalendarHarness {
 @MainActor
 @Test func aConsentCarryingAGmailScopeStoresNothing() async throws {
     for extra in [GmailScope.readonly, GmailScope.modify, "https://mail.google.com/"] {
-        let h = try CalendarHarness(grants: readScopes + [extra])
+        let h = try CalendarHarness(grants: writeScopes + [extra])
         let calendar = try #require(try h.session().calendar)
         await #expect(throws: CalendarError.self, "\(extra)") { try await calendar.connect() }
         #expect(try h.calendarTokens.load(account: h.email) == nil, "nothing was stored")
@@ -219,9 +224,9 @@ private final class CalendarHarness {
 }
 
 @MainActor
-@Test func theProviderReadsAndNeverWritesInReadOnly() async throws {
+@Test func theProviderReadsAndNeverWritesWithAReadGrant() async throws {
     let h = try CalendarHarness()
-    try h.storeCalendarToken(writeScopes)
+    try h.storeCalendarToken(readScopes)
     h.http.on("GET", "/calendar/v3/calendars/robin@example.com/events") { _ in
         FakeHTTPTransport.json(200, ["items": [["id": "ev1", "summary": "Standup",
                                                 "start": ["dateTime": "2026-10-14T14:00:00Z"],
@@ -236,12 +241,12 @@ private final class CalendarHarness {
                                    addMeetLink: true)
     await #expect(throws: CalendarError.self) { _ = try await provider.createEvent(draft) }
     await #expect(throws: CalendarError.self) { try await provider.deleteEvent(events[0]) }
-    #expect(h.http.requests.allSatisfy { $0.method == "GET" }, "read-only: only reads left the process")
+    #expect(h.http.requests.allSatisfy { $0.method == "GET" }, "a read grant: only reads left the process")
 }
 
 @MainActor
-@Test func writeModeCreatesWithMeetAndTheUndoDeletes() async throws {
-    let h = try CalendarHarness(launch: .normal, mailScopes: [GmailScope.modify], grants: writeScopes)
+@Test func aWriteGrantCreatesWithMeetAndTheUndoDeletes() async throws {
+    let h = try CalendarHarness()
     try h.storeCalendarToken(writeScopes)
     let path = "/calendar/v3/calendars/robin@example.com/events"
     h.http.on("POST", path) { _ in
@@ -252,7 +257,7 @@ private final class CalendarHarness {
                                                                          "uri": "https://meet.google.com/xyz"]]]])
     }
     h.http.on("DELETE", path + "/made1") { _ in HTTPResponse(status: 204, headers: [:], body: Data()) }
-    let provider = try #require(try h.session(writes: true).environment.calendar)
+    let provider = try #require(try h.session().environment.calendar)
     #expect(provider.info.createRefusal == nil)
     let day = Date(timeIntervalSince1970: 1_791_000_000)
     let draft = CalendarEventDraft(title: "Lunch", start: day, end: day.addingTimeInterval(1_800), timeZone: "UTC",
@@ -272,7 +277,7 @@ private final class CalendarHarness {
 
 @MainActor
 @Test func attendeeEventsAreNeverDeletedAndLostAnswersAreUnclear() async throws {
-    let h = try CalendarHarness(launch: .normal, mailScopes: [GmailScope.modify], grants: writeScopes)
+    let h = try CalendarHarness()
     try h.storeCalendarToken(writeScopes)
     let path = "/calendar/v3/calendars/robin@example.com/events"
     h.http.on("POST", path) { _ in
@@ -280,7 +285,7 @@ private final class CalendarHarness {
                                      "end": ["dateTime": "2026-10-14T14:30:00Z"],
                                      "attendees": [["email": "alice@example.com"]]])
     }
-    let provider = try #require(try h.session(writes: true).environment.calendar)
+    let provider = try #require(try h.session().environment.calendar)
     let day = Date(timeIntervalSince1970: 1_791_000_000)
     let draft = CalendarEventDraft(title: "Lunch", start: day, end: day.addingTimeInterval(1_800), timeZone: "UTC",
                                    attendees: [EmailAddress(email: "alice@example.com")])
@@ -317,7 +322,7 @@ private final class CalendarHarness {
     #expect(CompositionRoot.fakeCalendar(arguments: ["-UseFakeData", "-UseFakeCalendar"])?.info.isSample == true)
     let h = try CalendarHarness()
     let plain = LiveBackend(
-        safeMode: .readOnly, store: h.store,
+        store: h.store,
         accountDependencies: LiveAccountManager.Dependencies(
             environment: ["OPENHUMAN_OAUTH_CLIENT_JSON": try SyntheticClient.writeJSON()],
             storeDirectory: h.directory.appendingPathComponent("none"), tokenStore: h.mailTokens,
@@ -333,15 +338,15 @@ private final class CalendarHarness {
 @Test func aSecondInboxsCalendarIsItsOwnAndAFailureLeavesGmailAlone() async throws {
     let otherEmail = "sam@example.org"
     func secondInbox(_ h: CalendarHarness) throws -> (Account, StoredToken) {
-        let id = try h.store.addAccount(email: otherEmail, displayName: nil, scopes: [GmailScope.readonly])
-        let token = StoredToken(refreshToken: "synthetic-refresh-mail-2", grantedScopes: [GmailScope.readonly],
+        let id = try h.store.addAccount(email: otherEmail, displayName: nil, scopes: [GmailScope.modify])
+        let token = StoredToken(refreshToken: "synthetic-refresh-mail-2", grantedScopes: [GmailScope.modify],
                                 clientID: SyntheticClient.clientID)
         try h.mailTokens.save(token, account: otherEmail)
         return (Account(id: id, email: otherEmail, displayName: nil, alias: nil, health: .active), token)
     }
 
     do {
-        let h = try CalendarHarness(grants: readScopes + [GmailScope.readonly])
+        let h = try CalendarHarness(grants: writeScopes + [GmailScope.modify])
         let (other, otherMail) = try secondInbox(h)
         let session = try h.session()
         let connections = try #require(session.environment.calendarConnections)
@@ -364,11 +369,11 @@ private final class CalendarHarness {
         let connection = try #require(session.environment.calendarConnections?.calendarConnection(for: other))
         try await connection.connect(client: nil)
         let stored = try #require(try h.calendarTokens.load(account: otherEmail))
-        #expect(stored.grantedScopes == readScopes && stored.clientID == SyntheticClient.clientID)
+        #expect(stored.grantedScopes == writeScopes && stored.clientID == SyntheticClient.clientID)
         #expect(try h.calendarTokens.load(account: h.email) == nil, "the window's inbox is not connected by it")
         #expect(try h.mailTokens.load(account: otherEmail) == otherMail && h.mailTokens.load(account: h.email) == h.mailToken)
         let consent = try #require(h.browser.urls.last)
-        #expect(query(consent, "scope") == readScopes.joined(separator: " "))
+        #expect(query(consent, "scope") == writeScopes.joined(separator: " "))
         #expect(query(consent, "include_granted_scopes") == nil && query(consent, "login_hint") == otherEmail)
         #expect(h.http.requests.map { $0.url.path() } == ["/token"], "the token endpoint only")
         var states = connection.connectionStates().makeAsyncIterator()
@@ -380,7 +385,7 @@ private final class CalendarHarness {
 }
 
 @MainActor
-@Test func theProviderMovesOnlyOwnEventsAndOnlyInWriteMode() async throws {
+@Test func theProviderMovesOnlyOwnEventsAndOnlyWithAWriteGrant() async throws {
     let path = "/calendar/v3/calendars/robin@example.com/events/ev1"
     let day = Date(timeIntervalSince1970: 1_791_000_000)
     let mine = CalendarEvent(id: "ev1", title: "Standup", start: day, end: day.addingTimeInterval(1_800), timeZone: "UTC",
@@ -389,21 +394,21 @@ private final class CalendarHarness {
 
     do {
         let h = try CalendarHarness()
-        try h.storeCalendarToken(writeScopes)
+        try h.storeCalendarToken(readScopes)
         let provider = try #require(try h.session().environment.calendar)
         await #expect(throws: CalendarError.self) {
             _ = try await provider.moveEvent(mine, to: newStart, end: newStart.addingTimeInterval(1_800), sendUpdates: .all)
         }
-        #expect(!h.http.requests.contains { $0.method == "PATCH" }, "read-only: no move left the process")
+        #expect(!h.http.requests.contains { $0.method == "PATCH" }, "a read grant: no move left the process")
     }
 
-    let h = try CalendarHarness(launch: .normal, mailScopes: [GmailScope.modify], grants: writeScopes)
+    let h = try CalendarHarness()
     try h.storeCalendarToken(writeScopes)
     h.http.on("PATCH", path) { _ in
         FakeHTTPTransport.json(200, ["id": "ev1", "summary": "Standup", "start": ["dateTime": "2026-10-14T15:00:00Z"],
                                      "end": ["dateTime": "2026-10-14T15:30:00Z"], "organizer": ["self": true]])
     }
-    let provider = try #require(try h.session(writes: true).environment.calendar)
+    let provider = try #require(try h.session().environment.calendar)
     let moved = try await provider.moveEvent(mine, to: newStart, end: newStart.addingTimeInterval(1_800), sendUpdates: .all)
     #expect(moved.id == "ev1" && moved.organizerIsMe == true)
     let patch = try #require(h.http.requests.last)
@@ -432,7 +437,7 @@ private final class CalendarHarness {
 }
 
 @MainActor
-@Test func theProviderAnswersInvitationsOnlyInWriteModeAndMapsTheAnswer() async throws {
+@Test func theProviderAnswersInvitationsOnlyWithAWriteGrantAndMapsTheAnswer() async throws {
     let path = "/calendar/v3/calendars/robin@example.com/events/ev7"
     let day = Date(timeIntervalSince1970: 1_791_000_000)
     let invite = CalendarEvent(id: "ev7", title: "Review", start: day, end: day.addingTimeInterval(1_800), timeZone: "UTC",
@@ -451,24 +456,24 @@ private final class CalendarHarness {
 
     do {
         let h = try CalendarHarness()
-        try h.storeCalendarToken(writeScopes)
+        try h.storeCalendarToken(readScopes)
         let provider = try #require(try h.session().environment.calendar)
         #expect(provider.abilities == [.respond, .remove, .editFull, .removeMeet],
                 "answers, removing an event the user organizes, the full edit form and removing a Meet link")
         await #expect(throws: CalendarError.self) {
             _ = try await provider.respond(to: invite, with: .accepted, sendUpdates: .all)
         }
-        #expect(!h.http.requests.contains { $0.method == "PATCH" }, "read-only: no answer left the process")
+        #expect(!h.http.requests.contains { $0.method == "PATCH" }, "a read grant: no answer left the process")
     }
 
-    let h = try CalendarHarness(launch: .normal, mailScopes: [GmailScope.modify], grants: writeScopes)
+    let h = try CalendarHarness()
     try h.storeCalendarToken(writeScopes)
     h.http.on("GET", path) { _ in
         FakeHTTPTransport.json(200, ["id": "ev7", "summary": "Review", "start": ["dateTime": "2026-10-14T15:00:00Z"],
                                      "end": ["dateTime": "2026-10-14T15:30:00Z"], "attendees": invited()])
     }
     h.http.on("PATCH", path) { _ in FakeHTTPTransport.json(200, answered()) }
-    let provider = try #require(try h.session(writes: true).environment.calendar)
+    let provider = try #require(try h.session().environment.calendar)
     let result = try await provider.respond(to: invite, with: .accepted, sendUpdates: .all)
     #expect(result.myResponse == .accepted && result.organizerIsMe == false)
     let patch = try #require(h.http.requests.last)
@@ -500,20 +505,20 @@ private final class CalendarHarness {
 
     do {
         let h = try CalendarHarness()
-        try h.storeCalendarToken(writeScopes)
+        try h.storeCalendarToken(readScopes)
         let provider = try #require(try h.session().environment.calendar)
         await #expect(throws: CalendarError.self) { try await provider.removeEvent(mine, sendUpdates: .none) }
-        #expect(h.http.requests.filter { $0.url.path() == path }.isEmpty, "read-only: nothing about the event was asked")
+        #expect(h.http.requests.filter { $0.url.path() == path }.isEmpty, "a read grant: nothing about the event was asked")
     }
 
-    let h = try CalendarHarness(launch: .normal, mailScopes: [GmailScope.modify], grants: writeScopes)
+    let h = try CalendarHarness()
     try h.storeCalendarToken(writeScopes)
     h.http.on("GET", path) { _ in
         FakeHTTPTransport.json(200, ["id": "ev5", "summary": "Planning", "start": ["dateTime": "2026-10-14T15:00:00Z"],
                                      "end": ["dateTime": "2026-10-14T15:30:00Z"], "organizer": ["email": "robin@example.com", "self": true]])
     }
     h.http.on("DELETE", path) { _ in HTTPResponse(status: 204, headers: [:], body: Data()) }
-    let provider = try #require(try h.session(writes: true).environment.calendar)
+    let provider = try #require(try h.session().environment.calendar)
     try await provider.removeEvent(mine, sendUpdates: .none)
     let methods = h.http.requests.filter { $0.url.path() == path }.map(\.method)
     #expect(methods == ["GET", "DELETE"], "the guard read the event, then it was deleted")
@@ -530,14 +535,14 @@ private final class CalendarHarness {
     await #expect(throws: CalendarError.self) { try await provider.removeEvent(repeating, sendUpdates: .none) }
     #expect(h.http.requests.count == before)
 
-    let other = try CalendarHarness(launch: .normal, mailScopes: [GmailScope.modify], grants: writeScopes)
+    let other = try CalendarHarness()
     try other.storeCalendarToken(writeScopes)
     other.http.on("GET", path) { _ in
         FakeHTTPTransport.json(200, ["id": "ev5", "organizer": ["email": "pat@example.org"],
                                      "start": ["dateTime": "2026-10-14T15:00:00Z"], "end": ["dateTime": "2026-10-14T15:30:00Z"]])
     }
     other.http.on("DELETE", path) { _ in HTTPResponse(status: 204, headers: [:], body: Data()) }
-    let strict = try #require(try other.session(writes: true).environment.calendar)
+    let strict = try #require(try other.session().environment.calendar)
     await #expect(throws: CalendarError.self) { try await strict.removeEvent(mine, sendUpdates: .none) }
     #expect(!other.http.requests.contains { $0.method == "DELETE" })
 }
@@ -567,15 +572,15 @@ private final class CalendarHarness {
 
     do {
         let h = try CalendarHarness()
-        try h.storeCalendarToken(writeScopes)
+        try h.storeCalendarToken(readScopes)
         let provider = try #require(try h.session().environment.calendar)
         await #expect(throws: CalendarError.self) {
             _ = try await provider.patchEvent(instance, with: retitle, scope: .thisEvent, sendUpdates: .none)
         }
-        #expect(!h.http.requests.contains { $0.url.path().hasPrefix(events) }, "read-only: nothing about the event was sent")
+        #expect(!h.http.requests.contains { $0.url.path().hasPrefix(events) }, "a read grant: nothing about the event was sent")
     }
 
-    let h = try CalendarHarness(launch: .normal, mailScopes: [GmailScope.modify], grants: writeScopes)
+    let h = try CalendarHarness()
     try h.storeCalendarToken(writeScopes)
     let patchedInstance = FakeHTTPTransport.json(200, wire("inst1", day))
     let series = FakeHTTPTransport.json(200, wire("series1", first, rules: ["RRULE:FREQ=WEEKLY;COUNT=10"]))
@@ -585,7 +590,7 @@ private final class CalendarHarness {
     h.http.on("GET", events + "/series1") { _ in series }
     h.http.on("PATCH", events + "/series1") { _ in patchedSeries }
     h.http.on("POST", events) { _ in made }
-    let provider = try #require(try h.session(writes: true).environment.calendar)
+    let provider = try #require(try h.session().environment.calendar)
     func sent(after count: Int) -> [HTTPRequest] { Array(h.http.requests.dropFirst(count)).filter { $0.url.path().hasPrefix(events) } }
 
     var before = h.http.requests.count

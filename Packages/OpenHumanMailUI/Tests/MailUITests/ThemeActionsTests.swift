@@ -49,11 +49,9 @@ struct ThemeActionsTests {
         #expect(ThemeActionHandler.action(for: store.preferences.mode) == .themeDark)
     }
 
-    @Test(arguments: [SafeModeInfo.readOnly, SafeModeInfo.normal])
-    func theyWorkInReadOnlySafeMode(safeMode: SafeModeInfo) {
+    @Test func theyWorkWhenMailCantBeChanged() {
         let (registry, store, _) = rig()
         var context = ActionContext()
-        context.safeMode = safeMode
         context.canWrite = false
         for id in [ActionID.themeLight, .themeDark, .themeSystem, .themeAccent("blue")] {
             #expect(registry.availability(id, host: nil, context: context) == .enabled, "\(id.rawValue)")

@@ -49,7 +49,6 @@ public final class ReaderModel {
     public private(set) var colorOverrides: [String: String] = [:]
     public private(set) var notice: String?
     public internal(set) var quoteSelection: QuoteSelection?
-    public let safeMode: SafeModeInfo
     public private(set) var pendingMessages: [MessageKey] = []
     @ObservationIgnored public private(set) var hasInteracted = false
     public let myAddresses: Set<String>
@@ -87,7 +86,6 @@ public final class ReaderModel {
         self.data = data
         self.renderQueue = renderQueue
         self.settings = renderQueue.settings
-        self.safeMode = data.safeMode()
         self.myAddresses = Set(myAddresses.map { $0.lowercased() })
     }
 

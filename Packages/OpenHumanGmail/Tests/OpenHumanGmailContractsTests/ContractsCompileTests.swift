@@ -67,18 +67,9 @@ import OpenHumanMIME
         if case .failure(let error) = item.result { #expect(error == .notFound("t1")) }
     }
 
-    @Test func safeModeAndMetrics() {
-        #expect(SafeMode.normal.oauthScopes == [GmailScope.modify])
-        #expect(SafeMode.writeAllowlist.oauthScopes == [GmailScope.modify])
-        #expect(SafeMode.readOnly.oauthScopes == [GmailScope.readonly])
-        #expect(SafeMode.fromEnvironment(nil) == .readOnly)
-        #expect(SafeMode.fromEnvironment("") == .readOnly)
-        #expect(SafeMode.fromEnvironment("read-only") == .readOnly)
-        #expect(SafeMode.fromEnvironment("write-allowlist") == .writeAllowlist)
-        #expect(SafeMode.fromEnvironment("normal") == .normal)
-        #expect(SafeMode.fromEnvironment("readonly") == .readOnly)
-        #expect(SafeMode.fromEnvironment("Normal") == .readOnly)
-        #expect(TransportError.blockedBySafeMode("POST /gmail/v1/users/me/messages/send") != .other("x"))
+    @Test func scopesErrorsAndMetrics() {
+        #expect(OAuthScopes.mailRequest == [GmailScope.modify])
+        #expect(TransportError.refusedByGuard("POST /gmail/v1/users/me/messages/send") != .other("x"))
         let metric = GmailCallMetric(method: "messages.get", units: 5, status: 200, attempts: 1, durationMs: 12)
         struct Sink: GmailMetricsSink { func record(_ metric: GmailCallMetric) {} }
         Sink().record(metric)

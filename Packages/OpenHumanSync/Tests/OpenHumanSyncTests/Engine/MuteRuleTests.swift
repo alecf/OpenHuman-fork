@@ -88,11 +88,11 @@ import Testing
         await engine.stop()
     }
 
-    @Test func aReadOnlyEngineQueuesNothingAndShowsGmailsState() async throws {
-        let h = try await EngineHarness()
+    @Test func anAccountWithoutModifyQueuesNothingAndShowsGmailsState() async throws {
+        let h = try await EngineHarness(scopes: [GmailScope.readonly])
         let thread = h.threads[1]
         _ = await muteOnServer(h, thread)
-        let engine = h.engine(safeMode: .readOnly)
+        let engine = h.engine()
         await engine.start()
         try await h.waitForSyncs(engine)
         #expect(!(try h.inbox().contains(thread)))
@@ -100,7 +100,7 @@ import Testing
 
         let reply = await h.gmail.deliver(threadID: thread)
         _ = try await engine.syncNow(h.account, reason: "test")
-        #expect(try h.ops().isEmpty, "read-only never queues a change")
+        #expect(try h.ops().isEmpty, "an account without write access never queues a change")
         #expect(try h.inbox().contains(thread), "the conversation shows where Gmail has it")
         #expect((await h.gmail.labelIDs(ofMessage: reply.messageID) ?? []).contains("INBOX"))
         await engine.stop()

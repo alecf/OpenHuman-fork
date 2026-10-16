@@ -11,7 +11,6 @@ public final class CLIContext {
     public let global: GlobalOptions
     public let path: String
     public let meta: CommandMeta
-    let safeMode: SafeMode
     public let location: StoreLocation
     public var warnings: [String] = []
     var readonlyByDefault = false
@@ -20,12 +19,11 @@ public final class CLIContext {
     private var writeStore: MailStore?
     private var cachedEngine: MailEngine?
 
-    init(env: CLIEnvironment, global: GlobalOptions, path: String, meta: CommandMeta, safeMode: SafeMode) throws {
+    init(env: CLIEnvironment, global: GlobalOptions, path: String, meta: CommandMeta) throws {
         self.env = env
         self.global = global
         self.path = path
         self.meta = meta
-        self.safeMode = safeMode
         let variables = env.variables
         if let home = global.home, !home.isEmpty {
             location = StoreLocation(directory: URL(fileURLWithPath: (home as NSString).expandingTildeInPath, isDirectory: true))
@@ -74,7 +72,7 @@ public final class CLIContext {
         let store = try writableStore()
         let configuration = EngineConfiguration(role: .localClient, appVersion: env.appVersion,
                                                 gmail: GmailClientConfig(userAgent: "openhuman-cli/\(env.appVersion)"),
-                                                clock: env.clock, safeMode: safeMode)
+                                                clock: env.clock)
         let engine = MailEngine(store: store, gmailFactory: nil, tokenStore: nil, oauthClient: nil,
                                 configuration: configuration, systemEvents: nil)
         cachedEngine = engine

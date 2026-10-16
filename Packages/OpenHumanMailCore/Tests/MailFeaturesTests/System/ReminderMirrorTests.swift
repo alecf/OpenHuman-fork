@@ -39,14 +39,10 @@ struct ReminderMirrorTests {
         #expect(mirror.permission == .unknown)
     }
 
-    @Test func theSystemCopyOffersMarkDoneAndSnoozeOrNothingInReadOnlyMode() async {
+    @Test func theSystemCopyOffersMarkDoneAndSnooze() async {
         let notifier = FakeSystemNotifier(authorization: .authorized)
         await mirror(notifier).sync([item(1, due: fixedNow.addingTimeInterval(600))])
         #expect(notifier.pending.first?.category == .reminder)
-        let readOnly = FakeSystemNotifier(authorization: .authorized)
-        let store = FakeMailStore(corpus: .make(threadCount: 3, now: fixedNow), options: .init(remoteAck: .immediate, safeMode: .readOnly))
-        await mirror(readOnly, store: store).sync([item(1, due: fixedNow.addingTimeInterval(600))])
-        #expect(readOnly.pending.first?.category == .readOnly)
     }
 
     @Test func noPermissionPromptWithoutAReminder() async {

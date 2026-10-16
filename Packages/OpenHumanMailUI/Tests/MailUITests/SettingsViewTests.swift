@@ -29,21 +29,17 @@ private func host<V: View>(_ view: V, size: NSSize = NSSize(width: 820, height: 
 }
 
 @MainActor
-private func environment(safeMode: SafeModeInfo = .normal) -> AppEnvironment {
-    AppEnvironment.fake(corpus: .rich(threadCount: 20, now: fixedNow), options: .init(remoteAck: .immediate, safeMode: safeMode),
+private func environment() -> AppEnvironment {
+    AppEnvironment.fake(corpus: .rich(threadCount: 20, now: fixedNow), options: .init(remoteAck: .immediate),
                         featureFlags: FeatureFlags())
 }
 
 @MainActor
-@Test func theShellLaysOutInBothThemesAndShowsTheReadOnlyBanner() throws {
+@Test func theShellLaysOutInBothThemes() throws {
     let window = NSSize(width: SettingsMetrics.windowWidth, height: SettingsMetrics.windowHeight)
-    for mode in [SafeModeInfo.normal, .readOnly] {
-        let env = environment(safeMode: mode)
-        let hosting = try host(SettingsShellView(environment: env, hosting: SettingsHosting(), defaults: .standard),
-                               size: window, name: "settings-shell-\(mode)")
-        #expect(hosting.frame.width == SettingsMetrics.windowWidth)
-        #expect((SettingsAvailability(environment: env).banner != nil) == (mode == .readOnly))
-    }
+    let hosting = try host(SettingsShellView(environment: environment(), hosting: SettingsHosting(), defaults: .standard),
+                           size: window, name: "settings-shell-light")
+    #expect(hosting.frame.width == SettingsMetrics.windowWidth)
     _ = try host(SettingsShellView(environment: environment(), hosting: SettingsHosting(), defaults: .standard),
                  size: window, name: "settings-shell-dark", theme: .dark)
     let standalone = SettingsHosting(appearance: { AnyView(Text(verbatim: "Appearance page")) },
@@ -74,10 +70,19 @@ private func environment(safeMode: SafeModeInfo = .normal) -> AppEnvironment {
     _ = try host(AdvancedSettingsPage(environment: env, extras: extras), name: "settings-advanced")
     _ = try host(PlatformFeaturesPage(environment: env), name: "settings-platform")
     _ = try host(ImportanceSettingsPage(environment: env), name: "settings-importance")
-    _ = try host(ImportanceSettingsPage(environment: environment(safeMode: .readOnly)), name: "settings-importance-read-only")
     _ = try host(AdvancedSettingsPage(environment: env, extras: extras, showsDeveloperItems: false), name: "settings-advanced-public")
     _ = try host(PlatformFeaturesPage(environment: env, showsDeveloperItems: false), name: "settings-platform-public")
     _ = try host(CalendarSettingsPage(environment: env), name: "settings-calendar")
+}
+
+@MainActor
+@Test func confirmBeforeSendingIsOfferedOnALiveAccountOnly() throws {
+    let store = FakeMailStore(corpus: .rich(threadCount: 20, now: fixedNow), options: .init(remoteAck: .immediate))
+    let live = AppEnvironment(data: store, commands: store, accounts: store, settings: store, isFake: true,
+                              featureFlags: FeatureFlags(), isLiveAccount: true)
+    #expect(GeneralSettingsModel(environment: live).showsConfirmBeforeSending)
+    #expect(!GeneralSettingsModel(environment: environment()).showsConfirmBeforeSending)
+    _ = try host(GeneralSettingsPage(environment: live, extras: { AnyView(EmptyView()) }), name: "settings-general-live")
 }
 
 @MainActor
@@ -106,7 +111,7 @@ private func environment(safeMode: SafeModeInfo = .normal) -> AppEnvironment {
     let progress = InMemoryOnboardingProgress()
     let model = OnboardingModel(store: progress, ports: OnboardingModel.Ports(
         data: env.data, accounts: env.accounts, ai: FakeAIOnboarding(), notifier: FakeSystemNotifier(),
-        loginItem: FakeLoginItem(), safeMode: .readOnly))
+        loginItem: FakeLoginItem()))
     var closed = 0
     for step in OnboardingStep.allCases {
         await model.go(to: step)

@@ -35,7 +35,7 @@ private final class TwoAccountGoogle: Sendable {
             let client = Self.form(request.body)["client_id"] ?? ""
             return FakeHTTPTransport.json(200, ["access_token": "access-\(client.prefix(12))",
                                                 "refresh_token": "refresh-\(client.prefix(12))", "expires_in": 3600,
-                                                "scope": GmailScope.readonly, "token_type": "Bearer"])
+                                                "scope": GmailScope.modify, "token_type": "Bearer"])
         }
         http.on("GET", "/gmail/v1/users/me/profile") { _ in
             FakeHTTPTransport.json(200, ["emailAddress": next.value.withLock { $0 }, "messagesTotal": 0,
@@ -76,7 +76,7 @@ private func consentClientID(_ url: URL?) -> String? {
     let browser = RecordingBrowser()
     let clock = TestClock()
     let manager = LiveAccountManager(
-        safeMode: .readOnly, store: store,
+        store: store,
         dependencies: LiveAccountManager.Dependencies(
             environment: [:], storeDirectory: home, clientStore: clients, tokenStore: tokens, transport: google.http,
             makeReceiver: { AnsweringReceiver(browser: browser) }, browser: browser, clock: clock))
@@ -145,12 +145,12 @@ private func consentClientID(_ url: URL?) -> String? {
     let home = FileManager.default.temporaryDirectory.appendingPathComponent("oh-multiclient-ui-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: home) }
     let manager = LiveAccountManager(
-        safeMode: .readOnly, store: try MailStore.openInMemoryForTesting(),
+        store: try MailStore.openInMemoryForTesting(),
         dependencies: LiveAccountManager.Dependencies(
             environment: [:], storeDirectory: home, tokenStore: InMemoryTokenStore(),
             transport: FakeHTTPTransport(), makeReceiver: { AnsweringReceiver(browser: RecordingBrowser()) },
             browser: RecordingBrowser(), clock: TestClock()))
-    let model = SignInModel(accounts: manager, safeMode: .readOnly)
+    let model = SignInModel(accounts: manager)
     let runner = Task { await model.run() }
     defer { runner.cancel() }
     await eventually("needs a client") { model.phase == .needsClient }
@@ -176,7 +176,7 @@ private func consentClientID(_ url: URL?) -> String? {
                                                 appVersion: "0.0.0-test"))
     let clients = InMemoryOAuthClientStore()
     let manager = LiveAccountManager(
-        safeMode: .readOnly, store: store,
+        store: store,
         dependencies: LiveAccountManager.Dependencies(
             environment: [:], storeDirectory: home, clientStore: clients, tokenStore: InMemoryTokenStore(),
             transport: FakeHTTPTransport(), makeReceiver: { AnsweringReceiver(browser: RecordingBrowser()) },
@@ -205,7 +205,7 @@ private func consentClientID(_ url: URL?) -> String? {
     clients.failLoads(true)
     func manager(_ directory: URL) throws -> LiveAccountManager {
         LiveAccountManager(
-            safeMode: .readOnly, store: try MailStore.openInMemoryForTesting(),
+            store: try MailStore.openInMemoryForTesting(),
             dependencies: LiveAccountManager.Dependencies(
                 environment: [:], storeDirectory: directory, clientStore: clients, tokenStore: InMemoryTokenStore(),
                 transport: FakeHTTPTransport(), makeReceiver: { AnsweringReceiver(browser: RecordingBrowser()) },
@@ -217,7 +217,7 @@ private func consentClientID(_ url: URL?) -> String? {
     #expect(try upgraded.loadClient().clientID == Clients.workID)
 
     let fresh = try manager(home.appendingPathComponent("fresh"))
-    let model = SignInModel(accounts: fresh, safeMode: .readOnly)
+    let model = SignInModel(accounts: fresh)
     let runner = Task { await model.run() }
     defer { runner.cancel() }
     await eventually("needs a client") { model.phase == .needsClient }
@@ -240,7 +240,7 @@ private func consentClientID(_ url: URL?) -> String? {
     let clients = InMemoryOAuthClientStore(syncAvailable: false)
     let tokens = InMemoryTokenStore()
     let manager = LiveAccountManager(
-        safeMode: .readOnly, store: store,
+        store: store,
         dependencies: LiveAccountManager.Dependencies(
             environment: [:], storeDirectory: home, clientStore: clients, tokenStore: tokens,
             transport: FakeHTTPTransport(), makeReceiver: { AnsweringReceiver(browser: RecordingBrowser()) },
@@ -250,8 +250,8 @@ private func consentClientID(_ url: URL?) -> String? {
     #expect(await manager.oauthClientImportNote() == LiveAccountManager.clientNotSyncedNote)
     #expect(manager.currentClientStatus() == .configured(source: .file))
 
-    _ = try store.addAccount(email: "robin@example.com", displayName: nil, scopes: [GmailScope.readonly])
-    try tokens.save(StoredToken(refreshToken: "synthetic-refresh-report", grantedScopes: [GmailScope.readonly],
+    _ = try store.addAccount(email: "robin@example.com", displayName: nil, scopes: [GmailScope.modify])
+    try tokens.save(StoredToken(refreshToken: "synthetic-refresh-report", grantedScopes: [GmailScope.modify],
                                 clientID: Clients.workID), account: "robin@example.com")
     let report = manager.keychainDiagnostics()
     let key = OAuthClientConfig.registryKey(clientID: Clients.workID)

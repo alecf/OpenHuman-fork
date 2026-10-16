@@ -13,7 +13,6 @@ public final class OnboardingModel {
     public private(set) var syncLine: String?
     public private(set) var firstMailArrived = false
     public private(set) var isFinished = false
-    public let safeMode: SafeModeInfo
 
     public private(set) var inboxes: [Account] = []
     public private(set) var calendars: [AccountID: InboxCalendar] = [:]
@@ -45,7 +44,6 @@ public final class OnboardingModel {
         self.data = ports.data
         self.calendarPorts = ports.calendars
         self.settings = ports.settings
-        self.safeMode = ports.safeMode
         var resumed = store.load()
         if resumed.completed {
             resumed.step = .welcome
@@ -76,13 +74,12 @@ public final class OnboardingModel {
         public var ai: any AIOnboardingPort
         public var notifier: any SystemNotifying
         public var loginItem: any LoginItemControlling
-        public var safeMode: SafeModeInfo
         public var signedIn: @MainActor () -> Bool
         public var calendars: (any CalendarConnectionsProviding)?
         public var settings: (any SettingsPort)?
 
         public init(data: any MailDataSource, accounts: (any AccountManaging)?, ai: any AIOnboardingPort,
-                    notifier: any SystemNotifying, loginItem: any LoginItemControlling, safeMode: SafeModeInfo,
+                    notifier: any SystemNotifying, loginItem: any LoginItemControlling,
                     signedIn: @escaping @MainActor () -> Bool = { true },
                     calendars: (any CalendarConnectionsProviding)? = nil, settings: (any SettingsPort)? = nil) {
             self.data = data
@@ -90,7 +87,6 @@ public final class OnboardingModel {
             self.ai = ai
             self.notifier = notifier
             self.loginItem = loginItem
-            self.safeMode = safeMode
             self.signedIn = signedIn
             self.calendars = calendars
             self.settings = settings
@@ -312,7 +308,7 @@ public final class OnboardingModel {
 
     private func startEmailSignIn() {
         guard emailSignIn == nil, let accounts else { return }
-        let signIn = SignInModel(accounts: accounts, safeMode: safeMode)
+        let signIn = SignInModel(accounts: accounts)
         signIn.onSignedIn = { [weak self] id in
             guard let self else { return }
             Task { await self.emailConnected(id) }

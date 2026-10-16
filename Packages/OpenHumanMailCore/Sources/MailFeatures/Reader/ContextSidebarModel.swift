@@ -113,8 +113,6 @@ public final class ContextSidebarModel {
             try await environment.vips.accept(suggestion)
             vipSuggestion = nil
             vipMessage = "\(suggestion.displayName) is a VIP. Their mail is always important."
-        } catch MailPortError.blockedBySafeMode {
-            vipMessage = MailPortError.readOnlyText
         } catch {
             vipMessage = (error as? MailPortError)?.description ?? "That change couldn't be saved."
         }

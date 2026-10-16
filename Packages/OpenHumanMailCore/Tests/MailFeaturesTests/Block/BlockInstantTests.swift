@@ -39,9 +39,8 @@ final class BlockFixture {
     let account = AccountID(1)
     private(set) var posted: [String] = []
 
-    init(corpus: FakeCorpus = .make(threadCount: 6, now: fixedNow), hold: Checkpoint? = nil,
-         safeMode: SafeModeInfo = .normal) {
-        store = FakeMailStore(corpus: corpus, options: .init(remoteAck: .immediate, safeMode: safeMode, now: { fixedNow }))
+    init(corpus: FakeCorpus = .make(threadCount: 6, now: fixedNow), hold: Checkpoint? = nil) {
+        store = FakeMailStore(corpus: corpus, options: .init(remoteAck: .immediate, now: { fixedNow }))
         settings = HeldRuleSettings(store, hold: hold)
         env = AppEnvironment(data: store, commands: store, accounts: store, settings: settings, isFake: true,
                              featureFlags: FeatureFlags())
@@ -180,13 +179,17 @@ final class BlockFixture {
         #expect(await f.rules().map(\.id) == ["sender:\(counterpart)"])
     }
 
-    @Test func readOnlyStillRefusesAndChangesNothing() async throws {
-        let f = BlockFixture(safeMode: .readOnly)
+    @Test func aMoveTheWritePortRefusesSavesNoRuleAndBringsTheThreadBack() async throws {
+        let f = BlockFixture()
         let news = try await f.deliver(from: "news@acme.example")
-        let state = try await f.startShowing(news)
+        f.router.start()
+        await untilObserved { f.listed(news) }
+        f.store.failNextCommand(.unavailable("Gmail can't be reached"))
         #expect(await f.block(news, sender: "news@acme.example"))
-        #expect(f.listed(news) && state.reader?.thread == news)
-        #expect(await f.rules().isEmpty)
-        #expect(f.posted.contains(StatusModel.blockedText))
+        #expect(await f.rules().isEmpty, "the rule is taken back with the failed move")
+        await untilObserved { f.listed(news) }
+        #expect(f.posted.contains("Couldn't block news@acme.example"))
+        #expect(try await f.inStoreInbox(news), "nothing moved")
+        #expect(f.env.undo?.stack.isEmpty == true)
     }
 }

@@ -98,10 +98,6 @@ extension FakeMailStore {
         mutate { $0.syncLines[account] = line }
     }
 
-    public func setSafeMode(_ mode: SafeModeInfo) {
-        mutate { $0.safeMode = mode }
-    }
-
     public func setOAuthClient(_ status: OAuthClientStatus) {
         mutate { $0.oauthClient = status }
     }

@@ -15,7 +15,7 @@ import Testing
         let inner = ScriptedTransport()
         let guarded = ReadOnlyTransport(wrapping: inner)
         let payload = expected ?? "\(request.method) \(request.url.path(percentEncoded: true))"
-        await #expect(throws: TransportError.blockedBySafeMode(payload), sourceLocation: sourceLocation) {
+        await #expect(throws: TransportError.refusedByGuard(payload), sourceLocation: sourceLocation) {
             _ = try await guarded.send(request)
         }
         #expect(inner.requests.isEmpty, "a refused request reached the wrapped transport", sourceLocation: sourceLocation)

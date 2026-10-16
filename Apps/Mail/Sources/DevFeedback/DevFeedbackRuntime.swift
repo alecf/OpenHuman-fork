@@ -124,14 +124,6 @@ final class AppDevFeedbackHost: DevFeedbackHost {
         }
     }
 
-    var safeMode: SafeModeInfo? {
-        switch app()?.screen {
-        case .mail(let environment): environment.status.safeMode
-        case .signIn(let model): model.safeMode
-        default: nil
-        }
-    }
-
     var theme: DevFeedbackSnapshot.ThemeInfo? { themeProvider() }
 
     var extraDenylist: [String] {

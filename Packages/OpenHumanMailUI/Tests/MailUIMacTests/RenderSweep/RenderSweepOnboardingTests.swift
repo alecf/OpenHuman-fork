@@ -33,7 +33,7 @@ extension RenderSweepTests {
         ]
         for (screen, status, notice, waits) in cases {
             let accounts = OnboardingSweepAccounts(status: status, waits: waits)
-            let model = SignInModel(accounts: accounts, safeMode: .normal, notice: notice)
+            let model = SignInModel(accounts: accounts, notice: notice)
             await model.run()
             if waits {
                 model.signIn()
@@ -72,7 +72,7 @@ extension RenderSweepTests {
         for step in OnboardingStep.allCases {
             let model = OnboardingModel(store: InMemoryOnboardingProgress(), ports: OnboardingModel.Ports(
                 data: data, accounts: data, ai: FakeAIOnboarding(), notifier: FakeSystemNotifier(),
-                loginItem: FakeLoginItem(), safeMode: .normal, calendars: FakeCalendarConnections(), settings: data))
+                loginItem: FakeLoginItem(), calendars: FakeCalendarConnections(), settings: data))
             await model.go(to: step)
             if step == .ready { try await until(timeout: .seconds(60)) { model.syncLine != nil } }
             if step == .connectEmail { try await until(timeout: .seconds(60)) { model.emailSignIn?.canSignIn == true } }
@@ -98,7 +98,7 @@ extension RenderSweepTests {
         func model(_ accounts: any AccountManaging = data) -> OnboardingModel {
             OnboardingModel(store: InMemoryOnboardingProgress(), ports: OnboardingModel.Ports(
                 data: data, accounts: accounts, ai: FakeAIOnboarding(), notifier: FakeSystemNotifier(),
-                loginItem: FakeLoginItem(), safeMode: .normal, calendars: calendars, settings: data))
+                loginItem: FakeLoginItem(), calendars: calendars, settings: data))
         }
         func shoot(_ model: OnboardingModel, _ screen: String) async throws {
             let window = sweepStandaloneWindow(WelcomeGuideView(model: model, onClose: {}), store: themes,

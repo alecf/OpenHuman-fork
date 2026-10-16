@@ -3,13 +3,13 @@
   "area": "Calendar",
   "title": "Real account: edit your own event",
   "steps": [
-    "On a real connected calendar in write mode create a test event with one guest you control",
+    "On a real connected calendar create a test event with one guest you control",
     "Change its title and time, choose Send to guests, wait for the Undo window to end",
     "Check Google Calendar and the guest's inbox; then delete the event from Mail",
     "Open an event someone else organizes and confirm its fields are read-only"
   ],
   "deepLink": null,
   "expected": "The title and time change in Google Calendar, the guest gets one update email, and Delete asks first. Someone else's event cannot be edited and offers Decline.",
-  "requires": "real-write",
+  "requires": "real",
   "addedIn": "2026-10-13"
 }

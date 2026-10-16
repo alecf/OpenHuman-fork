@@ -105,7 +105,7 @@ import Testing
         #expect(!token.changesNothing)
     }
 
-    @Test func readOnlySkipsTheGmailHalfButStillHandlesTheBacklog() async throws {
+    @Test func withoutAWritePortTheGmailHalfIsSkippedButTheBacklogIsHandled() async throws {
         let f = Fixture()
         let a = f.threads[0], b = f.threads[1], own = f.threads[2]
         let preview = SuperhumanReminderImportPreview.make([
@@ -153,7 +153,7 @@ import Testing
         let account = f.account
         let model = SuperhumanRemindersSettingsModel(
             settings: f.store, commands: f.store, undo: nil,
-            availability: SettingsAvailability(safeMode: .normal, hasCommands: true, hasSettings: true, hasAccounts: true),
+            availability: SettingsAvailability(hasCommands: true, hasSettings: true, hasAccounts: true),
             accounts: { [account] }, scan: { _ in [lone] })
         await model.refreshUnmatched()
         #expect(model.unmatched.map(\.id) == [lone.id])

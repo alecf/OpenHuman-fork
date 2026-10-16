@@ -128,7 +128,7 @@ extension FakeMailStore {
     public func send(_ key: DraftKey, undoWindow: Duration) async throws -> SendToken {
         let now = self.now
         let held = try mutate { s -> HeldSend in
-            try checkWritable(&s, send: true)
+            try checkWritable(&s)
             guard var draft = s.drafts[key] else { throw MailPortError.notFound("draft") }
             guard draft.status != .sending else { throw MailPortError.conflict("already sending") }
             guard !draft.fields.to.isEmpty || !draft.fields.cc.isEmpty || !draft.fields.bcc.isEmpty else {
@@ -316,11 +316,7 @@ extension FakeMailStore {
 
     public func unsubscribe(_ key: MessageKey) async throws {
         try mutate { s in
-            if let failure = s.failNextCommand {
-                s.failNextCommand = nil
-                throw failure
-            }
-            guard s.safeMode == .normal else { throw MailPortError.blockedBySafeMode }
+            try checkWritable(&s)
             guard let threadKey = s.messageIndex[key],
                   let message = s.threads[threadKey]?.messages.first(where: { $0.summary.id == key }) else {
                 throw MailPortError.notFound("message")

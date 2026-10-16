@@ -11,7 +11,7 @@ public struct ConversationDebugInput: Sendable {
     public var app: DiagnosticsAppInfo
     public var now: Date
     public var accountIndex: Int
-    public var writeMode: String
+    public var isLiveAccount: Bool
     public var sync: DiagnosticsSnapshot.AccountEntry?
     public var detail: ConversationDetail
     public var row: ThreadRow?
@@ -23,7 +23,7 @@ public struct ConversationDebugInput: Sendable {
     public var logLines: [String]
     public var options: ConversationDebugOptions
 
-    public init(app: DiagnosticsAppInfo, now: Date, accountIndex: Int, writeMode: String,
+    public init(app: DiagnosticsAppInfo, now: Date, accountIndex: Int, isLiveAccount: Bool,
                 sync: DiagnosticsSnapshot.AccountEntry? = nil, detail: ConversationDetail, row: ThreadRow? = nil,
                 labels: [LabelInfo] = [], splits: [SplitInfo] = [], importance: ImportanceExplanation? = nil,
                 ownAddresses: Set<String> = [], store: ConversationDebugStoreFacts? = nil, logLines: [String] = [],
@@ -31,7 +31,7 @@ public struct ConversationDebugInput: Sendable {
         self.app = app
         self.now = now
         self.accountIndex = accountIndex
-        self.writeMode = writeMode
+        self.isLiveAccount = isLiveAccount
         self.sync = sync
         self.detail = detail
         self.row = row
@@ -66,7 +66,7 @@ public enum ConversationDebugReport {
 
     struct Account: Encodable {
         var index: Int
-        var writeMode: String
+        var liveAccount: Bool
         var syncState: String?
         var lastSyncAgeSeconds: Int?
         var consecutiveFailures: Int?
@@ -215,7 +215,7 @@ public enum ConversationDebugReport {
             generatedAt: iso.string(from: input.now),
             app: App(version: safeToken(input.app.version), build: safeToken(input.app.build), commit: safeToken(input.app.gitCommit),
                      macOS: safeText(input.app.os), dataMode: safeToken(input.app.dataMode)),
-            account: Account(index: input.accountIndex, writeMode: safeText(input.writeMode),
+            account: Account(index: input.accountIndex, liveAccount: input.isLiveAccount,
                              syncState: sync.map { safeToken($0.connectivity) },
                              lastSyncAgeSeconds: sync?.lastSyncAt.map { max(0, Int(input.now.timeIntervalSince($0))) },
                              consecutiveFailures: sync?.consecutiveFailures, threads: sync?.threadCount,

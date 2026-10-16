@@ -144,12 +144,11 @@ struct AppShellTests {
         NSApp.windows.first { $0.identifier?.rawValue.hasPrefix(DevFeedbackRuntime.mainWindowID) == true && $0.isVisible }
     }
 
-    @Test(.timeLimit(.minutes(2))) func theWriteKeyIsRefusedInReadOnlyThroughTheWindow() async throws {
+    @Test(.timeLimit(.minutes(2))) func theArchiveKeyTakesTheRowOutThroughTheWindow() async throws {
         let corpus = FakeCorpus.make(threadCount: 20)
         let gmail = FakeGmail(accountEmail: corpus.account.email)
         await FakeGmailLaunch.seed(gmail, corpus: corpus)
-        let running = try FakeGmailLaunch.makeSession(safeMode: .readOnly, store: try MailStore.openInMemoryForTesting(),
-                                                      gmail: gmail)
+        let running = try FakeGmailLaunch.makeSession(store: try MailStore.openInMemoryForTesting(), gmail: gmail)
         let environment = running.session.environment
         await running.session.start()
         defer { Task { await running.session.stop() } }
@@ -168,20 +167,13 @@ struct AppShellTests {
         router.go(to: .system(.inbox))
         await eventually("rows") { router.list?.rows.count == 20 }
         #expect(router.location == .system(.inbox))
-        let requests = running.wire.requests.count
         func key(_ chars: String, _ code: UInt16, _ modifiers: NSEvent.ModifierFlags = []) throws -> NSEvent {
             try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0,
                                           windowNumber: window.windowNumber, context: nil, characters: chars,
                                           charactersIgnoringModifiers: chars, isARepeat: false, keyCode: code))
         }
+        #expect(router.isEnabled(.markDone))
         #expect(content.keyRouter.route(try key("e", 14)) == nil)
-        #expect(content.keyRouter.route(try key("#", 20, .shift)) == nil)
-        #expect(environment.status.blockedNotice == StatusModel.blockedText)
-        #expect(environment.notices.toasts.map(\.message) == ["Read-only: Mail can't change your mail"])
-        #expect(router.list?.rows.count == 20)
-        #expect(!router.isEnabled(.markDone))
-        #expect(running.wire.requests.dropFirst(requests).allSatisfy {
-            $0.method == "GET" || $0.url.path(percentEncoded: false) == "/batch/gmail/v1"
-        })
+        #expect(router.list?.rows.count == 19, "the conversation leaves the inbox at once")
     }
 }

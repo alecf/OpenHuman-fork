@@ -121,8 +121,8 @@ final class RecordingFormatter: ComposeFormatEditing {
         #expect(f.recorder.calls.isEmpty, "formatting saves nothing by itself")
     }
 
-    @Test func theFormattingBarWorksInReadOnlySafeMode() async throws {
-        let f = ComposeFixture(safeMode: .readOnly)
+    @Test func theFormattingBarIsALocalSettingThatWritesNoMail() async throws {
+        let f = ComposeFixture()
         await f.loaded()
         await f.compose.settle()
         let session = try #require(f.compose.openNew(placement: .modal))

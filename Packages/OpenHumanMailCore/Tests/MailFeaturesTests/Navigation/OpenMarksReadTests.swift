@@ -59,47 +59,6 @@ import Testing
         await eventually { f.router.list?.row(for: key)?.isUnread == false }
     }
 
-    @Test func readOnlyReadsItOnThisMacOnly() async throws {
-        let f = ActionFixture(options: .init(remoteAck: .manual, safeMode: .readOnly))
-        await f.loaded(10)
-        let row = try #require(f.rows.first { $0.isUnread })
-        let key = row.id
-        f.router.open(key)
-        await eventually { f.router.list?.row(for: key)?.isUnread == false }
-        let reader = try #require(f.router.reader)
-        await eventually { reader.state == .loaded && !reader.messages.isEmpty
-            && reader.messages.allSatisfy { !$0.summary.isUnread } }
-        #expect(f.store.pendingOperationCount == 0, "nothing queued")
-        #expect(try await firstDetail(f.store, key)?.messages.contains(where: \.isUnread) == true, "the source unchanged")
-        #expect(f.env.notices.toasts.isEmpty, "no refusal toast for a key the user did not press")
-        #expect(f.env.undo?.stack.isEmpty == true)
-
-        f.router.closeReader()
-        f.router.go(to: .system(.starred))
-        await eventually { f.router.list?.location == .system(.starred) && f.router.list?.state == .loaded }
-        f.router.go(to: .system(.inbox))
-        await eventually { f.router.list?.location == .system(.inbox) && f.router.list?.row(for: key) != nil }
-        #expect(f.router.list?.row(for: key)?.isUnread == false)
-
-        f.store.deliverMessage(account: key.account, to: key, from: Self.dana, at: row.lastMessageAt + 3_600)
-        await eventually { f.router.list?.row(for: key)?.isUnread == true }
-        f.router.open(key)
-        await eventually { f.router.list?.row(for: key)?.isUnread == false }
-        #expect(f.store.pendingOperationCount == 0)
-    }
-
-    @Test func aPortRefusingForSafeModeReadsItOnThisMacOnly() async throws {
-        let f = ActionFixture(options: .init(remoteAck: .manual))
-        await f.loaded(10)
-        let key = try #require(f.rows.first { $0.isUnread }?.id)
-        f.store.failNextCommand(.blockedBySafeMode)
-        f.router.open(key)
-        await eventually { f.router.active?.localReads[key] != nil }
-        await eventually { f.router.list?.row(for: key)?.isUnread == false }
-        #expect(f.store.pendingOperationCount == 0)
-        #expect(f.env.notices.toasts.isEmpty)
-    }
-
     @Test func localReadsShowARowReadUntilNewerMailArrives() {
         let at = Date(timeIntervalSince1970: 1_791_000_000)
         let key = ThreadKey(account: AccountID(1), rowID: 7, gmailThreadID: GmailThreadID("t7"))

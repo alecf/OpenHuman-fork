@@ -15,9 +15,9 @@ struct ReaderModelBehaviorTests {
 
     private func model(_ details: [ConversationDetail], bodies: [MessageKey: MessageContent], open thread: ThreadKey,
                        settings: (any SettingsPort)? = FakeMailStore(corpus: .make(threadCount: 1, now: fixedNow)),
-                       files: [Int64: URL] = [:], safeMode: SafeModeInfo = .normal,
+                       files: [Int64: URL] = [:],
                        accessorySlot: ReaderHeaderAccessoryStore = ReaderHeaderAccessoryStore()) -> (ReaderModel, RenderQueue, ReaderTestSource) {
-        let source = ReaderTestSource(details: details, bodies: bodies, files: files, safeMode: safeMode)
+        let source = ReaderTestSource(details: details, bodies: bodies, files: files)
         let queue = RenderQueue(settings: settings)
         let model = ReaderModel(thread: thread, data: source, renderQueue: queue, accessorySlot: accessorySlot)
         model.start()
@@ -35,8 +35,8 @@ struct ReaderModelBehaviorTests {
         let (model, _, _) = model([starred], bodies: [:], open: starred.id)
         await eventually { model.state == .loaded }
         #expect(model.isStarred)
-        let on = ReaderActions.context(host: nil, thread: starred.id, lastMessage: nil, safeMode: .normal, isStarred: true)
-        let off = ReaderActions.context(host: nil, thread: starred.id, lastMessage: nil, safeMode: .normal)
+        let on = ReaderActions.context(host: nil, thread: starred.id, lastMessage: nil, isStarred: true)
+        let off = ReaderActions.context(host: nil, thread: starred.id, lastMessage: nil)
         let toggle = try #require(ActionCatalog.all.first { $0.id == .toggleStar })
         #expect(ReaderActions.availability(toggle, registry: nil, host: nil, context: on).help.hasPrefix("Unstar"))
         #expect(ReaderActions.availability(toggle, registry: nil, host: nil, context: off).help.hasPrefix("Star"))
@@ -313,17 +313,11 @@ struct ReaderModelBehaviorTests {
         #expect(accessory.activated == [last])
     }
 
-    @Test func safeModeIsTheDataSources() async throws {
+    @Test func markDoneIsAReaderActionWithItsKeyInTheHelp() async throws {
         let detail = F.conversation(17, count: 1, from: F.dana)
-        let (model, _, _) = model([detail], bodies: [:], open: detail.id, safeMode: .readOnly)
-        #expect(model.safeMode == .readOnly)
         let done = try #require(ActionCatalog.descriptor(.markDone))
-        let readOnly = ActionRules.availability(done, in: ReaderActions.context(host: nil, thread: detail.id, lastMessage: nil, safeMode: model.safeMode))
-        let availability = ReaderActions.availability(done, decided: readOnly)
-        #expect(!availability.isEnabled)
-        #expect(availability.help == DisabledReason.safeMode.description)
-        let normal = ActionRules.availability(done, in: ReaderActions.context(host: nil, thread: detail.id, lastMessage: nil, safeMode: .normal))
-        #expect(ReaderActions.availability(done, decided: normal) == .init(isEnabled: true, help: "Mark done  E"))
+        let decided = ActionRules.availability(done, in: ReaderActions.context(host: nil, thread: detail.id, lastMessage: nil))
+        #expect(ReaderActions.availability(done, decided: decided) == .init(isEnabled: true, help: "Mark done  E"))
         #expect(ReaderActions.threadActions.map(\.id).contains(.markDone))
     }
 

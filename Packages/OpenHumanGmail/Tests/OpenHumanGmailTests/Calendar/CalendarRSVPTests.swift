@@ -21,9 +21,8 @@ private let zone = TimeZone(identifier: "America/Los_Angeles")!
                     body: try! JSONSerialization.data(withJSONObject: body))
     }
 
-    private func guardFor(_ mode: SafeMode, scopes: [String]? = nil) -> CalendarGuardTransport {
-        CalendarGuardTransport(wrapping: ScriptedTransport(), calendarID: Self.me, mode: mode,
-                               grantedScopes: scopes ?? CalendarScopes.requested(for: mode))
+    private func guardFor(_ scopes: [String] = CalendarScopes.request.write) -> CalendarGuardTransport {
+        CalendarGuardTransport(wrapping: ScriptedTransport(), calendarID: Self.me, grantedScopes: scopes)
     }
 
     private func answer(_ status: String, own: [String: Any] = ["email": "robin@example.com"]) -> [String: Any] {
@@ -32,27 +31,24 @@ private let zone = TimeZone(identifier: "America/Los_Angeles")!
         return ["attendees": [Self.organizer, mine]]
     }
 
-    private func client(_ mode: SafeMode, _ http: FakeHTTPTransport) -> GoogleCalendarClient {
-        GoogleCalendarClient(calendarID: Self.me, mode: mode, grantedScopes: CalendarScopes.requested(for: mode),
+    private func client(_ scopes: [String], _ http: FakeHTTPTransport) -> GoogleCalendarClient {
+        GoogleCalendarClient(calendarID: Self.me, grantedScopes: scopes,
                              tokens: StaticTokenProvider(token: "synthetic-cal-access"), transport: http,
                              clock: InstantClock(), timeZone: zone)
     }
 
-    @Test func anAnswerPatchPassesOnlyInWriteModeWithCalendarEvents() {
+    @Test func anAnswerPatchPassesOnlyWithCalendarEvents() {
         for status in ["accepted", "declined", "tentative"] {
             let request = patch(Self.event + "?sendUpdates=all", answer(status))
-            #expect(guardFor(.normal).refusalReason(for: request) == nil, "\(status)")
-            #expect(guardFor(.readOnly).refusalReason(for: request) != nil, "read-only never answers")
-            #expect(guardFor(.writeAllowlist).refusalReason(for: request) != nil, "test-writes never answers")
-            #expect(guardFor(.normal, scopes: CalendarScopes.requested(for: .readOnly)).refusalReason(for: request) != nil,
-                    "a read-only grant in a write-mode run")
+            #expect(guardFor().refusalReason(for: request) == nil, "\(status)")
+            #expect(guardFor(CalendarScopes.request.read).refusalReason(for: request) != nil, "a read grant never answers")
         }
         let bySelf = patch(Self.event + "?sendUpdates=none", answer("declined", own: ["email": "alias@example.com", "self": true]))
-        #expect(guardFor(.normal).refusalReason(for: bySelf) == nil, "the entry Google marks as the account's own")
+        #expect(guardFor().refusalReason(for: bySelf) == nil, "the entry Google marks as the account's own")
     }
 
     @Test func anyOtherAnswerShapeIsRefused() {
-        let calendar = guardFor(.normal)
+        let calendar = guardFor()
         var withTitle = answer("accepted")
         withTitle["summary"] = "x"
         var withTimes = answer("accepted")
@@ -97,7 +93,7 @@ private let zone = TimeZone(identifier: "America/Los_Angeles")!
                                                 "end": ["dateTime": "2026-10-13T15:30:00-07:00"],
                                                 "organizer": ["self": false], "attendees": body["attendees"] ?? []])
         }
-        let answered = try await client(.normal, http).respond(eventID: "ev1", response: "tentative", sendUpdates: .all)
+        let answered = try await client(CalendarScopes.request.write, http).respond(eventID: "ev1", response: "tentative", sendUpdates: .all)
         #expect(answered?.selfResponse == "tentative" && answered?.organizerIsSelf == false)
         #expect(http.requests.map(\.method) == ["GET", "PATCH"], "read first, then one patch")
         let sent = try #require(http.requests.last)
@@ -111,7 +107,7 @@ private let zone = TimeZone(identifier: "America/Los_Angeles")!
         #expect(attendees[1]["responseStatus"] as? String == "tentative" && attendees[1]["self"] as? Bool == true)
     }
 
-    @Test func readOnlyAndANonInvitationNeverSendAnAnswer() async throws {
+    @Test func aReadGrantAndANonInvitationNeverSendAnAnswer() async throws {
         let http = FakeHTTPTransport()
         http.on("GET", Self.path) { _ in
             FakeHTTPTransport.json(200, ["id": "ev1", "start": ["dateTime": "2026-10-13T15:00:00-07:00"],
@@ -119,9 +115,10 @@ private let zone = TimeZone(identifier: "America/Los_Angeles")!
                                          "attendees": [Self.organizer, ["email": "robin@example.com", "self": true]]])
         }
         await #expect(throws: GoogleCalendarError.self) {
-            _ = try await client(.readOnly, http).respond(eventID: "ev1", response: "accepted", sendUpdates: .all)
+            _ = try await client(CalendarScopes.request.read, http).respond(eventID: "ev1", response: "accepted",
+                                                                             sendUpdates: .all)
         }
-        #expect(!http.requests.contains { $0.method == "PATCH" }, "read-only: refused before the wire")
+        #expect(!http.requests.contains { $0.method == "PATCH" }, "a read grant: refused before the wire")
 
         let notInvited = FakeHTTPTransport()
         notInvited.on("GET", Self.path) { _ in
@@ -129,11 +126,11 @@ private let zone = TimeZone(identifier: "America/Los_Angeles")!
                                          "end": ["dateTime": "2026-10-13T15:30:00-07:00"], "attendees": [Self.organizer]])
         }
         await #expect(throws: GoogleCalendarError.self) {
-            _ = try await client(.normal, notInvited).respond(eventID: "ev1", response: "accepted", sendUpdates: .all)
+            _ = try await client(CalendarScopes.request.write, notInvited).respond(eventID: "ev1", response: "accepted", sendUpdates: .all)
         }
         #expect(notInvited.requests.map(\.method) == ["GET"], "not invited: nothing patched")
         await #expect(throws: GoogleCalendarError.self) {
-            _ = try await client(.normal, notInvited).respond(eventID: "ev1", response: "needsAction", sendUpdates: .all)
+            _ = try await client(CalendarScopes.request.write, notInvited).respond(eventID: "ev1", response: "needsAction", sendUpdates: .all)
         }
         #expect(notInvited.requests.count == 1, "an answer Mail does not give is refused before any request")
     }
@@ -154,7 +151,7 @@ private let zone = TimeZone(identifier: "America/Los_Angeles")!
             ]])
         }
         let start = ISO8601DateFormatter().date(from: "2026-10-13T07:00:00Z")!
-        let events = try await client(.readOnly, http).listEvents(from: start, to: start.addingTimeInterval(86_400))
+        let events = try await client(CalendarScopes.request.read, http).listEvents(from: start, to: start.addingTimeInterval(86_400))
         let byID = Dictionary(uniqueKeysWithValues: events.map { ($0.id, $0) })
         #expect(byID["a"]?.selfResponse == "tentative" && byID["a"]?.location == "Room 4" && byID["a"]?.notes == "Agenda")
         #expect(byID["a"]?.recurringEventID == "weekly")

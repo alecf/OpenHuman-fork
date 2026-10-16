@@ -691,7 +691,6 @@ private struct AppIntentsSection: View {
                         isOn: Binding(get: { model.shareSubjects }, set: { model.setShareSubjects($0) }))
                 .disabled(!model.isOn)
             SettingsRow("Let Shortcuts change mail", detail: AppIntentsSettingsModel.changesNote,
-                        status: model.changesStatus, statusTone: .warning,
                         isOn: Binding(get: { model.allowMailChanges }, set: { model.setAllowMailChanges($0) }))
                 .disabled(!model.isOn)
             SettingsRow("Ask before each change",

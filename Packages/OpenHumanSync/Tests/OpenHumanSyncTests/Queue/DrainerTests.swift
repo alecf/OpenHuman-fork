@@ -248,18 +248,22 @@ import Testing
         #expect(try await h.serverInbox().isEmpty)
     }
 
-    @Test func safeModeRefusalFailsPermanentlyAndIsNeverRetried() async throws {
-        let h = try await WriteHarness(safeMode: .readOnly)
+    @Test func aGuardRefusalFailsPermanentlyAndIsNeverRetried() async throws {
+        let h = try await WriteHarness()
         let id = try h.store.apply(.archive([try h.ref(h.threads[0])]), origin: .app).operationIDs[0]
+        await h.gmail.failNext(.batchModify, with: .transport(.refusedByGuard("POST /gmail/v1/users/me/messages/batchModify")))
         let events = EventLog()
-        let report = await h.drainer(api: try h.client, events: events).drainOnce()
+        let drainer = h.drainer(api: h.gmail, events: events)
+        let report = await drainer.drainOnce()
         #expect(report.failed == 1)
         let op = try #require(try h.store.operation(id))
-        #expect(op.status == .failed && op.lastErrorCode == "safe_mode_blocked")
+        #expect(op.status == .failed && op.lastErrorCode == "refused_by_guard")
         #expect(op.lastErrorMessage == "POST /gmail/v1/users/me/messages/batchModify")
-        #expect(h.wire.nonGETRequests.isEmpty)
+        #expect(await h.serverLabels(ofThread: h.threads[0]).contains("INBOX"))
         #expect(try h.inbox().contains(h.threads[0]))
         #expect(events.failedOperations.count == 1)
+        #expect(await drainer.drainOnce().claimed == 0)
+        #expect(await h.gmail.callCount(.batchModify) == 1)
     }
 
     @Test func groupsJoinOnlyConsecutiveEqualKeys() {

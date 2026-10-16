@@ -5,7 +5,6 @@ import MailModel
 @MainActor
 public final class ActionFeedback {
     private weak var environment: AppEnvironment?
-    private var blockedToast: Toast.ID?
     private var contextToast: Toast.ID?
 
     init(environment: AppEnvironment) {
@@ -15,11 +14,6 @@ public final class ActionFeedback {
     public func refuse(_ id: ActionID, _ reason: DisabledReason) {
         guard let environment else { return }
         switch reason {
-        case .safeMode:
-            environment.status.reportBlockedWrite(id)
-            if let blockedToast { environment.notices.dismiss(blockedToast) }
-            blockedToast = environment.notices.post(StatusModel.blockedText, style: .info,
-                                                    duration: NoticeCenter.infoDuration)
         case .unavailable:
             environment.notices.post(reason.description, style: .info, duration: NoticeCenter.infoDuration)
         case .noSelection, .needs, .notBuilt:

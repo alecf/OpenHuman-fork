@@ -84,7 +84,7 @@ struct CalendarEventFormView: View {
             content().disabled(access.reason != nil)
         }
         .themeFont(theme.typeMeta)
-        .readOnlyReason(access.reason)
+        .lockedReason(access.reason)
     }
 
 
@@ -103,7 +103,7 @@ struct CalendarEventFormView: View {
             } else {
                 Text(form.title).themeFont(theme.typeHeadline).foregroundStyle(theme.textPrimary.color)
                     .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                    .readOnlyReason(access.reason)
+                    .lockedReason(access.reason)
                     .accessibilityIdentifier("\(idPrefix).title")
             }
         }
@@ -203,7 +203,7 @@ struct CalendarEventFormView: View {
         }
         .toggleStyle(.checkbox).themeFont(theme.typeCaption)
         .disabled(access.reason != nil)
-        .readOnlyReason(access.reason)
+        .lockedReason(access.reason)
         .padding(.leading, iconColumn)
         .accessibilityIdentifier("\(idPrefix).guestPermissions")
     }

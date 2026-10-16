@@ -77,14 +77,6 @@ struct DockBadgeTests {
         #expect(f.dock.label == "", "stopping clears the tile")
     }
 
-    @Test func worksInReadOnlySafeMode() async throws {
-        let f = SystemFixture(corpus: .make(threadCount: 20, now: fixedNow), options: .init(remoteAck: .immediate, safeMode: .readOnly))
-        f.env.system.startDockBadge()
-        let model = try #require(f.env.system.dockBadge)
-        await eventually(timeout: .seconds(15)) { model.total > 0 }
-        await eventually(timeout: .seconds(15)) { f.dock.label == DockBadgeModel.text(for: model.total) }
-    }
-
     @Test func moduleOffLeavesTheTileAlone() {
         let f = SystemFixture(flags: FeatureFlags().with(.dockBadge, false))
         f.env.runLaunchTasks()

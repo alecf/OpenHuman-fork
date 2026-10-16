@@ -60,21 +60,6 @@ struct NewslettersSplitTests {
         #expect(personal.splits.map(\.id) == before)
     }
 
-    @Test func readOnlySafeModeNeverAddsTheTab() async throws {
-        let f = OverlayFixture(corpus: .rich(threadCount: 160, now: fixedNow),
-                               options: .init(remoteAck: .immediate, safeMode: .readOnly))
-        await f.loaded()
-        #expect(f.router.perform(.switchToAccount(2)))
-        let personal = try #require(f.router.active)
-        await eventually { personal.splitsLoaded }
-        let before = personal.splits
-        let availability = f.registry.availability(.addNewslettersSplit, host: f.router,
-                                                   context: f.router.actionContext())
-        #expect(availability != .enabled, "a split edit is refused in read-only")
-        _ = await f.run(.addNewslettersSplit, source: .palette)
-        #expect(personal.splits == before)
-    }
-
     @Test func thePaletteFindsItByNewsletterWords() async throws {
         let f = OverlayFixture(corpus: .rich(threadCount: 160, now: fixedNow))
         await f.loaded()

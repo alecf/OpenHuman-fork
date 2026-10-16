@@ -126,11 +126,11 @@ struct SpotlightIndexerTests {
         #expect(!indexer.isPaused)
     }
 
-    @Test func itWorksInReadOnlySafeModeBecauseItNeverWritesToGmail() async throws {
-        let f = SystemFixture(options: .init(remoteAck: .immediate, safeMode: .readOnly))
+    @Test func indexingNeverChangesMail() async throws {
+        let f = SystemFixture(options: .init(remoteAck: .immediate))
         _ = try await started(f)
         #expect(!f.spotlight.items.isEmpty)
-        #expect(f.store.safeMode() == .readOnly)
+        #expect(f.store.pendingOperationCount == 0)
     }
 
     @Test func rebuildDeletesEverythingAndIndexesAgainWhileRemoveAllEmptiesAndStops() async throws {

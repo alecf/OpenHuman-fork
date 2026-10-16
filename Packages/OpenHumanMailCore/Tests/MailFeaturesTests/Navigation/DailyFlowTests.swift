@@ -25,17 +25,6 @@ import Testing
         await eventually { f.router.list?.row(for: key)?.isUnread == true }
     }
 
-    @Test func readOnlyOpeningWritesNothingAndSaysNothing() async throws {
-        let f = ActionFixture(options: .init(safeMode: .readOnly))
-        await f.loaded(10)
-        let key = try #require(f.rows.first { $0.isUnread }?.id)
-        f.router.open(key)
-        await eventually { f.router.active?.reader?.messages.isEmpty == false }
-        await eventually { f.router.list?.row(for: key)?.isUnread == false }
-        #expect(f.store.pendingOperationCount == 0, "stopped before the port, as `s` is")
-        #expect(f.env.notices.toasts.isEmpty, "no refusal toast for a key the user did not press")
-    }
-
     @Test func openingAReadConversationWritesNothing() async throws {
         let f = ActionFixture(options: .init(remoteAck: .manual))
         await f.loaded(10)

@@ -9,49 +9,28 @@ func token(_ receipt: ActionReceipt) throws -> String {
 }
 
 @Suite struct UndoCommandTests {
-    static let env = Harness.write
-
-    @Test func undoTakesBackADoneThatIsStillQueued() async throws {
-        let h = try Harness()
-        let done = await h.run(["gmail", "done", "t1", "--json"], environment: Self.env)
-        let undo = try #require(done.data["undo"] as? String)
-        let op = try #require(try h.operations([.pending]).first)
-        let r = await h.run(["gmail", "undo", undo, "--json"], environment: Self.env)
-        #expect(r.code == 0 && r.data["verb"] as? String == "undo" && r.data["threadIds"] as? [String] == ["t1"], "\(r.code) \(r.err)")
-        #expect(try h.store.operation(op.id)?.status == .cancelled)
-        let inbox = await h.run(["gmail", "inbox", "--json"])
-        #expect(inbox.list("threads").contains { $0["threadId"] as? String == "t1" })
-        #expect(!(try h.operations()).contains { $0.kind == .sendDraft })
-        let again = await h.run(["gmail", "done", "t2", "--json"], environment: Self.env)
-        let before = try h.operations().count
-        let dry = await h.run(["gmail", "undo", try #require(again.data["undo"] as? String), "--dry-run", "--json"])
-        #expect(dry.code == 0 && dry.data["dryRun"] as? Bool == true && dry.data["threadIds"] as? [String] == ["t2"])
-        #expect(try h.operations().count == before)
-    }
-
-    @Test func aForgedTokenCanDoNoMoreThanTheTriageCommands() async throws {
+    @Test func undoIsRefusedWhateverTheToken() async throws {
         let h = try Harness()
         let ref = try h.threadRef("t1")
-        let before = try h.operations().count
-        func undo(_ text: String) async -> Run { await h.run(["gmail", "undo", text, "--json"], environment: Self.env) }
-        for action: MailAction in [.trash([ref]), .markSpam([ref]), .modifyLabels([ref], add: [GmailLabelID("Label_1")], remove: []),
-                                   .createLabel(h.account, name: "X", applyTo: [ref]),
-                                   .modifyMessageLabels(h.account, [GmailMessageID("m1")], add: [GmailLabelID("TRASH")], remove: [])] {
-            let r = await undo(try token(ActionReceipt(operationIDs: [], undo: action)))
-            #expect(r.code == 5 && r.errorCode == "undo_not_allowed", "\(action): \(r.code)")
-        }
         let appReceipt = try h.store.apply(.archive([try h.threadRef("t2")]), origin: .app)
         let appOp = try #require(appReceipt.operationIDs.first)
+        let before = try h.operations().count
+        func undo(_ text: String) async -> Run { await h.run(["gmail", "undo", text, "--json"]) }
+        for action: MailAction in [.moveToInbox([ref]), .trash([ref]), .markSpam([ref]), .modifyLabels([ref], add: [GmailLabelID("Label_1")], remove: []),
+                                   .createLabel(h.account, name: "X", applyTo: [ref])] {
+            let r = await undo(try token(ActionReceipt(operationIDs: [], undo: action)))
+            #expect(r.code == 5 && r.errorCode == "mail_changes_in_app", "\(action): \(r.code)")
+        }
         let refused = await undo(try token(appReceipt))
-        #expect(refused.code == 5 && refused.errorCode == "undo_not_allowed")
+        #expect(refused.code == 5 && refused.errorCode == "mail_changes_in_app")
         #expect(try h.store.operation(appOp)?.status == .pending)
-        let wrongRow = ThreadRef(accountID: ref.accountID, rowID: ThreadRowID(rawValue: ref.rowID.rawValue + 999), gmailThreadID: ref.gmailThreadID)
-        #expect((await undo(try token(ActionReceipt(operationIDs: [], undo: .moveToInbox([wrongRow]))))).errorCode == "bad_undo_token")
-        #expect((await undo("not-a-token")).errorCode == "bad_undo_token")
-        #expect((await undo(try token(ActionReceipt(operationIDs: [], undo: nil)))).errorCode == "bad_undo_token")
-        #expect(try h.operations().count == before + appReceipt.operationIDs.count)
-        let blocked = await h.run(["gmail", "undo", harmlessUndoToken, "--json"])
-        #expect(blocked.code == 5 && blocked.errorCode == "blocked_by_safe_mode")
+        #expect((await undo("not-a-token")).errorCode == "mail_changes_in_app")
+        let preview = await h.run(["gmail", "undo", harmlessUndoToken, "--dry-run", "--json"])
+        #expect(preview.code == 0 && preview.data["dryRun"] as? Bool == true && preview.data["status"] as? String == "dry_run")
+        let forbidden = await h.run(["gmail", "undo", try token(ActionReceipt(operationIDs: [], undo: .trash([ref]))), "--dry-run", "--json"])
+        #expect(forbidden.code == 5 && forbidden.errorCode == "undo_not_allowed")
+        #expect((await h.run(["gmail", "undo", "not-a-token", "--dry-run", "--json"])).errorCode == "bad_undo_token")
+        #expect(try h.operations().count == before)
     }
 }
 
@@ -96,7 +75,7 @@ func call(_ id: Int, _ tool: String, _ arguments: [String: Any] = [:]) -> String
     rpc(id, "tools/call", ["name": tool, "arguments": arguments])
 }
 
-func mcp(_ h: Harness, _ lines: [String], args: [String] = [], environment: [String: String] = Harness.write) async -> McpSession {
+func mcp(_ h: Harness, _ lines: [String], args: [String] = [], environment: [String: String] = [:]) async -> McpSession {
     let queue = LineQueue(lines)
     let out = BufferSink(), err = BufferSink()
     var variables = h.allowedEnvironment
@@ -113,10 +92,10 @@ func mcp(_ h: Harness, _ lines: [String], args: [String] = [], environment: [Str
         "gmail_splits_list", "gmail_drafts_list", "gmail_drafts_get", "gmail_review_list", "gmail_snippets_list", "gmail_snippets_show",
         "gmail_snippets_render", "sync_status",
     ]
-    static let writeTools = [
-        "gmail_drafts_create", "gmail_drafts_update", "gmail_drafts_reply",
-        "gmail_done", "gmail_move_to_inbox", "gmail_read", "gmail_unread", "gmail_star", "gmail_unstar", "gmail_snooze", "gmail_unsnooze",
-        "gmail_remind", "gmail_unremind", "undo",
+    static let draftTools = ["gmail_drafts_create", "gmail_drafts_update", "gmail_drafts_reply"]
+    static let triageTools = [
+        "gmail_done", "gmail_archive", "gmail_move_to_inbox", "gmail_read", "gmail_unread", "gmail_star", "gmail_unstar", "gmail_snooze",
+        "gmail_unsnooze", "gmail_remind", "gmail_unremind", "undo", "gmail_undo",
     ]
     static let notExposed: Set<String> = [
         "gmail.send", "gmail.reply", "gmail.reply-all", "gmail.forward", "gmail.drafts.send", "gmail.trash", "gmail.untrash", "gmail.spam",
@@ -124,35 +103,51 @@ func mcp(_ h: Harness, _ lines: [String], args: [String] = [], environment: [Str
         "gmail.splits.delete", "gmail.splits.reorder", "gmail.drafts.delete", "gmail.drafts.forward", "gmail.review.approve",
         "gmail.review.reject", "accounts.add", "accounts.remove", "auth.login", "auth.logout", "config.set", "sync.run", "gmail.history",
         "gmail.attachments.get", "calendar.events", "gmail.snippets.add", "gmail.snippets.delete", "gmail.snippets.import",
+        "gmail.done", "gmail.move-to-inbox", "gmail.read", "gmail.unread", "gmail.star", "gmail.unstar", "gmail.snooze", "gmail.unsnooze",
+        "gmail.remind", "gmail.unremind", "gmail.undo",
     ]
 
-    func listed(_ h: Harness, _ args: [String] = [], environment: [String: String] = Harness.write) async -> [String] {
+    func listed(_ h: Harness, _ args: [String] = [], environment: [String: String] = [:]) async -> [String] {
         let r = await h.run(["mcp", "--list-tools", "--json"] + args, environment: environment)
         return r.list("tools").compactMap { $0["name"] as? String }
     }
 
-    @Test func theToolListIsPinnedPerModeAndHasNoSendTool() async throws {
+    @Test func theToolListIsPinnedAndHasNoSendTool() async throws {
         let h = try Harness()
-        #expect(await listed(h) == Self.readTools + Self.writeTools)
-        #expect(await listed(h, environment: [:]) == Self.readTools)
-        #expect(await listed(h, environment: ["OPENHUMAN_SAFE_MODE": "write-allowlist"]) == Self.readTools)
+        #expect(await listed(h) == Self.readTools + Self.draftTools)
         #expect(await listed(h, ["--readonly"]) == Self.readTools)
-        #expect(await listed(h, environment: Harness.write.merging(["OPENHUMAN_READONLY": "1"]) { $1 }) == Self.readTools)
+        #expect(await listed(h, environment: ["OPENHUMAN_READONLY": "1"]) == Self.readTools)
         for tool in McpTools.all {
             let meta = try #require(CommandCatalog.meta(for: tool.path), "\(tool.name)")
             #expect(meta.implemented && meta.reserved == nil && !meta.network, "\(tool.name)")
             #expect(!Self.notExposed.contains(meta.path), "\(tool.name) runs \(meta.path)")
-            #expect(tool.group == .read ? meta.writes == .none : meta.writes == .mail, "\(tool.name)")
+            #expect(tool.group == .read ? meta.writes == .none : meta.writes == .agentDraft, "\(tool.name)")
             #expect(!tool.name.contains("send") && tool.name.allSatisfy { $0.isLowercase || $0 == "_" }, "\(tool.name)")
         }
         try h.store.setSetting(.cliReadonlyDefault, true, scope: .global)
         #expect(await listed(h) == Self.readTools)
         try h.store.setSetting(.cliReadonlyDefault, false, scope: .global)
-        try h.store.setSetting(.cliAllowedCommands, ["mcp", "gmail.search", "gmail.archive"], scope: .global)
-        #expect(await listed(h) == ["gmail_search", "gmail_done"])
+        try h.store.setSetting(.cliAllowedCommands, ["mcp", "gmail.search", "gmail.drafts.show"], scope: .global)
+        #expect(await listed(h) == ["gmail_search", "gmail_drafts_get"])
         try h.store.setSetting(.cliAllowedCommands, ["gmail.search"], scope: .global)
         let refused = await mcp(h, [rpc(1, "initialize", ["protocolVersion": "2025-06-18"])])
         #expect(refused.code == 5 && refused.stdout.isEmpty && refused.err.contains("command_not_allowed"))
+    }
+
+    @Test func theToolListHasNoTriageTools() async throws {
+        let h = try Harness()
+        #expect(!McpTools.all.contains { CommandCatalog.meta(for: $0.path)?.writes == .mailChange })
+        #expect(Set(McpTools.all.map(\.name)).isDisjoint(with: Self.triageTools))
+        try h.store.setSetting(.cliAllowedCommands, ["mcp", "gmail.done", "gmail.archive", "gmail.undo", "gmail.snooze"], scope: .global)
+        #expect(await listed(h).isEmpty)
+        try h.store.setSetting(.cliAllowedCommands, nil, scope: .global)
+        let before = try Snapshot(h)
+        let s = await mcp(h, [rpc(1, "tools/list")] + Self.triageTools.enumerated().map { call($0.offset + 2, $0.element, ["threadIds": ["t1"]]) })
+        let names = (s.result(1)["tools"] as? [[String: Any]])?.compactMap { $0["name"] as? String } ?? []
+        #expect(names == Self.readTools + Self.draftTools)
+        for index in Self.triageTools.indices { #expect(s.errorCode(index + 2) == -32602, "\(Self.triageTools[index])") }
+        #expect(!s.err.contains("mcp: tool gmail_"))
+        #expect(try Snapshot(h) == before && h.operations().isEmpty)
     }
 
     @Test func aSessionInitializesListsAndCallsReadTools() async throws {
@@ -181,7 +176,7 @@ func mcp(_ h: Harness, _ lines: [String], args: [String] = [], environment: [Str
         #expect((initialize["instructions"] as? String)?.contains("untrusted") == true)
         #expect(s.reply(2)["result"] is [String: Any])
         let tools = s.result(3)["tools"] as? [[String: Any]] ?? []
-        #expect(tools.compactMap { $0["name"] as? String } == Self.readTools + Self.writeTools)
+        #expect(tools.compactMap { $0["name"] as? String } == Self.readTools + Self.draftTools)
         let search = try #require(tools.first { $0["name"] as? String == "gmail_search" })
         #expect(((search["inputSchema"] as? [String: Any])?["required"] as? [String]) == ["query"])
         #expect((search["annotations"] as? [String: Any])?["readOnlyHint"] as? Bool == true)
@@ -202,47 +197,41 @@ func mcp(_ h: Harness, _ lines: [String], args: [String] = [], environment: [Str
         #expect(s.err.contains("mcp: tool gmail_search exit 0") && !s.err.contains("invoice"))
     }
 
-    @Test func draftAndTriageToolsGoThroughThePolicyAndUndo() async throws {
+    @Test func draftToolsGoThroughThePolicy() async throws {
         let h = try Harness()
         let s = await mcp(h, [
             call(1, "gmail_drafts_create", ["to": ["a@example.com"], "subject": "Hi", "body": "--not an option\nline two", "note": "check"]),
-            call(2, "gmail_done", ["threadIds": ["t1"]]),
-            call(3, "gmail_done", ["threadIds": (0...100).map { "t\($0)" }]),
-            call(4, "gmail_done", ["threadIds": "t1"]),
-            call(5, "gmail_done", ["threadIds": ["zzz"]]),
+            call(2, "gmail_drafts_reply", ["messageId": "m1", "body": "Thanks"]),
+            call(3, "gmail_drafts_create", ["to": "a@example.com", "subject": "Hi", "body": "x"]),
+            call(4, "gmail_drafts_reply", ["messageId": "zzz", "body": "x"]),
         ])
         #expect(s.result(1)["isError"] as? Bool == false, "\(s.err)")
         let draft = s.envelope(1)["data"] as? [String: Any] ?? [:]
         #expect(draft["sent"] as? Bool == false && draft["origin"] as? String == "cli" && draft["review"] as? String == "pending")
+        #expect(draft["status"] as? String == "queued")
         #expect((draft["reviewLink"] as? String)?.hasPrefix("openhuman://review?") == true)
-        let stored = try #require(try h.store.drafts(account: h.account, states: [], limit: 10).first)
+        let stored = try #require(try h.store.drafts(account: h.account, states: [], limit: 10).first { $0.composeMode == .new })
         #expect(stored.content.bodyText == "--not an option\nline two" && stored.origin == .cli && stored.reviewState == .pending)
 
-        #expect(s.result(2)["isError"] as? Bool == false)
-        let done = s.envelope(2)["data"] as? [String: Any] ?? [:]
-        #expect(done["status"] as? String == "queued")
-        #expect(s.notes(2).contains("Queued locally"))
-        #expect(s.errorCode(3) == -32602 && s.errorCode(4) == -32602)
-        #expect(s.result(5)["isError"] as? Bool == true && (s.envelope(5)["error"] as? [String: Any])?["code"] as? String == "not_found")
-        let doneOp = try #require(try h.operations([.pending]).first { $0.kind == .modifyLabels })
-        #expect(doneOp.origin == .cli)
-
-        let undo = try #require(done["undo"] as? String)
-        let back = await mcp(h, [call(1, "undo", ["token": undo])])
-        #expect(back.result(1)["isError"] as? Bool == false, "\(back.err)")
-        #expect(try h.store.operation(doneOp.id)?.status == .cancelled)
-        #expect(!(try h.operations()).contains { $0.kind == .sendDraft })
+        #expect(s.result(2)["isError"] as? Bool == false, "\(s.err)")
+        #expect(s.notes(2).contains("Saved locally"))
+        #expect(s.errorCode(3) == -32602)
+        #expect(s.result(4)["isError"] as? Bool == true && (s.envelope(4)["error"] as? [String: Any])?["code"] as? String == "not_found")
+        let ops = try h.operations()
+        #expect(ops.count == 2 && ops.allSatisfy { $0.kind == .upsertDraft && $0.origin == .cli })
     }
 
     @Test func aReadOnlyServerListsAndRunsReadToolsOnly() async throws {
         let h = try Harness()
-        let s = await mcp(h, [rpc(1, "tools/list"), call(2, "gmail_done", ["threadIds": ["t1"]]), call(3, "gmail_inbox")], args: ["--readonly"])
+        let s = await mcp(h, [rpc(1, "tools/list"), call(2, "gmail_drafts_create", ["to": ["a@example.com"], "subject": "S", "body": "x"]),
+                              call(3, "gmail_inbox")], args: ["--readonly"])
         #expect((s.result(1)["tools"] as? [[String: Any]])?.compactMap { $0["name"] as? String } == Self.readTools)
         #expect(s.errorCode(2) == -32602)
         #expect(s.result(3)["isError"] as? Bool == false)
+        let viaEnv = await mcp(h, [call(1, "gmail_drafts_create", ["to": ["a@example.com"], "subject": "S", "body": "x"])],
+                               environment: ["OPENHUMAN_READONLY": "1"])
+        #expect(viaEnv.errorCode(1) == -32602)
         #expect(try h.operations().isEmpty)
-        let safe = await mcp(h, [call(1, "gmail_drafts_create", ["to": ["a@example.com"], "subject": "S", "body": "x"])], environment: [:])
-        #expect(safe.errorCode(1) == -32602)
         #expect(try h.store.drafts(account: h.account, states: [], limit: 10).isEmpty)
     }
 }

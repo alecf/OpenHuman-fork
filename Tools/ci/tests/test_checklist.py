@@ -145,7 +145,7 @@ class BuildAndCheckTests(TempRoot):
         self.assertIn("not assembled", notes[0])
 
     def test_invalid_fragment_fails_the_build_and_writes_nothing(self):
-        write_fragments(self.root, [item("a", requires="real")])
+        write_fragments(self.root, [item("a", requires="live")])
         self.assertEqual(cl.cmd_build(self.root, check=False), 1)
         self.assertFalse(os.path.exists(os.path.join(self.root, MONO)))
         errors, _, _ = cc.check_tree(self.root)

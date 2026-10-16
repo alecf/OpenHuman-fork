@@ -89,7 +89,7 @@ struct AskOlderMailWiringTests {
         await FakeGmailLaunch.seed(gmail, corpus: corpus)
         let starred = await gmail.deliver(subject: "Synthetic starred", labels: ["STARRED"])
         let store = try MailStore.openInMemoryForTesting()
-        let running = try FakeGmailLaunch.makeSession(safeMode: .readOnly, store: store, gmail: gmail,
+        let running = try FakeGmailLaunch.makeSession(store: store, gmail: gmail,
                                                       unsubscribeTransport: nil)
         let app = AppModel(screen: .mail(running.session.environment), session: running.session)
         await running.session.start()
@@ -104,7 +104,7 @@ struct AskOlderMailWiringTests {
         #expect(found.contains { $0.gmailThreadID.rawValue == starred.threadID })
         let lists = running.wire.requests.filter { $0.url.path(percentEncoded: false).hasSuffix("/messages") }
         #expect(lists.contains { ($0.url.query(percentEncoded: false) ?? "").contains("maxResults=20") })
-        #expect(running.wire.requests.allSatisfy(isReadOnlyOnTheWire))
+        #expect(running.wire.requests.allSatisfy(isReadOnTheWire))
         _ = app
     }
 }

@@ -308,7 +308,7 @@ struct RealAccountSystemTests {
         let http = FakeHTTPTransport()
         http.on("POST", "/u/") { _ in HTTPResponse(status: 200, headers: [:], body: Data()) }
 
-        try await OneClickUnsubscribe(store: store, transport: http, mode: .normal).send(try key(store, account, "news1"))
+        try await OneClickUnsubscribe(store: store, transport: http).send(try key(store, account, "news1"))
         let request = try #require(http.requests.first)
         #expect(http.requests.count == 1)
         #expect(request.method == "POST" && request.url.absoluteString == "https://list.example/u/token-1")
@@ -316,23 +316,18 @@ struct RealAccountSystemTests {
         #expect(request.headers["Content-Type"] == "application/x-www-form-urlencoded")
         #expect(request.timeout == .seconds(10))
 
-        for mode in [SafeMode.readOnly, .writeAllowlist] {
-            await #expect(throws: MailPortError.blockedBySafeMode) {
-                try await OneClickUnsubscribe(store: store, transport: http, mode: mode).send(try key(store, account, "news1"))
-            }
-        }
-        await #expect(throws: MailPortError.blockedBySafeMode, "the write-mode deny-list still applies") {
-            try await OneClickUnsubscribe(store: store, transport: http, mode: .normal).send(try key(store, account, "news2"))
+        await #expect(throws: MailPortError.notAllowed(OneClickUnsubscribe.refusal), "the guard refuses a delete path") {
+            try await OneClickUnsubscribe(store: store, transport: http).send(try key(store, account, "news2"))
         }
         await #expect(throws: MailPortError.notFound("one-click unsubscribe")) {
-            try await OneClickUnsubscribe(store: store, transport: http, mode: .normal).send(try key(store, account, "news3"))
+            try await OneClickUnsubscribe(store: store, transport: http).send(try key(store, account, "news3"))
         }
         #expect(http.requests.count == 1, "nothing else left the process")
 
         let refusing = FakeHTTPTransport()
         refusing.on("POST", "/") { _ in HTTPResponse(status: 500, headers: [:], body: Data()) }
         await #expect(throws: MailPortError.unavailable("the list didn't accept the unsubscribe request")) {
-            try await OneClickUnsubscribe(store: store, transport: refusing, mode: .normal).send(try key(store, account, "news1"))
+            try await OneClickUnsubscribe(store: store, transport: refusing).send(try key(store, account, "news1"))
         }
     }
 
@@ -342,9 +337,8 @@ struct RealAccountSystemTests {
         let (store, account) = try FixtureStoreSeeder.makeStore(corpus: corpus)
         try put(store, account, id: "d1", labels: ["DRAFT"], subject: "MARKER draft subject", from: "marker@secret.example",
                 history: 9_401)
-        let adapter = MailStoreAdapter(store: store, safeMode: .readOnly)
+        let adapter = MailStoreAdapter(store: store)
         let snapshot = try await adapter.diagnosticsSnapshot()
-        #expect(snapshot.safeMode == "readOnly")
         #expect(snapshot.schemaVersion == 2)
         let entry = try #require(snapshot.accounts.first)
         #expect(snapshot.accounts.count == 1 && entry.index == 1)

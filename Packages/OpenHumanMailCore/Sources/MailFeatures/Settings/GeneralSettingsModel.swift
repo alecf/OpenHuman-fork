@@ -20,7 +20,7 @@ public final class GeneralSettingsModel {
     public let downloadBodies: StoredSetting<Bool>
     public let bodyMax: StoredSetting<Int?>
     public let confirmEverySend: StoredSetting<Bool>
-    public let showsWriteModeSending: Bool
+    public let showsConfirmBeforeSending: Bool
     public let availability: SettingsAvailability
     public let signatureOnReplies: StoredSetting<Bool>
     public let defaultReminderTime: StoredSetting<Int>
@@ -29,16 +29,16 @@ public final class GeneralSettingsModel {
     public let hintOnClick: StoredSetting<Bool>
     public let shortcutLearning: ShortcutLearning?
 
-    public init(settings: (any SettingsPort)?, availability: SettingsAvailability, writeMode: Bool = false,
+    public init(settings: (any SettingsPort)?, availability: SettingsAvailability, isLiveAccount: Bool = false,
                 shortcutLearning: ShortcutLearning? = nil) {
         hintOnClick = StoredSetting(AppSettings.hintOnClick, port: settings)
         self.shortcutLearning = shortcutLearning
         self.availability = availability
-        showsWriteModeSending = writeMode
+        showsConfirmBeforeSending = isLiveAccount && availability.hasCommands
         defaultReminderTime = StoredSetting(AppSettings.defaultReminderTime, port: settings)
         reminderWeekdaysOnly = StoredSetting(AppSettings.reminderWeekdaysOnly, port: settings)
         signatureOnReplies = StoredSetting(AppSettings.signatureOnReplies, port: settings)
-        confirmEverySend = StoredSetting(WriteModeSession.confirmEverySend, port: settings)
+        confirmEverySend = StoredSetting(SendSettings.confirmEverySend, port: settings)
         undoSend = StoredSetting(AppSettings.undoSendSeconds, port: settings)
         snooze = StoredSetting(AppSettings.schedulerSnooze, port: settings)
         sendLater = StoredSetting(AppSettings.schedulerSendLater, port: settings)
@@ -56,7 +56,7 @@ public final class GeneralSettingsModel {
 
     public convenience init(environment: AppEnvironment) {
         self.init(settings: environment.settings, availability: SettingsAvailability(environment: environment),
-                  writeMode: environment.writeMode != nil, shortcutLearning: environment.actions.shortcutHints)
+                  isLiveAccount: environment.isLiveAccount, shortcutLearning: environment.actions.shortcutHints)
     }
 
     public func start() {

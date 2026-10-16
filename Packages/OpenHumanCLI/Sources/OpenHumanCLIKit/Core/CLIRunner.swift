@@ -1,6 +1,5 @@
 import ArgumentParser
 import Foundation
-import OpenHumanGmail
 import OpenHumanStore
 
 public protocol CLICommand: AsyncParsableCommand {
@@ -58,10 +57,9 @@ enum CLIRunner {
             if global.timeout != nil, parseDuration(global.timeout!) == nil {
                 throw CLIError.usage("--timeout must look like 30s, 500ms or 2m, and be at most 1h.")
             }
-            let mode = Policy.safeMode(environment: env.variables)
-            let ctx = try CLIContext(env: env, global: global, path: path, meta: meta, safeMode: mode)
+            let ctx = try CLIContext(env: env, global: global, path: path, meta: meta)
             context = ctx
-            let inputs = try policyInputs(ctx, command: command, mode: mode)
+            let inputs = try policyInputs(ctx, command: command)
             try Policy.evaluate(meta, path: path, inputs)
             if global.sync { throw CLIError.appRequired("--sync needs Gmail access, which only OpenHuman Mail has in Phase 1.") }
 
@@ -80,7 +78,7 @@ enum CLIRunner {
         }
     }
 
-    private static func policyInputs<C: CLICommand>(_ ctx: CLIContext, command: C, mode: SafeMode) throws -> PolicyInputs {
+    private static func policyInputs<C: CLICommand>(_ ctx: CLIContext, command: C) throws -> PolicyInputs {
         let env = ctx.env
         var readonly = ctx.global.readonly || env.variables["OPENHUMAN_READONLY"] == "1"
         var allowed: [String]?
@@ -93,7 +91,7 @@ enum CLIRunner {
             }
             allowed = try store.setting(.cliAllowedCommands, scope: .global)
         }
-        return PolicyInputs(readonly: readonly, safeMode: mode, allowedCommands: allowed, noInput: ctx.global.noInput || !env.stdinIsTTY,
+        return PolicyInputs(readonly: readonly, allowedCommands: allowed, noInput: ctx.global.noInput || !env.stdinIsTTY,
                             yes: command.yes, dryRun: ctx.global.dryRun)
     }
 }

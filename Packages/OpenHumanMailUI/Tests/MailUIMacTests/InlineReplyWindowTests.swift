@@ -20,7 +20,7 @@ struct InlineReplyWindow {
     var router: AppRouter { environment.router }
     var reader: ReaderViewController { content.reader }
 
-    static func make(safeMode: SafeModeInfo = .normal, size: NSSize = NSSize(width: 1100, height: 1000),
+    static func make(size: NSSize = NSSize(width: 1100, height: 1000),
                      mode: AppearanceMode = .light, frameName: String = "dev.openhuman.tests.inline-reply",
                      heldSends: FakeMailStore.Options.HeldSends = .realTime,
                      ai: AICenter? = nil, reduceMotion: Bool = false,
@@ -28,7 +28,7 @@ struct InlineReplyWindow {
                      exclusive: Bool = false, environment: AppEnvironment? = nil) async throws -> InlineReplyWindow {
         if exclusive { await FocusWindowGate.enter() }
         do {
-            var window = try await makeUngated(safeMode: safeMode, size: size, mode: mode, frameName: frameName, heldSends: heldSends, ai: ai, reduceMotion: reduceMotion, featureFlags: featureFlags, environment: environment)
+            var window = try await makeUngated(size: size, mode: mode, frameName: frameName, heldSends: heldSends, ai: ai, reduceMotion: reduceMotion, featureFlags: featureFlags, environment: environment)
             window.gated = exclusive
             return window
         } catch {
@@ -37,14 +37,13 @@ struct InlineReplyWindow {
         }
     }
 
-    private static func makeUngated(safeMode: SafeModeInfo = .normal, size: NSSize = NSSize(width: 1100, height: 1000),
+    private static func makeUngated(size: NSSize = NSSize(width: 1100, height: 1000),
                      mode: AppearanceMode = .light, frameName: String = "dev.openhuman.tests.inline-reply",
                      heldSends: FakeMailStore.Options.HeldSends = .realTime,
                      ai: AICenter? = nil, reduceMotion: Bool = false,
                      featureFlags: FeatureFlags = .atLaunch,
                      environment given: AppEnvironment? = nil) async throws -> InlineReplyWindow {
-        let environment = given ?? AppEnvironment.fake(corpus: .small, options: .init(remoteAck: .immediate, heldSends: heldSends,
-                                                                             safeMode: safeMode),
+        let environment = given ?? AppEnvironment.fake(corpus: .small, options: .init(remoteAck: .immediate, heldSends: heldSends),
                                               featureFlags: featureFlags, ai: ai, notices: NoticeCenter(autoExpire: false))
         let themes = ThemeStore(preferencesStore: MemoryThemePreferencesStore(ThemePreferences(mode: mode)),
                                 reduceMotion: reduceMotion)
@@ -196,8 +195,8 @@ struct InlineReplyWindow {
         #expect(menu.items.prefix(3).map(\.title) == ["Reply", "Reply all", "Forward"])
     }
 
-    @Test func readOnlyStillPrefillsTheRecipientsAndTheQuoteWhichToggles() async throws {
-        let w = try await InlineReplyWindow.make(safeMode: .readOnly)
+    @Test func aReplyPrefillsTheRecipientsAndTheQuoteWhichToggles() async throws {
+        let w = try await InlineReplyWindow.make()
         defer { w.close() }
         let (thread, messages) = try await w.conversationWithAMiddleSender()
         _ = try await w.open(thread)
@@ -205,7 +204,6 @@ struct InlineReplyWindow {
         let composer = try await w.inlineComposer()
         let session = composer.session
         let last = try #require(messages.last)
-        #expect(!session.canPersist && session.draftKey == nil, "nothing is created in read-only")
         #expect(!session.to.tokens.isEmpty, "To is prefilled")
         if let sender = last.from?.email, !(w.router.accounts.first?.account.isMe(sender) ?? true) {
             #expect(session.to.tokens.map { $0.email.lowercased() } == [sender.lowercased()])
@@ -228,8 +226,6 @@ struct InlineReplyWindow {
             w.window.contentView?.layoutSubtreeIfNeeded()
             return abs(composer.bounds.height - collapsed) < 1
         }
-        #expect(w.environment.compose.perform(.send, in: session, source: .keyboard))
-        #expect(session.notice?.kind == .error && session.draftKey == nil)
     }
 
     @Test func keysGoBackToTheConversationWhenTheFocusLeavesTheComposer() async throws {

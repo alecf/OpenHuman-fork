@@ -40,7 +40,7 @@ struct SettingsShellTests {
         let (defaults, name) = scratchDefaults()
         defer { defaults.removePersistentDomain(forName: name) }
         let registry = SettingsFixture().env.modules
-        let availability = SettingsAvailability(safeMode: .normal, hasCommands: true, hasSettings: true, hasAccounts: true)
+        let availability = SettingsAvailability(hasCommands: true, hasSettings: true, hasAccounts: true)
         let first = SettingsShellModel(registry: registry, availability: availability, defaults: defaults)
         first.selected = "privacy"
         let second = SettingsShellModel(registry: registry, availability: availability, defaults: defaults)
@@ -52,22 +52,12 @@ struct SettingsShellTests {
         #expect(defaults.string(forKey: SettingsShellModel.lastPageKey) == "nonsense")
     }
 
-    @Test func readOnlySafeModeIsShownAndDisablesStoredItemEditsButNotLocalSettings() {
-        let readOnly = SettingsFixture(safeMode: .readOnly).availability
-        #expect(readOnly.banner == "Read-only: Mail can't change, delete or send anything in Gmail. Splits, snippets and "
-            + "importance rules can't be edited; other settings work as usual.")
-        #expect(!readOnly.canEditStoredItems)
-        #expect(readOnly.canEditSettings)
-        #expect(readOnly.storedItemsNote == "Read-only: splits and snippets can't be edited.")
+    @Test func storedItemsAreEditableExactlyWhenThereIsAWritePort() {
         let normal = SettingsFixture().availability
-        #expect(normal.banner == nil && normal.canEditStoredItems && normal.storedItemsNote == nil)
-        #expect(SettingsFixture(safeMode: .writeAllowlist).availability.banner
-            == "Test writes only: sending is off and only test threads can change.")
-        let noWrite = SettingsAvailability(safeMode: .normal, hasCommands: false, hasSettings: true, hasAccounts: false)
-        #expect(!noWrite.canEditStoredItems && noWrite.storedItemsNote == "Editing isn't available here.")
-        for text in [readOnly.banner, readOnly.storedItemsNote, noWrite.storedItemsNote].compactMap({ $0 }) {
-            #expect(!text.contains("safe mode") && !text.contains("build"), "\(text)")
-        }
+        #expect(normal.hasCommands && normal.canEditSettings && normal.storedItemsNote == nil)
+        let noWrite = SettingsAvailability(hasCommands: false, hasSettings: true, hasAccounts: false)
+        #expect(!noWrite.hasCommands && noWrite.canEditSettings)
+        #expect(noWrite.storedItemsNote == "Editing isn't available here.")
     }
 }
 

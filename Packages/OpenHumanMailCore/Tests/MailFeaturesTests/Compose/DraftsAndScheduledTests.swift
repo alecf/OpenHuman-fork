@@ -103,7 +103,7 @@ import Testing
 
         #expect(await f.run(.openThread))
         #expect(f.router.reader?.thread == thread && f.compose.windowSession == nil)
-        let context = ReaderActions.context(host: f.router, thread: thread, lastMessage: nil, safeMode: .normal)
+        let context = ReaderActions.context(host: f.router, thread: thread, lastMessage: nil)
         let offered = ReaderActions.offeredThreadActions(registry: f.env.actions, host: f.router, context: context).map(\.id)
         #expect(offered.contains(.openDraft) && offered.contains(.remind))
         #expect(ReaderActions.symbol(for: .openDraft) == "pencil")
@@ -168,41 +168,10 @@ import Testing
         #expect(!f.recorder.calls.contains("scheduleSend") && f.compose.windowSession === session)
     }
 
-    @Test func readOnlyRefusesTheRowChangesBeforeThePortButStillOpensTheDraft() async throws {
-        let f = ComposeFixture(safeMode: .readOnly)
-        await f.loaded()
-        let (thread, scheduled) = try await scheduledRow(f)
-        #expect(f.env.actions.availability(.cancelScheduledSend, host: f.router) == .disabled(.safeMode))
-        #expect(f.env.actions.availability(.rescheduleSend, host: f.router) == .disabled(.safeMode))
-        #expect(f.env.actions.availability(.openDraft, host: f.router) == .enabled, "opening only shows it")
-        #expect(await f.run(.cancelScheduledSend), "refused out loud")
-        #expect(await f.run(.rescheduleSend))
-        await f.toast(StatusModel.blockedText)
-        #expect(f.timePicker == nil)
-        if case .done = f.compose.cancelScheduledSend(in: thread) {} else { Issue.record("expected a refusal") }
-        if case .done = f.compose.rescheduleSend(in: thread) {} else { Issue.record("expected a refusal") }
-        await f.compose.reschedule(scheduled.id, at: fixedNow.addingTimeInterval(7_200), previous: fixedNow, thread: thread)
-        #expect(f.recorder.calls.isEmpty, "\(f.recorder.calls)")
-        #expect(await f.draftRow(scheduled.id)?.status == .scheduled)
-
-        #expect(await f.run(.openThread))
-        await soon { f.compose.windowSession?.draftKey == scheduled.id }
-        #expect(f.compose.windowSession?.canPersist == false)
-        #expect(f.recorder.calls.isEmpty, "\(f.recorder.calls)")
-    }
-
-    @Test func writeAllowlistCancelsButNeverMovesASend() async throws {
-        let f = ComposeFixture(safeMode: .writeAllowlist)
-        await f.loaded()
-        _ = try await scheduledRow(f)
-        #expect(f.env.actions.availability(.rescheduleSend, host: f.router) == .disabled(.safeMode))
-        #expect(f.env.actions.availability(.cancelScheduledSend, host: f.router) == .enabled)
-    }
-
     @Test func withConfirmEverySendOnTheMoveOpensTheDraftWhereTheCardAsks() async throws {
-        let f = ComposeFixture(writeMode: WriteModeSession())
+        let f = ComposeFixture(isLiveAccount: true)
         await f.loaded()
-        try await f.store.set(WriteModeSession.confirmEverySend, true)
+        try await f.store.set(SendSettings.confirmEverySend, true)
         let (_, scheduled) = try await scheduledRow(f)
         #expect(await f.run(.rescheduleSend))
         await soon { f.compose.windowSession?.draftKey == scheduled.id }

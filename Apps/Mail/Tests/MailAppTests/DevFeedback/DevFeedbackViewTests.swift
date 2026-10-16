@@ -49,8 +49,8 @@ import Testing
             #expect(!item.steps.isEmpty && item.steps.count <= 4, "\(item.id): keep it under a minute")
             if let link = item.deepLink { #expect((try? MailLinkParser.parse(string: link).get()) != nil) }
         }
-        #expect(checklist.items.contains { $0.requires == .fake } && checklist.items.contains { $0.requires == .realReadOnly })
-        for area in ["Sign-in", "Inbox", "Reader", "Safe mode", "Sync", "Appearance"] {
+        #expect(checklist.items.contains { $0.requires == .fake } && checklist.items.contains { $0.requires == .real })
+        for area in ["Sign-in", "Inbox", "Reader", "Block", "Sync", "Appearance"] {
             #expect(checklist.items.contains { $0.area == area }, "no \(area) items")
         }
     }
@@ -66,8 +66,8 @@ import Testing
         defer { try? FileManager.default.removeItem(at: support) }
         let center = try makeCenter(bundled: Bundle.main.url(forResource: "dev-test-checklist", withExtension: "json"))
         center.checklist.record(.worked, for: "inbox.jk")
-        center.checklist.record(.didNotWork, for: "safe.write-key")
-        center.checklist.setNote("Nothing happened when I pressed e", for: "safe.write-key")
+        center.checklist.record(.didNotWork, for: "block.sender-cleanup-undo")
+        center.checklist.setNote("Undo left one conversation in Trash", for: "block.sender-cleanup-undo")
         center.checklist.open(center.checklist.items[0])
         try render(DevChecklistView(model: center.checklist, onGiveFeedback: {}), size: NSSize(width: 680, height: 900),
                    name: "dev-checklist-panel")

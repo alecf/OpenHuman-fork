@@ -33,10 +33,17 @@ private func tempDirectory() -> URL {
         #expect(result.items[0].requires == .fake)
     }
 
-    @Test func decodesTheWriteModeRequirement() throws {
-        var write = item("w.one"); write["requires"] = "real-write"
-        let result = try decode([write])
-        #expect(result.issues.isEmpty && result.items.first?.requires == .realWrite)
+    @Test func requiresIsFakeOrRealAndNothingElse() throws {
+        var real = item("r.one"); real["requires"] = "real"
+        let result = try decode([real, item("f.one")])
+        #expect(result.issues.isEmpty && result.items.map(\.requires) == [.real, .fake])
+        #expect(DevChecklistItem.Requirement.allCases == [.fake, .real])
+        for value in ["real-readonly", "real-write", "live", "Real"] {
+            var entry = item("o.one"); entry["requires"] = value
+            let refused = try decode([entry])
+            #expect(refused.items.isEmpty, "\(value)")
+            #expect(refused.issues.count == 1 && refused.issues[0].contains("requires must be \"fake\" or \"real\""), "\(value)")
+        }
     }
 
     @Test func acceptsABareArrayAndIgnoresUnknownKeys() throws {

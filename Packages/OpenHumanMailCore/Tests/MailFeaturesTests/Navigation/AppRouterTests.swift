@@ -238,18 +238,6 @@ import Testing
         await eventually { router.banner() == nil }
     }
 
-    @Test func readOnlyOfflineBannerPromisesNoSavedChanges() async throws {
-        let (env, router) = await shell(options: .init(liveConnectivity: true, safeMode: .readOnly))
-        let store = try #require(env.data as? FakeMailStore)
-        let follower = Task { await env.status.run() }
-        defer { follower.cancel() }
-        await eventually { env.status.connectivity.count == 2 }
-        store.setOffline(true)
-        await eventually { router.banner()?.kind == .offline }
-        #expect(router.banner()?.message == "Offline. Mail shows the mail on this Mac and syncs when you're back online.")
-        #expect(router.banner()?.detail == nil)
-    }
-
     @Test func markDoneRemovesTheRowAndUndoPutsItAndTheCursorBack() async throws {
         let env = AppEnvironment.fake(corpus: .make(threadCount: 10, now: fixedNow), options: .init(remoteAck: .immediate))
         let router = AppRouter(environment: env)
@@ -294,36 +282,17 @@ import Testing
         await eventually { router.list?.rows.count == 5 }
     }
 
-    @Test func readOnlyRefusesMarkDoneBeforeThePortAndSaysSoOnce() async throws {
-        let env = AppEnvironment.fake(corpus: .make(threadCount: 5, now: fixedNow), options: .init(safeMode: .readOnly))
-        let store = try #require(env.commands as? FakeMailStore)
-        let router = AppRouter(environment: env)
-        router.start()
-        await eventually { router.list?.rows.count == 5 }
-        #expect(!router.isEnabled(.markDone))
-        #expect(router.perform(.markDone))
-        #expect(router.perform(.trash))
-        #expect(router.perform(.markDone))
-        #expect(env.status.blockedNotice == StatusModel.blockedText)
-        #expect(env.notices.toasts.map(\.message) == ["Read-only: Mail can't change your mail"], "a repeat replaces the toast")
-        #expect(env.notices.toasts.map(\.style) == [.info], "an expected refusal, not an error (audit ST4)")
-        #expect(store.pendingOperationCount == 0)
-        #expect(router.list?.rows.count == 5)
-        #expect(router.perform(.nextThread))
-        #expect(router.list?.cursorIndex == 1)
-    }
-
-    @Test func thePortsOwnSafeModeRefusalShowsTheSameNotice() async throws {
+    @Test func aPortRefusalRestoresTheRowAndSaysItFailed() async throws {
         let env = AppEnvironment.fake(corpus: .make(threadCount: 5, now: fixedNow))
         let store = try #require(env.commands as? FakeMailStore)
         let router = AppRouter(environment: env)
         router.start()
         await eventually { router.list?.rows.count == 5 }
-        store.failNextCommand(.blockedBySafeMode)
-        #expect(router.perform(.markDone))
-        await eventually { env.notices.toasts.contains { $0.message == StatusModel.blockedText } }
-        #expect(env.status.blockedNotice == StatusModel.blockedText)
-        await eventually { router.list?.rows.count == 5 && router.list?.optimisticKeys.isEmpty == true }
+        store.failNextCommand(.notAllowed("this change"))
+        #expect(await env.actions.run(.markDone, source: .keyboard, host: router))
+        #expect(env.notices.toasts.contains { $0.message == "Couldn't mark 1 conversation done" && $0.style == .error })
+        #expect(router.list?.optimisticKeys.isEmpty == true)
+        await untilObserved { router.list?.rows.count == 5 }
         #expect(env.undo?.canUndo == false)
     }
 

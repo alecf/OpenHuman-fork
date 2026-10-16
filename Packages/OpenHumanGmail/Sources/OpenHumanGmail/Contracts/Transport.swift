@@ -55,7 +55,7 @@ public enum TransportError: Error, Equatable, Sendable {
     case tls(String)
     case cancelled
     case other(String)
-    case blockedBySafeMode(String)
+    case refusedByGuard(String)
 }
 
 public enum GmailError: Error, Equatable, Sendable {

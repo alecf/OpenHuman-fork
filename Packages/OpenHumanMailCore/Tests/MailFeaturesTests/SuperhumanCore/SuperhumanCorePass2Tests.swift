@@ -292,8 +292,8 @@ final class RecordingPrinter: ConversationPrinting {
         #expect(html.contains("Second &lt;line&gt;") && html.contains("isn't downloaded"))
     }
 
-    @Test func printHandsTheConversationToThePrinterInReadOnlyToo() async throws {
-        let f = ActionFixture(corpus: .rich(threadCount: 20, now: fixedNow), options: .init(remoteAck: .immediate, safeMode: .readOnly))
+    @Test func printHandsTheConversationToThePrinter() async throws {
+        let f = ActionFixture(corpus: .rich(threadCount: 20, now: fixedNow), options: .init(remoteAck: .immediate))
         await f.loaded()
         let printer = RecordingPrinter()
         f.registry.superhumanCore?.printer = printer
@@ -304,7 +304,6 @@ final class RecordingPrinter: ConversationPrinting {
         #expect(await f.run(.printConversation))
         let document = try #require(printer.documents.first)
         #expect(document.html.contains("oh-print-message"))
-        #expect(!f.registry.availability(.addToSplit, host: f.router).isEnabled, "split edits are refused in read-only")
     }
 
     @Test func theContactPaneIsAboutTheNewestOtherPerson() {

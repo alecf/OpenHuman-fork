@@ -18,12 +18,12 @@ final class GoogleCalendarProvider: CalendarProviding {
     let client: GoogleCalendarClient
     private let onFetch: (@Sendable (CalendarFetchRecord) -> Void)?
 
-    init(client: GoogleCalendarClient, account: String, readOnlyReason: String?,
+    init(client: GoogleCalendarClient, account: String, createRefusal: String?,
          onFetch: (@Sendable (CalendarFetchRecord) -> Void)? = nil) {
         self.client = client
         self.onFetch = onFetch
         info = CalendarProviderInfo(name: "Google Calendar", account: account,
-                                    createRefusal: client.allowsWrites ? nil : readOnlyReason ?? Self.cannotWrite)
+                                    createRefusal: client.allowsWrites ? nil : createRefusal ?? Self.cannotWrite)
     }
 
     static let cannotWrite = "Mail can't create events with this calendar connection."
@@ -380,8 +380,8 @@ final class GoogleCalendarProvider: CalendarProviding {
             return .failed("Couldn't \(what).")
         }
         switch failure {
-        case .blockedBySafeMode:
-            return .refused("Not allowed in this safe mode: Mail didn't send it.")
+        case .refusedByGuard:
+            return .refused("Mail never sends that calendar change, so nothing was changed.")
         case .reauthRequired, .unauthorized:
             return .failed("Google Calendar needs to be connected again (Settings › Calendar).")
         case .rateLimited:

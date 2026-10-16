@@ -6,7 +6,7 @@ public struct OpenHumanCLI: AsyncParsableCommand {
         commandName: "openhuman",
         abstract: "OpenHuman Mail on the command line: read the local cache, draft replies for review, never send.",
         discussion: """
-            Reads come from the same SQLite store as the app. Writes are queued for the app, which pushes them to Gmail.
+            Reads come from the same SQLite store as the app. Drafts wait in the app's review queue; mail changes are made in the app.
             Default output is JSON when stdout is not a terminal. Run `openhuman schema` for every command as data.
             """,
         version: OpenHumanCLIVersion.current,

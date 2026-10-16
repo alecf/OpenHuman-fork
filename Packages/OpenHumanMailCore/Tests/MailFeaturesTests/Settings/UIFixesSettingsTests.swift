@@ -48,9 +48,12 @@ struct UIFixesSettingsTests {
         #expect(!release.isAvailable && !release.showsDeveloperItems)
     }
 
-    @Test func theCalendarNoteHasNoSafeModeWordingForEveryone() {
-        #expect(!CalendarSettingsModel.createNote.lowercased().contains("safe mode"))
-        #expect(!CalendarSettingsModel.createNote.lowercased().contains("test-writes"))
+    @Test func theCalendarNotesUseNoModeWording() {
+        for note in [CalendarSettingsModel.createNote, CalendarSettingsModel.connectNote] {
+            for word in ["safe mode", "test-writes", "write mode", "read-only"] {
+                #expect(!note.lowercased().contains(word), "\(word)")
+            }
+        }
         #expect(CalendarSettingsModel.createNote.contains("Undo"))
     }
 

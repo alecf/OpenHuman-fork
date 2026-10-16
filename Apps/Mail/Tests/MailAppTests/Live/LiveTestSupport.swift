@@ -77,7 +77,7 @@ final class FakeGoogle: Sendable {
     let api: FakeGmailTransport
     let http = FakeHTTPTransport()
 
-    init(gmail: FakeGmail, grantedScope: String = GmailScope.readonly) {
+    init(gmail: FakeGmail, grantedScope: String = GmailScope.modify) {
         self.gmail = gmail
         let api = FakeGmailTransport(gmail)
         self.api = api

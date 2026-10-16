@@ -46,7 +46,7 @@ enum TokenEndpoint {
                 }
             } catch let error as TransportError {
                 switch error {
-                case .cancelled, .blockedBySafeMode: throw error
+                case .cancelled, .refusedByGuard: throw error
                 default:
                     guard canRetry else { throw error }
                     Log(.oauth).notice("token endpoint transport error; retrying")

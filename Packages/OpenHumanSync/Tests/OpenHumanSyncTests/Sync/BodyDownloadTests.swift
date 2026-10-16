@@ -276,16 +276,16 @@ private final class Flag: Sendable {
         #expect(await h.syncer.rateLimitStreak == 0)
     }
 
-    @Test func theDownloadSendsOnlyGETsThroughReadOnlyTransport() async throws {
+    @Test func theDownloadSendsOnlyGETsThroughTheLiveStack() async throws {
         let clock = InstantClock(now: testNow)
         let metrics = SyncMetricsCollector()
         var wireBox: FakeGmailTransport?
         let h = try SyncHarness(settings: backfillSettings(pageSize: 100), clock: clock) { gmail in
             let wire = FakeGmailTransport(gmail)
-            let factory = DefaultGmailClientFactory(safeMode: .readOnly, apiTransport: wire,
+            let factory = DefaultGmailClientFactory(apiTransport: wire,
                                                     config: GmailClientConfig(userAgent: "OpenHumanMail/test"),
                                                     clock: clock, metrics: { _ in metrics }) { _ in
-                (StaticTokenProvider(), [GmailScope.readonly])
+                (StaticTokenProvider(), [GmailScope.modify])
             }
             wireBox = wire
             return try! factory.client(for: "me@example.com")

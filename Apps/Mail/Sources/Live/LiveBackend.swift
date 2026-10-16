@@ -20,8 +20,6 @@ final class LiveBackend {
         case needsWriteAccess(AccountItem)
     }
 
-    let safeMode: SafeMode
-    let writeModeSwitch: LiveWriteModeSwitch?
     let store: MailStore
     let accounts: LiveAccountManager
     private let tokenStore: any TokenStore
@@ -34,12 +32,9 @@ final class LiveBackend {
     private let makeReceiver: @Sendable () -> any LoopbackRedirectReceiver
     private let browser: any ExternalBrowser
 
-    init(safeMode: SafeMode, store: MailStore, writeModeSwitch: LiveWriteModeSwitch? = nil,
-         accountDependencies: LiveAccountManager.Dependencies,
+    init(store: MailStore, accountDependencies: LiveAccountManager.Dependencies,
          transports: Transports, userAgent: String, pollInterval: Duration? = nil,
          makeSystemEvents: @escaping @MainActor () -> AppSystemEvents? = { AppSystemEvents() }) {
-        self.safeMode = safeMode
-        self.writeModeSwitch = writeModeSwitch
         self.store = store
         self.tokenStore = accountDependencies.tokenStore
         self.transports = transports
@@ -50,7 +45,7 @@ final class LiveBackend {
         calendarTokenStore = accountDependencies.calendarTokenStore
         makeReceiver = accountDependencies.makeReceiver
         browser = accountDependencies.browser
-        accounts = LiveAccountManager(safeMode: safeMode, store: store, dependencies: accountDependencies)
+        accounts = LiveAccountManager(store: store, dependencies: accountDependencies)
     }
 
     func initialStep() -> Start {
@@ -73,10 +68,10 @@ final class LiveBackend {
                 continue
             }
             if Self.scopeRefusal(token.grantedScopes) != nil {
-                refusal = refusal ?? .signIn(loginHint: account.email, notice: Self.broadAccessNotice(safeMode))
+                refusal = refusal ?? .signIn(loginHint: account.email, notice: Self.broadAccessNotice)
                 continue
             }
-            if safeMode == .normal, !token.grantedScopes.contains(GmailScope.modify) {
+            if !token.grantedScopes.contains(GmailScope.modify) {
                 refusal = refusal ?? .needsWriteAccess(account)
                 continue
             }
@@ -87,25 +82,21 @@ final class LiveBackend {
 
     static let signInAgainNotice = "Mail needs you to sign in again on this Mac. Your mail here is kept."
 
-    static let writeAccessNotice = "To make changes, sign in again and allow Mail to change your mail."
+    nonisolated static let writeAccessNotice = "To make changes, sign in again and allow Mail to change your mail."
 
-    static func broadAccessNotice(_ safeMode: SafeMode) -> String {
-        "This account gave Mail more access than it needs. Sign in again and Mail will ask only for "
-            + (safeMode == .readOnly ? "read-only access." : "what it uses.")
-    }
+    static let broadAccessNotice = "This account gave Mail more access than it needs. Sign in again and Mail will ask "
+        + "only for what it uses."
 
-    func makeSession(for account: AccountItem, writes: Bool = false) throws -> SyncSession {
+    func makeSession(for account: AccountItem) throws -> SyncSession {
         let client = try accounts.client(for: account)
         let (tokenEvents, relay) = AsyncStream.makeStream(of: TokenEvent.self)
         let credentials = Self.credentials(tokenStore: tokenStore, accounts: accounts, client: client,
                                            transport: transports.token, clock: clock, onEvent: { relay.yield($0) })
         let gmail = GmailClientConfig(userAgent: userAgent)
         let metrics = SyncMetricsRegistry()
-        let mode = safeMode
-        let sessionMode: SafeMode = mode == .normal && writes ? .normal : .readOnly
-        let factory = DefaultGmailClientFactory(safeMode: sessionMode, apiTransport: transports.api, config: gmail,
-                                                clock: clock, metrics: { metrics.collector(for: $0) }) { email in
-            try Self.credentials(email, from: credentials, safeMode: mode)
+        let factory = DefaultGmailClientFactory(apiTransport: transports.api, config: gmail, clock: clock,
+                                                metrics: { metrics.collector(for: $0) }) { email in
+            try Self.credentials(email, from: credentials)
         }
         let seconds = (try? store.setting(.pollIntervalSeconds, scope: .global)) ?? 60
         let manager = accounts, wires = transports, receiver = makeReceiver, opener = browser, time = clock
@@ -113,7 +104,7 @@ final class LiveBackend {
         var makeCalendar: LiveCalendarConnections.MakeSession?
         if let calendarTokens = calendarTokenStore {
             makeCalendar = { (email: String, owner: OAuthClientConfig) -> GoogleCalendarSession in
-                GoogleCalendarSession(account: email, mode: sessionMode, dependencies: GoogleCalendarSession.Dependencies(
+                GoogleCalendarSession(account: email, dependencies: GoogleCalendarSession.Dependencies(
                     tokenStore: calendarTokens, client: owner, tokenTransport: wires.token, apiTransport: wires.api,
                     makeReceiver: receiver, browser: opener, clock: time, knownClients: known,
                     pinnedScopes: { manager.calendarPinnedScopes(email: $0) },
@@ -128,16 +119,13 @@ final class LiveBackend {
             factory: factory, gmail: gmail, metrics: metrics, tokenStore: tokenStore, oauthClient: client, clock: clock,
             pollInterval: pollInterval ?? .seconds(max(seconds, 15)), systemEvents: makeSystemEvents(),
             tokenEvents: tokenEvents, draftsDirectory: store.location.draftsDirectory,
-            unsubscribeTransport: transports.unsubscribe,
-            writeMode: sessionMode == .normal, accounts: accounts, writeModeSwitch: writeModeSwitch)
+            unsubscribeTransport: transports.unsubscribe, accounts: accounts)
         wiring.calendar = calendar
         let connections = makeCalendar.map {
             LiveCalendarConnections(own: calendar, ownAccount: account.id, accounts: manager, make: $0)
         }
         wiring.calendarConnections = connections
-        let session = try SyncSession(account: account, store: store, wiring: wiring, isFake: false)
-        writeModeSwitch?.writesNow = session.environment.writeMode != nil
-        return session
+        return try SyncSession(account: account, store: store, wiring: wiring, isFake: false)
     }
 
     nonisolated static func credentials(
@@ -149,11 +137,11 @@ final class LiveBackend {
     }
 
     nonisolated static func credentials(
-        _ email: String, from credentials: AccountCredentials, safeMode: SafeMode
+        _ email: String, from credentials: AccountCredentials
     ) throws -> (tokens: any AccessTokenProvider, grantedScopes: [String]) {
         guard let scopes = try credentials.grantedScopes(for: email) else { throw GmailError.reauthRequired }
         if let broader = scopeRefusal(scopes) {
-            Log(.oauth).error("\(safeMode.rawValue): a token carrying \(broader) is not used")
+            Log(.oauth).error("a token carrying \(broader) is not used")
             throw GmailError.reauthRequired
         }
         return (credentials.tokenManager(for: email), scopes)

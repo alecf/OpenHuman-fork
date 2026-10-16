@@ -78,14 +78,6 @@ extension CalendarWindowModel {
         case response(id: String, CalendarResponse)
     }
 
-    var safeModeRefusal: String? {
-        switch environment.status.safeMode {
-        case .readOnly: String(localized: "Read-only safe mode: Mail never changes your calendar.")
-        case .writeAllowlist: String(localized: "Test-writes safe mode: changing calendar events is off (it can email people).")
-        case .normal: nil
-        }
-    }
-
     func provider(for event: CalendarEvent) -> (key: String, provider: (any CalendarProviding)?) {
         let key = event.account?.lowercased() ?? sources.first?.key ?? ""
         if let found = providers[key] { return (key, found) }
@@ -99,7 +91,7 @@ extension CalendarWindowModel {
         removeQuestion = nil
         selectedEventID = event.id
         let (key, found) = provider(for: event)
-        let refusal = safeModeRefusal ?? found?.info.createRefusal
+        let refusal = found?.info.createRefusal
             ?? (found == nil ? CalendarError.notConfigured.description : nil)
         let abilities = found?.abilities ?? []
         let mine = !event.id.isEmpty
@@ -141,12 +133,6 @@ extension CalendarWindowModel {
             closeCard()
             return
         }
-        if let refusal = safeModeRefusal {
-            current.note = refusal
-            card = current
-            environment.actions.refuse(.calendarNewEvent, .safeMode)
-            return
-        }
         if current.form != nil {
             await saveFormCard(current)
             return
@@ -170,12 +156,6 @@ extension CalendarWindowModel {
 
     public func respond(_ response: CalendarResponse) async {
         guard var current = card else { return }
-        if let refusal = safeModeRefusal {
-            current.note = refusal
-            card = current
-            environment.actions.refuse(.calendarNewEvent, .safeMode)
-            return
-        }
         guard current.canRespond, let target = provider(for: current.event).provider else {
             current.note = current.reason ?? String(localized: "This calendar can't answer invitations from Mail.")
             card = current
@@ -203,12 +183,6 @@ extension CalendarWindowModel {
 
     public func askToRemoveCardEvent() {
         guard var current = card else { return }
-        if let refusal = safeModeRefusal {
-            current.note = refusal
-            card = current
-            environment.actions.refuse(.calendarNewEvent, .safeMode)
-            return
-        }
         guard current.canRemove else {
             current.note = current.reason ?? String(localized: "This calendar can't remove events from Mail yet.")
             card = current
@@ -229,12 +203,6 @@ extension CalendarWindowModel {
 
     public func removeCardEvent() async {
         guard var current = card else { return }
-        if let refusal = safeModeRefusal {
-            current.note = refusal
-            card = current
-            environment.actions.refuse(.calendarNewEvent, .safeMode)
-            return
-        }
         guard current.canRemove else {
             current.note = current.reason ?? String(localized: "This calendar can't remove events from Mail yet.")
             card = current
@@ -271,10 +239,6 @@ extension CalendarWindowModel {
 
     public func moveEvent(_ event: CalendarEvent, to start: Date, end: Date) async {
         guard start != event.start || end != event.end else { return }
-        if safeModeRefusal != nil {
-            environment.actions.refuse(.calendarNewEvent, .safeMode)
-            return
-        }
         guard event.isMovableByMe, let target = provider(for: event).provider else {
             environment.notices.post(String(localized: "Mail moves only your own events. Someone else organizes this one."),
                                      duration: NoticeCenter.infoDuration)

@@ -55,7 +55,6 @@ struct EngineNoticeTests {
         #expect(NotificationService.schedulerStoppedText("something_new")
             == "Background tasks stopped after repeated errors. Quit and open Mail again.")
         #expect(NotificationService.schedulerStoppedText("snooze") == "Snooze stopped after repeated errors. Restart Mail to try again.")
-        #expect(NotificationService.readOnlyNoticeTitle == "Mail is read-only, so nothing changed.")
     }
 
     @Test func aReturnedSnoozeNotifiesInTheBackgroundWithItsSubject() async throws {

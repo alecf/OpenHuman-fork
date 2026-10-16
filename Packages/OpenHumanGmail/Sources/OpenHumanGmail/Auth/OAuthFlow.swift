@@ -24,12 +24,6 @@ public struct OAuthFlow: Sendable {
                   clock: clock, randomBytes: OAuthRandom.bytes)
     }
 
-    public init(client: OAuthClientConfig, mode: SafeMode, transport: any HTTPTransport,
-                receiver: any LoopbackRedirectReceiver, browser: any ExternalBrowser, clock: any OHClock) {
-        self.init(client: client, scopes: mode.oauthScopes, transport: transport, receiver: receiver,
-                  browser: browser, clock: clock)
-    }
-
     init(client: OAuthClientConfig, scopes: [String], transport: any HTTPTransport,
          receiver: any LoopbackRedirectReceiver, browser: any ExternalBrowser, clock: any OHClock,
          randomBytes: @escaping @Sendable (Int) -> Data) {

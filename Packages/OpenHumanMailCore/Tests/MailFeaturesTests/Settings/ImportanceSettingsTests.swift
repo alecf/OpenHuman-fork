@@ -138,26 +138,6 @@ struct ImportanceSettingsTests {
         #expect(ImportanceSettingsModel.normalized("keyword:invoice", for: .matcher) == nil, "add-on rules are not typed here")
     }
 
-    @Test func readOnlySafeModeListsTheRulesButChangesNothing() async throws {
-        let f = SettingsFixture(safeMode: .readOnly)
-        let model = await model(f)
-        #expect(!model.canEdit)
-        #expect(model.editNote?.hasPrefix("Read-only safe mode") == true)
-        model.beginAdd()
-        #expect(model.draft == nil, "the editor does not open")
-        let account = try #require(model.account)
-        let rules = port(f)
-        rules.setSafeMode(.normal)
-        _ = try await rules.apply(ImportanceChange(kind: .alwaysSender, account: account, value: "dana@example.com"))
-        rules.setSafeMode(.readOnly)
-        await eventually { model.rules.count == 1 }
-        let row = try #require(model.groups.first?.rows.first)
-        model.beginEdit(row)
-        #expect(model.draft == nil)
-        await model.delete(row)
-        #expect(rules.allRules.count == 1, "nothing is deleted in read-only safe mode")
-        #expect(!model.canUndoLastChange)
-    }
 
     @Test func withoutAWritePortThePageKeepsTheUndoToken() async throws {
         let store = FakeMailStore(corpus: .small, options: .init(remoteAck: .immediate))

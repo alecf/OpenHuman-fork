@@ -128,10 +128,6 @@ public final class SuperhumanCoreActionHandler: ActionHandler {
 
     func saveSnippet(from message: MessageKey, subject: String) async {
         guard let environment, let commands = environment.commands else { return }
-        guard environment.status.safeMode.allowsMailChanges else {
-            feedback.refuse(.saveMessageAsSnippet, .safeMode)
-            return
-        }
         guard let content = await ConversationPrint.content(of: message, data: environment.data) else {
             feedback.failed("Couldn't read the message")
             return
@@ -152,8 +148,6 @@ public final class SuperhumanCoreActionHandler: ActionHandler {
                                                                      bodyHTML: ComposeSerializer.html(document, signature: nil),
                                                                      variables: variables))
             environment.notices.post("Saved snippet “\(saved.name)”", style: .info, duration: NoticeCenter.infoDuration)
-        } catch MailPortError.blockedBySafeMode {
-            feedback.refuse(.saveMessageAsSnippet, .safeMode)
         } catch {
             feedback.failed((error as? MailPortError)?.description ?? "Couldn't save the snippet")
         }

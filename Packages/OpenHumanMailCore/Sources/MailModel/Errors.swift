@@ -2,7 +2,7 @@ import Foundation
 
 public enum MailPortError: Error, Equatable, Sendable, CustomStringConvertible {
     case unsupported(String)
-    case blockedBySafeMode
+    case notAllowed(String)
     case notFound(String)
     case conflict(String)
     case reservedLabel(String)
@@ -10,12 +10,10 @@ public enum MailPortError: Error, Equatable, Sendable, CustomStringConvertible {
     case limitExceeded(String)
     case unavailable(String)
 
-    public static let readOnlyText = "Read-only: Mail can't change your mail"
-
     public var description: String {
         switch self {
         case .unsupported(let what): "Not supported yet: \(what)"
-        case .blockedBySafeMode: Self.readOnlyText
+        case .notAllowed(let what): "Not allowed: \(what)"
         case .notFound(let what): "Not found: \(what)"
         case .conflict(let why): "Changed elsewhere: \(why)"
         case .reservedLabel(let name): "\(name) is managed by Mail and can't be changed by hand"

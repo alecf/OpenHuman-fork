@@ -60,13 +60,6 @@ import Testing
         #expect(Set(rules(f).allRules.map(\.kind)) == [.neverSender, .alwaysThread], "the move is kept for later")
     }
 
-    @Test func readOnlyRefusesTheMoves() async throws {
-        let f = await fixture(options: .init(safeMode: .readOnly))
-        #expect(f.registry.availability(.moveToOther, host: f.router) == .disabled(.safeMode))
-        #expect(await f.run(.moveToOther))
-        #expect(rules(f).allRules.isEmpty)
-    }
-
     @Test func settingsListsConversationRulesBelowSendersByTheirSubject() {
         let account = AccountID(1)
         let sender = ImportanceRuleInfo(id: "1", kind: .alwaysSender, account: account, value: "ann@acme.example",

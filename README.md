@@ -77,7 +77,7 @@ This is early software under active development. Unsigned builds and source buil
 - **AI on your Mac.** Summaries, quick replies, rewrites and Ask AI about your mail. AI runs on your Mac by default, and providers that would send mail off your Mac stay off until you allow them. Every prompt can be read and edited in Settings.
 - **Calendar beside your mail.** Your Google Calendar day next to the conversation, events created from an email, and free times inserted into a reply.
 - **Less noise.** Mute a conversation, block a sender or a domain, unsubscribe, and clear out old mail with Get me to zero.
-- **Starts read-only.** Mail first asks Gmail for read-only access and changes nothing until you turn on write mode. It never asks to delete mail permanently or to change Gmail settings or filters.
+- **Safe by design.** Mail never deletes mail permanently, empties Trash or Spam, or changes Gmail settings or filters, and ⌘Z undoes changes; a sent message can be taken back during its undo window.
 - **Themes.** Six built-in themes, and [your own](docs/themes.md) as plain JSON files.
 - **A CLI for agents.** `openhuman` reads the same local mail, writes drafts for you to review, and never sends. It includes an MCP server. See the [CLI documentation](docs/cli/README.md).
 

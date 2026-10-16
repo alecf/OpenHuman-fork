@@ -28,7 +28,7 @@ struct KeycapTooltipTests {
     }
 
     @Test func aDisabledActionShowsTheReasonWithoutKeys() {
-        let reason = DisabledReason.safeMode.description
+        let reason = DisabledReason.noSelection.description
         let tip = KeycapTooltipContent.make(title: "Mark done", bindings: [.key("e")], enabled: false, reason: reason)
         #expect(tip.title == reason && tip.keycaps.isEmpty && tip.plainText == reason)
         let noKey = KeycapTooltipContent.make(title: "More actions", bindings: [], enabled: true, reason: nil)

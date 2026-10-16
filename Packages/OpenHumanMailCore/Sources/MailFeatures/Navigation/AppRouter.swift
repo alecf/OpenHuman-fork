@@ -75,8 +75,7 @@ public final class AppRouter {
 
     public func banner(now: Date = Date()) -> StatusBanner? {
         StatusBanner.current(active: account, connectivity: environment.status.connectivity, now: now,
-                             canReauthorize: environment.accounts != nil,
-                             readOnly: environment.status.safeMode == .readOnly)
+                             canReauthorize: environment.accounts != nil)
     }
 
     public var windowTitle: String {

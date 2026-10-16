@@ -1,5 +1,4 @@
 import Foundation
-import MailActions
 import MailModel
 import Observation
 import OpenHumanCore
@@ -7,12 +6,9 @@ import OpenHumanCore
 @MainActor
 @Observable
 public final class StatusModel {
-    public let safeMode: SafeModeInfo
-    public let isWriteMode: Bool
     public private(set) var connectivity: [AccountID: ConnectivityState] = [:]
     public private(set) var progress: [AccountID: String] = [:]
     public var activeAccount: AccountID?
-    public private(set) var blockedNotice: String?
     public var focusLine: String?
     public private(set) var smartSearch: SmartSearchStatus = .off
     public var sendingLine: String?
@@ -25,28 +21,20 @@ public final class StatusModel {
     public nonisolated static let pendingDebounce: Duration = .milliseconds(400)
 
     @ObservationIgnored private let data: any MailDataSource
-    @ObservationIgnored private let noticeDuration: Duration
     @ObservationIgnored private let debounce: Duration
     @ObservationIgnored private let sleeper: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private var debounceTask: Task<Void, Never>?
-    @ObservationIgnored private var noticeTask: Task<Void, Never>?
 
-    public nonisolated static let blockedText = MailPortError.readOnlyText
-
-    public init(data: any MailDataSource, noticeDuration: Duration = .seconds(4), isWriteMode: Bool = false,
-                settings: (any SettingsPort)? = nil, pendingDebounce: Duration = StatusModel.pendingDebounce,
+    public init(data: any MailDataSource, settings: (any SettingsPort)? = nil,
+                pendingDebounce: Duration = StatusModel.pendingDebounce,
                 sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
         self.data = data
         self.debounce = pendingDebounce
         self.sleeper = sleep
         self.showPendingSync = StoredSetting(AppSettings.showPendingSync, port: settings)
-        self.safeMode = data.safeMode()
-        self.isWriteMode = isWriteMode && safeMode == .normal
-        self.noticeDuration = noticeDuration
     }
 
     isolated deinit {
-        noticeTask?.cancel()
         debounceTask?.cancel()
     }
 
@@ -116,56 +104,9 @@ public final class StatusModel {
         return text
     }
 
-    public var safeModeText: String? {
-        switch safeMode {
-        case .normal: return nil
-        case .readOnly: return "Read-only"
-        case .writeAllowlist: return "Safe mode: test writes only"
-        }
-    }
-
-    public var safeModeDetail: String? {
-        switch safeMode {
-        case .normal: return nil
-        case .readOnly: return "Mail can't change or send mail"
-        case .writeAllowlist: return "Only test threads can change; sending is off"
-        }
-    }
-
-    public var safeModeHelp: String? {
-        switch safeMode {
-        case .normal: return nil
-        case .readOnly:
-            return Self.readOnlyHelp
-        case .writeAllowlist:
-            return "Mail may change only threads and drafts this test run created. Sending is always off."
-        }
-    }
-
-    nonisolated static var readOnlyHelp: String {
-        let help = "Mail is connected with read-only access. It reads and syncs your mail but can't archive, label, star, "
-            + "snooze, trash or send, and snoozed conversations don't come back until it can make changes."
-        #if DEBUG
-        return help + " Set at launch with OPENHUMAN_SAFE_MODE."
-        #else
-        return help
-        #endif
-    }
-
     public var isVisible: Bool {
-        safeModeText != nil || !connectivity.isEmpty || blockedNotice != nil || focusLine != nil || smartSearchLine != nil
-            || sendingLine != nil || preparingLine != nil || pendingLine != nil
-    }
-
-    public func reportBlockedWrite(_ action: ActionID) {
-        blockedNotice = Self.blockedText
-        noticeTask?.cancel()
-        let duration = noticeDuration
-        noticeTask = Task { [weak self] in
-            try? await Task.sleep(for: duration)
-            guard !Task.isCancelled else { return }
-            self?.blockedNotice = nil
-        }
+        !connectivity.isEmpty || focusLine != nil || smartSearchLine != nil || sendingLine != nil || preparingLine != nil
+            || pendingLine != nil
     }
 
     public var pendingLine: String? {

@@ -72,7 +72,7 @@ import Testing
             #expect(command["writes"] as? Bool == (command["writeScope"] as? String != "none"))
         }
         let done = try #require(commands.first { $0["path"] as? String == "gmail.done" })
-        #expect(done["aliases"] as? [String] == ["gmail.archive"] && done["stage"] as? String == "1b" && done["writeScope"] as? String == "mail")
+        #expect(done["aliases"] as? [String] == ["gmail.archive"] && done["stage"] as? String == "1b" && done["writeScope"] as? String == "mailChange")
         let search = try #require(commands.first { $0["path"] as? String == "gmail.search" })
         #expect((search["arguments"] as? [[String: Any]])?.first?["name"] as? String == "query")
         let optionNames = (search["options"] as? [[String: Any]])?.flatMap { $0["names"] as? [String] ?? [] } ?? []
@@ -92,7 +92,8 @@ import Testing
             #expect((one.data["commands"] as? [[String: Any]])?.count == 1)
         }
         #expect((await h.run(["schema", "gmail.nope", "--json"])).code == 3)
-        #expect((await h.run(["schema", "--plain"])).out.contains("gmail.done\t1b\t1\tmail"))
+        #expect((await h.run(["schema", "--plain"])).out.contains("gmail.done\t1b\t1\tmailChange"))
+        #expect((await h.run(["schema", "--plain"])).out.contains("gmail.drafts.create\t1b\t1\tagentDraft"))
     }
 
     @Test func theCommittedSchemaIsFresh() async throws {
@@ -106,7 +107,7 @@ import Testing
     @Test func theSchemaIsIdenticalWhateverTheEnvironment() async throws {
         let h = try Harness(seed: false)
         let a = await h.run(["schema", "--json"])
-        let b = await h.run(["schema", "--json", "--wrap-untrusted"], environment: ["OPENHUMAN_SAFE_MODE": "write-allowlist"], timeZone: "Asia/Tokyo")
+        let b = await h.run(["schema", "--json", "--wrap-untrusted"], environment: ["OPENHUMAN_READONLY": "1"], timeZone: "Asia/Tokyo")
         #expect(a.data["commands"] as? NSArray == b.data["commands"] as? NSArray)
     }
 }

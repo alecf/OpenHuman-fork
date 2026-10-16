@@ -13,7 +13,7 @@ private final class CountingImportance: ImportanceRulesPort {
     let fake: FakeImportanceRules
     private let counters = Mutex<[AccountID: [ContactReplyCounter]]>([:])
 
-    init(safeMode: SafeModeInfo = .normal) { fake = FakeImportanceRules(safeMode: safeMode) }
+    init() { fake = FakeImportanceRules() }
 
     func setCounters(_ list: [ContactReplyCounter], for account: AccountID) { counters.withLock { $0[account] = list } }
 
@@ -186,8 +186,8 @@ private func startedCenter(_ importance: CountingImportance, undo: UndoCoordinat
 }
 
 @MainActor
-@Test func readOnlyRefusesTheRuleAndMarksNothing() async throws {
-    let importance = CountingImportance(safeMode: .readOnly)
+@Test func aRefusedRuleMarksNothingAndDeclineStillWorks() async throws {
+    let importance = CountingImportance()
     let (center, f) = await startedCenter(importance)
     importance.setCounters([replies("dana@example.com", daysAgo: [1, 2, 3])], for: f.work)
     let model = VIPSettingsModel(center: center, data: f.env.data, canMarkVIPs: true)
@@ -197,8 +197,9 @@ private func startedCenter(_ importance: CountingImportance, undo: UndoCoordinat
     model.refresh()
     await model.settle()
     let suggestion = try #require(model.suggestions.first)
+    importance.fake.failNext(.unavailable("importance rules"))
     await model.accept(suggestion)
-    #expect(model.errorMessage == DisabledReason.safeModeText)
+    #expect(model.errorMessage == MailPortError.unavailable("importance rules").description)
     #expect(try await f.env.settings!.get(VIPSettings.marked(f.work)) == [])
     await model.decline(suggestion)
     #expect(model.errorMessage == nil && model.notice == "Mail won't suggest dana@example.com again.")

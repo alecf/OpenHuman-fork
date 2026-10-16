@@ -16,8 +16,8 @@ final class ServicesFixture {
     let services = FakeServicesRegistrar()
     let active = ActiveFlag()
 
-    init(safeMode: SafeModeInfo = .normal, flags: FeatureFlags = FeatureFlags()) {
-        store = FakeMailStore(corpus: .make(threadCount: 10, now: fixedNow), options: .init(remoteAck: .immediate, safeMode: safeMode))
+    init(flags: FeatureFlags = FeatureFlags()) {
+        store = FakeMailStore(corpus: .make(threadCount: 10, now: fixedNow), options: .init(remoteAck: .immediate))
         recorder = RecordingCommands(store)
         env = AppEnvironment(data: store, commands: recorder, accounts: store, settings: store, isFake: true,
                              featureFlags: flags)
@@ -168,19 +168,6 @@ struct ServicesModelTests {
         f.env.system.setServices(enabled: true)
         f.services.deliver(.newMessage("Hello"))
         #expect(f.session != nil)
-    }
-
-    @Test func readOnlySafeModeOpensTheComposerAndCallsNoWritePort() async throws {
-        let f = ServicesFixture(safeMode: .readOnly)
-        await f.ready()
-        f.services.deliver(.newMessage("Read-only body"))
-        let session = try #require(f.session)
-        #expect(!session.canPersist)
-        session.updateBody(doc("Typed in read-only"))
-        _ = await session.save()
-        f.services.deliver(.attachFiles(try f.files(["c.txt"])))
-        await f.env.compose.settle()
-        #expect(f.recorder.calls.isEmpty, "\(f.recorder.calls)")
     }
 
     @Test func theModuleIsOnByDefaultAndOffLeavesNoProvider() async {

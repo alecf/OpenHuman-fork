@@ -111,7 +111,7 @@ enum Listing {
 
 struct Gmail: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "Read and triage mail in the local cache; drafts for review.",
+        abstract: "Read mail in the local cache; drafts for review.",
         subcommands: [
             GmailSearch.self, GmailList.self, GmailInbox.self, GmailGet.self, ThreadGroup.self, BatchGroup.self,
             GmailDone.self, GmailMoveToInbox.self, GmailRead.self, GmailUnread.self, GmailStar.self, GmailUnstar.self,

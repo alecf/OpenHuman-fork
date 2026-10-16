@@ -3,7 +3,7 @@ import OpenHumanCore
 import Synchronization
 
 public struct DenyListTransport: HTTPTransport {
-    private let wrapped: any HTTPTransport
+    let wrapped: any HTTPTransport
     public let recipients: SendRecipientGate?
 
     public init(wrapping transport: any HTTPTransport, recipients: SendRecipientGate? = nil) {
@@ -14,8 +14,8 @@ public struct DenyListTransport: HTTPTransport {
     public func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         let summary = ReadOnlyTransport.summary(of: request)
         if let reason = Self.refusalReason(for: request) ?? recipients?.refusalReason(for: request) {
-            Log(.gmail).notice("write mode refused \(ReadOnlyTransport.redactingAddresses(summary)): \(reason)")
-            throw TransportError.blockedBySafeMode(summary)
+            Log(.gmail).notice("deny list refused \(ReadOnlyTransport.redactingAddresses(summary)): \(reason)")
+            throw TransportError.refusedByGuard(summary)
         }
         let response = try await wrapped.send(request)
         if let recipients, (200..<300).contains(response.status) { recipients.learn(from: request, response: response) }

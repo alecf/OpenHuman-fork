@@ -101,7 +101,7 @@ struct SignInV2Tests {
     private func model(_ status: OAuthClientStatus, hint: String = "", notice: String? = nil)
         -> (SignInModel, FakeMailStore, Task<Void, Never>) {
         let store = FakeMailStore(corpus: .make(threadCount: 1), options: .init(remoteAck: .immediate, oauthClient: status))
-        let model = SignInModel(accounts: store, safeMode: .normal, loginHint: hint, notice: notice)
+        let model = SignInModel(accounts: store, loginHint: hint, notice: notice)
         let runner = Task { await model.run() }
         return (model, store, runner)
     }
@@ -138,9 +138,9 @@ struct SignInV2Tests {
     }
 
     @Test func theAccountFieldWaitsUnlessTheAddressIsKnown() {
-        let fresh = SignInModel(accounts: FakeMailStore(corpus: .make(threadCount: 1), options: .init()), safeMode: .normal)
+        let fresh = SignInModel(accounts: FakeMailStore(corpus: .make(threadCount: 1), options: .init()))
         #expect(!fresh.showsAccountField)
-        let again = SignInModel(accounts: FakeMailStore(corpus: .make(threadCount: 1), options: .init()), safeMode: .normal,
+        let again = SignInModel(accounts: FakeMailStore(corpus: .make(threadCount: 1), options: .init()),
                                 loginHint: "robin@example.com")
         #expect(again.showsAccountField)
     }

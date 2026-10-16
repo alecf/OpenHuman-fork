@@ -161,7 +161,7 @@ public struct ThreadListOverlay: Sendable {
     private(set) var entries: [Entry] = []
     private var nextID = 1
     public private(set) var version = 0
-    // Local-only reads (read-only mode): the store never confirms them, so they last until newer mail arrives
+    // Local-only reads (no write port): the store never confirms them, so they last until newer mail arrives
     public private(set) var localReads: [ThreadKey: Date] = [:]
 
     public init() {}

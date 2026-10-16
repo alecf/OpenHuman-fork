@@ -15,14 +15,14 @@ struct OnboardingFixture {
     let model: OnboardingModel
 
     init(progress initial: OnboardingProgress = OnboardingProgress(), ai: FakeAIOnboarding = FakeAIOnboarding(),
-         notifier: FakeSystemNotifier = FakeSystemNotifier(grantOnRequest: true), safeMode: SafeModeInfo = .normal) {
-        f = SettingsFixture(safeMode: safeMode)
+         notifier: FakeSystemNotifier = FakeSystemNotifier(grantOnRequest: true)) {
+        f = SettingsFixture()
         progress = InMemoryOnboardingProgress(initial)
         self.ai = ai
         self.notifier = notifier
         login = FakeLoginItem()
         model = OnboardingModel(store: progress, ports: OnboardingModel.Ports(
-            data: f.store, accounts: f.store, ai: ai, notifier: notifier, loginItem: login, safeMode: safeMode))
+            data: f.store, accounts: f.store, ai: ai, notifier: notifier, loginItem: login))
     }
 }
 
@@ -45,8 +45,7 @@ struct OnboardingFlowTests {
         first.model.close()
         #expect(!first.progress.load().completed && first.progress.load().step == .keys)
         let again = OnboardingModel(store: first.progress, ports: OnboardingModel.Ports(
-            data: first.f.store, accounts: first.f.store, ai: first.ai, notifier: first.notifier, loginItem: first.login,
-            safeMode: .normal))
+            data: first.f.store, accounts: first.f.store, ai: first.ai, notifier: first.notifier, loginItem: first.login))
         #expect(again.step == .keys)
         #expect(OnboardingModel.shouldAutoPresent(first.progress), "an unfinished guide shows itself again")
     }
@@ -58,7 +57,7 @@ struct OnboardingFlowTests {
         #expect(o.progress.load().completed && o.model.isFinished)
         #expect(!OnboardingModel.shouldAutoPresent(o.progress))
         let replay = OnboardingModel(store: o.progress, ports: OnboardingModel.Ports(
-            data: o.f.store, accounts: o.f.store, ai: o.ai, notifier: o.notifier, loginItem: o.login, safeMode: .normal))
+            data: o.f.store, accounts: o.f.store, ai: o.ai, notifier: o.notifier, loginItem: o.login))
         #expect(replay.step == .welcome && !replay.isFinished)
     }
 
@@ -120,15 +119,14 @@ struct OnboardingFlowTests {
         return []
     }
 
-    @Test func theGuideEndsInTheInboxWithoutChangingMailInAnySafeMode() async throws {
-        for mode in [SafeModeInfo.readOnly, .normal] {
-            let o = OnboardingFixture(safeMode: mode)
-            let before = try await inboxIDs(o)
-            while !o.model.isLast { await o.model.next() }
-            o.model.finish()
-            #expect(o.model.isFinished && o.model.safeMode == mode)
-            #expect(try await inboxIDs(o) == before, "the guide touched no mail")
-        }
+    @Test func theGuideEndsInTheInboxWithoutChangingMail() async throws {
+        let o = OnboardingFixture()
+        let before = try await inboxIDs(o)
+        while !o.model.isLast { await o.model.next() }
+        o.model.finish()
+        #expect(o.model.isFinished)
+        #expect(try await inboxIDs(o) == before, "the guide touched no mail")
+        #expect(o.f.store.pendingOperationCount == 0)
     }
 }
 

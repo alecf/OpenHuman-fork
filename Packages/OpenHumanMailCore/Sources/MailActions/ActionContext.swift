@@ -42,7 +42,6 @@ public struct ActionContext: Hashable, Sendable {
     public var targets: TargetState
     public var hasRows: Bool
     public var composer: UUID?
-    public var safeMode: SafeModeInfo
     public var canWrite: Bool
     public var canUndo: Bool
     public var canRedo: Bool
@@ -53,7 +52,7 @@ public struct ActionContext: Hashable, Sendable {
                 location: MailLocation? = nil, selection: [ThreadKey] = [], checkedCount: Int = 0,
                 focusedThread: ThreadKey? = nil, focusedMessage: MessageKey? = nil, sender: String? = nil,
                 targets: TargetState = TargetState(), hasRows: Bool = false, composer: UUID? = nil,
-                safeMode: SafeModeInfo = .normal, canWrite: Bool = true, canUndo: Bool = false, canRedo: Bool = false,
+                canWrite: Bool = true, canUndo: Bool = false, canRedo: Bool = false,
                 togglesOn: Set<ActionID> = []) {
         self.scope = scope
         self.account = account
@@ -67,7 +66,6 @@ public struct ActionContext: Hashable, Sendable {
         self.targets = targets
         self.hasRows = hasRows
         self.composer = composer
-        self.safeMode = safeMode
         self.canWrite = canWrite
         self.canUndo = canUndo
         self.canRedo = canRedo
@@ -106,7 +104,6 @@ public enum ActionAvailability: Hashable, Sendable {
 }
 
 public enum DisabledReason: Hashable, Sendable, CustomStringConvertible {
-    case safeMode
     case unavailable(String)
     case noSelection
     case nothingToUndo
@@ -115,11 +112,8 @@ public enum DisabledReason: Hashable, Sendable, CustomStringConvertible {
     case needs(action: String, context: String)
     case notBuilt(String)
 
-    public static let safeModeText = MailPortError.readOnlyText
-
     public var description: String {
         switch self {
-        case .safeMode: Self.safeModeText
         case .unavailable(let what): "\(what) isn't available here"
         case .noSelection: "No conversation selected"
         case .nothingToUndo: "Nothing to undo"
@@ -132,7 +126,7 @@ public enum DisabledReason: Hashable, Sendable, CustomStringConvertible {
 
     public var announces: Bool {
         switch self {
-        case .safeMode, .unavailable, .noSelection, .needs, .notBuilt: true
+        case .unavailable, .noSelection, .needs, .notBuilt: true
         case .nothingToUndo, .nothingToRedo, .other: false
         }
     }

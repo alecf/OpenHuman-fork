@@ -21,7 +21,7 @@ struct FakeFactory: GmailClientFactory {
         _ = await gmail.seedInbox(count: 2)
 
         let created = await h.run(["gmail", "drafts", "create", "--to", "bob@example.invalid", "--subject", "From the CLI", "--note", "please review",
-                                   "--body", "Synthetic text.", "--json"], environment: Harness.write)
+                                   "--body", "Synthetic text.", "--json"])
         #expect(created.code == 6)
         let draftID = try #require(created.data["draftId"] as? String)
         let upload = try #require(try h.operations([.pending]).first)
@@ -31,7 +31,7 @@ struct FakeFactory: GmailClientFactory {
                                                        changeNotificationName: "dev.openhuman.test.\(UUID().uuidString)"))
         let app = MailEngine(store: appStore, gmailFactory: FakeFactory(gmail: gmail), tokenStore: nil, oauthClient: nil,
                              configuration: EngineConfiguration(role: .app, appVersion: "0.0.0-test", gmail: GmailClientConfig(userAgent: "t"),
-                                                                clock: clock, schedulers: [], safeMode: .normal), systemEvents: nil)
+                                                                clock: clock, schedulers: []), systemEvents: nil)
         await app.start()
         var refused = false
         for _ in 0..<7_500 {
@@ -39,7 +39,7 @@ struct FakeFactory: GmailClientFactory {
             try await Task.sleep(for: .milliseconds(4))
         }
         #expect(refused, "the app's drainer did not refuse the CLI draft within 30 s")
-        #expect(try h.store.operation(upload.id)?.lastErrorCode == "safe_mode_blocked")
+        #expect(try h.store.operation(upload.id)?.lastErrorCode == "not_applied_outside_app")
         #expect(await gmail.callCount(.createDraft) == 0)
 
         let review = await h.run(["gmail", "review", "list", "--json"])

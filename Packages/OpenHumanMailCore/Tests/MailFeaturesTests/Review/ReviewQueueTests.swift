@@ -131,18 +131,6 @@ import Testing
         #expect(f.recorder.calls.contains("cancelSend"))
     }
 
-    @Test func sendIsRefusedInReadOnlyAndWritesNothing() async throws {
-        let f = ComposeFixture(safeMode: .readOnly)
-        let review = await open(f)
-        for id in [ActionID.reviewSend, .reviewKeep, .reviewDiscard] {
-            #expect(await f.run(id), "refused visibly, key consumed: \(id)")
-        }
-        #expect(f.toasts.contains("Read-only: Mail can't change your mail"))
-        #expect(review.counts == .init() && f.recorder.calls.filter { Self.mutations.contains($0) }.isEmpty)
-        #expect(f.compose.sessions.isEmpty)
-        #expect(review.keep() == nil && review.discard() == nil)
-    }
-
     @Test func editOpensTheRealComposerAndKeysActInsideIt() async throws {
         let f = ComposeFixture()
         let review = await open(f)

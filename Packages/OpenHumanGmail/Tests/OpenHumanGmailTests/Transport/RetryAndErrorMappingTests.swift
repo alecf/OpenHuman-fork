@@ -45,7 +45,7 @@ import Testing
             (.transport(.timedOut), true, true), (.transport(.timedOut), false, false),
             (.transport(.connectionLost(requestMayHaveBeenSent: true)), false, false),
             (.transport(.cannotConnect), false, true), (.transport(.notConnected), false, true),
-            (.transport(.blockedBySafeMode("POST /x")), true, false),
+            (.transport(.refusedByGuard("POST /x")), true, false),
             (.transport(.tls("x")), true, false),
             (.badRequest(reason: nil, message: ""), true, false), (.notFound("x"), true, false),
             (.forbidden(reason: "x", message: ""), true, false), (.dailyLimitExceeded, true, false),
@@ -96,7 +96,7 @@ import Testing
         }
         #expect(google.count == GmailMethod.allCases.count)
         #expect(GmailError.server(status: 503, message: "x").code == "server_503")
-        #expect(GmailError.transport(.blockedBySafeMode("POST /gmail/v1/users/me/settings/sendAs/a@b")).code
-                == "blocked_by_safe_mode")
+        #expect(GmailError.transport(.refusedByGuard("POST /gmail/v1/users/me/settings/sendAs/a@b")).code
+                == "refused_by_guard")
     }
 }

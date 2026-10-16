@@ -67,7 +67,7 @@ private struct InstantFixture {
          connection: FakeCalendarConnection? = nil, gated: GatedCalendar? = nil) {
         corpus = .make(threadCount: 4, now: fixedNow)
         calendar = gated?.inner ?? info.map { FakeCalendar(events: events, info: $0) } ?? FakeCalendar(events: events)
-        env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate, safeMode: .normal),
+        env = AppEnvironment.fake(corpus: corpus, options: .init(remoteAck: .immediate),
                                   calendar: gated ?? calendar, calendarConnection: connection, calendarCache: cache)
         env.calendarEvents.timeZone = newYork
         thread = corpus.threads[0].row.id

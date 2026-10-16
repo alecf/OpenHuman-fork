@@ -17,7 +17,7 @@ struct WriteHarness {
     let syncer: AccountSyncer
     let threads: [String]
 
-    init(safeMode: SafeMode = .normal, scopes: [String] = [GmailScope.modify], clock: any OHClock = InstantClock(now: testNow),
+    init(scopes: [String] = [GmailScope.modify], clock: any OHClock = InstantClock(now: testNow),
          threads count: Int = 3, onDisk: Bool = false) async throws {
         if onDisk {
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent("oh-write-\(UUID().uuidString)")
@@ -32,7 +32,7 @@ struct WriteHarness {
         gmail = FakeGmail(clock: clock, startDate: mailStart)
         let wire = FakeGmailTransport(gmail)
         self.wire = wire
-        factory = DefaultGmailClientFactory(safeMode: safeMode, apiTransport: wire,
+        factory = DefaultGmailClientFactory(apiTransport: wire,
                                             config: GmailClientConfig(userAgent: "OpenHumanMail/test"), clock: clock) { _ in
             (StaticTokenProvider(), scopes)
         }
@@ -65,11 +65,9 @@ struct WriteHarness {
         try store.operations(account: account, statuses: statuses, limit: 500)
     }
 
-    func drainer(api: any GmailAPI, events: EventLog = EventLog(), applied: Counter? = nil,
-                 external: Bool = false) -> OperationDrainer {
+    func drainer(api: any GmailAPI, events: EventLog = EventLog(), applied: Counter? = nil) -> OperationDrainer {
         OperationDrainer(account: account, store: store, api: api, clock: clock, storeClock: clock, ownerID: "test-owner",
-                         emit: { events.append($0) }, onApplied: { _ in applied?.increment() },
-                         drainsExternalOps: external)
+                         emit: { events.append($0) }, onApplied: { _ in applied?.increment() })
     }
 }
 

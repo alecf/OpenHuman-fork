@@ -7,5 +7,5 @@
     "After signing in, open Settings › Accounts"
   ],
   "expected": "On a build whose sign-ins sync, both say: Your sign-in is kept in your Keychain and syncs through iCloud Keychain if you have it turned on. On a build that can't sync, both say: Your sign-in is kept in this Mac's Keychain.",
-  "requires": "real-readonly"
+  "requires": "real"
 }

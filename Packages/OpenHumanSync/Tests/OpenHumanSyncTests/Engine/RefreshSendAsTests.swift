@@ -7,10 +7,10 @@ import Testing
 @testable import OpenHumanSync
 
 @Suite struct RefreshSendAsTests {
-    @Test(arguments: [SafeMode.normal, .readOnly])
-    func aRefreshRequestReReadsSendAsOnce(_ mode: SafeMode) async throws {
-        let h = try await EngineHarness()
-        let engine = h.engine(safeMode: mode)
+    @Test(arguments: [GmailScope.modify, GmailScope.readonly])
+    func aRefreshRequestReReadsSendAsOnce(_ grant: String) async throws {
+        let h = try await EngineHarness(scopes: [grant])
+        let engine = h.engine()
         await engine.start()
         try await h.waitForSyncs(engine)
         let before = await h.gmail.callCount(.listSendAs)

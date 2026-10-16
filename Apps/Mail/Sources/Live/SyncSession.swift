@@ -20,17 +20,13 @@ final class SyncSession: Sendable {
         var tokenEvents: AsyncStream<TokenEvent>?
         var draftsDirectory: URL? = nil
         var unsubscribeTransport: (any HTTPTransport)? = nil
-        var writeMode = false
         var accounts: (any AccountManaging)? = nil
-        var writeModeSwitch: (any WriteModeSwitching)? = nil
         var calendar: GoogleCalendarSession? = nil
         var calendarConnections: LiveCalendarConnections? = nil
     }
 
     let account: AccountID
     let email: String
-    let safeMode: SafeMode
-    let engineSafeMode: SafeMode
     let store: MailStore
     let api: any GmailAPI
     let engine: MailEngine
@@ -48,46 +44,39 @@ final class SyncSession: Sendable {
         email = item.email
         self.store = store
         api = try wiring.factory.client(for: item.email)
-        safeMode = try wiring.factory.effectiveMode(for: item.email)
-        engineSafeMode = wiring.factory.safeMode
         systemEvents = wiring.systemEvents
         tokenEvents = wiring.tokenEvents
         calendar = wiring.calendar
         calendarConnections = wiring.calendarConnections
         let slot = EngineSlot()
         let account = item.id
-        let mode = SafeModeInfo(safeMode)
-        let writeMode = mode == .normal && wiring.writeMode ? WriteModeSession() : nil
-        let effectiveMode: SafeMode = safeMode
         var oneClick: (@Sendable (MessageKey) async throws -> Void)?
         if let transport = wiring.unsubscribeTransport {
-            let request = OneClickUnsubscribe(store: store, transport: transport, mode: effectiveMode)
+            let request = OneClickUnsubscribe(store: store, transport: transport)
             oneClick = { key in try await request.send(key) }
         }
-        let commands = MailStoreCommands(engine: { try slot.engine() }, safeMode: mode, oneClick: oneClick)
+        let commands = MailStoreCommands(engine: { try slot.engine() }, oneClick: oneClick)
         environment = CompositionRoot.environment(
             store: store,
             ensureBody: { key in
                 _ = try await slot.engine().ensureBody(account: key.account, gmailMessageID: key.gmailMessageID)
             },
             attachmentFile: { key, attachment in try await Self.attachmentFile(slot.engine(), key, attachment) },
-            safeMode: mode,
             connectivity: { Self.connectivity(slot, store: store) },
             syncProgress: { Self.progressLines(slot) },
             commands: commands, accounts: wiring.accounts,
-            draftsDirectory: Self.draftsDirectory(wiring.draftsDirectory, safeMode: mode),
-            isFake: isFake, writeMode: writeMode, writeModeSwitch: wiring.writeModeSwitch, onDemand: Self.onDemand(slot),
+            draftsDirectory: wiring.draftsDirectory,
+            isFake: isFake, isLiveAccount: !isFake, onDemand: Self.onDemand(slot),
             calendar: wiring.calendarConnections == nil ? wiring.calendar?.provider : nil,
             calendarConnection: wiring.calendar, calendarConnections: wiring.calendarConnections)
         let configuration = EngineConfiguration(
             role: .app, appVersion: CompositionRoot.appVersion, gmail: wiring.gmail, pollInterval: wiring.pollInterval,
-            clock: wiring.clock, schedulers: Self.schedulers(environment.modules), safeMode: wiring.factory.safeMode)
+            clock: wiring.clock, schedulers: Self.schedulers(environment.modules))
         engine = MailEngine(store: store, gmailFactory: wiring.factory, tokenStore: wiring.tokenStore,
                             oauthClient: wiring.oauthClient, configuration: configuration,
                             systemEvents: wiring.systemEvents, metrics: { wiring.metrics.collector(for: $0) })
         slot.set(engine)
-        Log(.sync).notice("account \(account.rawValue): engine session in safe mode \(safeMode.rawValue)"
-            + (writeMode == nil ? "" : " (write mode on a real account)"))
+        Log(.sync).notice("account \(account.rawValue): engine session" + (isFake ? " on FakeGmail" : " on a real account"))
     }
 
     func start() async {
@@ -129,10 +118,6 @@ final class SyncSession: Sendable {
     }
 
     var backfillProgress: SyncProgress? { engine.syncProgress(account) }
-
-    static func draftsDirectory(_ directory: URL?, safeMode: SafeModeInfo) -> URL? {
-        safeMode == .readOnly ? nil : directory
-    }
 
     @MainActor
     static func schedulers(_ modules: ModuleRegistry) -> Set<ScheduleKind> {
@@ -353,15 +338,5 @@ private final class ConnectivityMerge: Sendable {
             return mapped
         }
         if let next { publish(next) }
-    }
-}
-
-extension SafeModeInfo {
-    init(_ mode: SafeMode) {
-        switch mode {
-        case .normal: self = .normal
-        case .readOnly: self = .readOnly
-        case .writeAllowlist: self = .writeAllowlist
-        }
     }
 }

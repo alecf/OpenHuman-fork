@@ -22,11 +22,11 @@ final class AIFixture {
 
     let appSettings: HeldSettings
 
-    init(safeMode: SafeModeInfo = .normal, settings: AISettings = AISettings(), providers: [any AIProvider]? = nil,
+    init(settings: AISettings = AISettings(), providers: [any AIProvider]? = nil,
          flags: FeatureFlags = FeatureFlags(), withAI: Bool = true, calendar: (any CalendarProviding)? = nil,
          traces: (any AITraceStore)? = nil) {
         store = FakeMailStore(corpus: .rich(threadCount: 60, now: fixedNow),
-                              options: .init(remoteAck: .immediate, heldSends: .manual, safeMode: safeMode, now: { fixedNow }))
+                              options: .init(remoteAck: .immediate, heldSends: .manual, now: { fixedNow }))
         recorder = RecordingCommands(store)
         registry = ProviderRegistry(providers: providers ?? [ScriptedProvider()])
         center = AICenter.make(registry: registry, settings: AISettingsBox(store: InMemoryAISettingsStore(settings)),

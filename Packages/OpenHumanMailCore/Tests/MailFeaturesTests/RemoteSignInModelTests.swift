@@ -54,7 +54,7 @@ private final class RemoteFake: AccountManaging {
 
 @MainActor
 private func readyModel(_ fake: RemoteFake, timeout: Duration = .seconds(600)) async -> (SignInModel, Task<Void, Never>) {
-    let model = SignInModel(accounts: fake, safeMode: .readOnly, loginHint: " robin@example.com ", remoteTimeout: timeout)
+    let model = SignInModel(accounts: fake, loginHint: " robin@example.com ", remoteTimeout: timeout)
     let runner = Task { await model.run() }
     await eventually { model.phase == .ready }
     return (model, runner)
@@ -110,7 +110,8 @@ private let pastedAddress = "http://127.0.0.1:50000/oauth2callback?code=syntheti
 @MainActor
 @Test(arguments: [
     AccountSetupError(.failed, "Google no longer accepts that code (already used or expired). Start again."),
-    AccountSetupError(.refused, "Google granted more than read-only access, so Mail refused the sign-in. Nothing was stored."),
+    AccountSetupError(.refused, "Google gave Mail more access than it asks for (such as full Gmail access), so Mail "
+        + "stopped and saved nothing. Sign in again."),
 ])
 func aSpentSignInReturnsToTheStartWithTheReasonAndNothingKept(error: AccountSetupError) async {
     let fake = RemoteFake()

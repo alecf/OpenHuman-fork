@@ -21,8 +21,8 @@ private enum ParityClients {
     }
 }
 
-private let readScopes = CalendarScopes.requested(for: .readOnly)
-private let writeScopes = CalendarScopes.requested(for: .normal)
+private let readScopes = CalendarScopes.request.read
+private let writeScopes = CalendarScopes.request.write
 
 private func form(_ body: Data?) -> [String: String] {
     guard let body, let text = String(data: body, encoding: .utf8) else { return [:] }
@@ -59,17 +59,17 @@ private final class ParityHarness {
     let backend: LiveBackend
     let robinID: AccountID
     let samID: AccountID
-    let granted = Shared(readScopes)
+    let granted = Shared(writeScopes)
     let consentFails = Shared(false)
 
-    init(launch: SafeMode = .readOnly, calendarStore: (any TokenStore)? = nil) throws {
+    init(calendarStore: (any TokenStore)? = nil) throws {
         home = FileManager.default.temporaryDirectory.appendingPathComponent("oh-calparity-\(UUID().uuidString)")
         store = try MailStore.open(StoreOptions(location: StoreLocation(directory: home), processKind: .test,
                                                 appVersion: "0.0.0-test",
                                                 changeNotificationName: "dev.openhuman.tests.calparity.\(UUID().uuidString)"))
         _ = try OAuthClientConfig.importClient(ParityClients.json(ParityClients.workID), storeDirectory: home)
         _ = try OAuthClientConfig.importClient(ParityClients.json(ParityClients.personalID), storeDirectory: home)
-        let mailScope = launch == .normal ? GmailScope.modify : GmailScope.readonly
+        let mailScope = GmailScope.modify
         robinID = try store.addAccount(email: Self.robin, displayName: nil, scopes: [mailScope])
         samID = try store.addAccount(email: Self.sam, displayName: nil, scopes: [mailScope])
         try mailTokens.save(StoredToken(refreshToken: "synthetic-mail-robin", grantedScopes: [mailScope],
@@ -97,7 +97,7 @@ private final class ParityHarness {
         http.on("POST", "/calendar/v3/freeBusy") { _ in FakeHTTPTransport.json(200, ["calendars": [:] as [String: Any]]) }
         let browser = self.browser
         backend = LiveBackend(
-            safeMode: launch, store: store,
+            store: store,
             accountDependencies: LiveAccountManager.Dependencies(
                 environment: [:], storeDirectory: home, tokenStore: mailTokens,
                 transport: http, makeReceiver: { AnsweringReceiver(browser: browser) }, browser: browser,
@@ -112,8 +112,8 @@ private final class ParityHarness {
         Account(id: id, email: email, displayName: nil, alias: nil, health: .active)
     }
 
-    func session(_ id: AccountID? = nil, writes: Bool = false) throws -> SyncSession {
-        try backend.makeSession(for: try account(id ?? robinID), writes: writes)
+    func session(_ id: AccountID? = nil) throws -> SyncSession {
+        try backend.makeSession(for: try account(id ?? robinID))
     }
 
     func storeCalendarToken(_ email: String, client: String, scopes: [String], expired: Bool = false) throws {
@@ -146,7 +146,7 @@ private final class ParityHarness {
     #expect(query(h.browser.urls.last, "client_id") == ParityClients.personalID)
     #expect(query(h.browser.urls.last, "login_hint") == ParityHarness.sam)
     for url in h.browser.urls.suffix(2) {
-        #expect(query(url, "scope") == readScopes.joined(separator: " ") && query(url, "include_granted_scopes") == nil)
+        #expect(query(url, "scope") == writeScopes.joined(separator: " ") && query(url, "include_granted_scopes") == nil)
     }
     #expect(try h.calendarTokens.load(account: ParityHarness.robin)?.clientID == ParityClients.workID)
     #expect(try h.calendarTokens.load(account: ParityHarness.sam)?.clientID == ParityClients.personalID)
@@ -154,7 +154,7 @@ private final class ParityHarness {
     let manager = h.backend.accounts
     #expect(manager.calendarClientKey(email: ParityHarness.robin) == OAuthClientConfig.registryKey(clientID: ParityClients.workID))
     #expect(manager.calendarClientKey(email: ParityHarness.sam) == OAuthClientConfig.registryKey(clientID: ParityClients.personalID))
-    #expect(manager.calendarPinnedScopes(email: ParityHarness.sam) == readScopes)
+    #expect(manager.calendarPinnedScopes(email: ParityHarness.sam) == writeScopes)
 
     var states = sam.connectionStates().makeAsyncIterator()
     let samState = try #require(await states.next())
@@ -166,8 +166,8 @@ private final class ParityHarness {
     #expect(try h.mailTokens.load(account: ParityHarness.robin) == mailBefore.0)
     #expect(try h.mailTokens.load(account: ParityHarness.sam) == mailBefore.1)
 
-    try h.storeCalendarToken(ParityHarness.robin, client: ParityClients.workID, scopes: readScopes, expired: true)
-    try h.storeCalendarToken(ParityHarness.sam, client: ParityClients.personalID, scopes: readScopes, expired: true)
+    try h.storeCalendarToken(ParityHarness.robin, client: ParityClients.workID, scopes: writeScopes, expired: true)
+    try h.storeCalendarToken(ParityHarness.sam, client: ParityClients.personalID, scopes: writeScopes, expired: true)
     let relaunched = try h.session()
     let before = h.tokenRequests.count
     try await #require(relaunched.calendarConnections).resume([(id: h.robinID, email: ParityHarness.robin),
@@ -224,10 +224,10 @@ private final class ParityHarness {
 }
 
 @MainActor
-@Test(.timeLimit(.minutes(2))) func creatingIsWriteModeOnlyForEveryAccount() throws {
-    let write = try ParityHarness(launch: .normal)
+@Test(.timeLimit(.minutes(2))) func creatingNeedsAWriteGrantForEveryAccount() throws {
+    let write = try ParityHarness()
     try write.storeCalendarToken(ParityHarness.sam, client: ParityClients.personalID, scopes: writeScopes)
-    let writing = try write.session(writes: true)
+    let writing = try write.session()
     let samWrite = try #require(writing.calendarConnections?.calendarProvider(for: write.model(write.samID, ParityHarness.sam)))
     #expect(samWrite.info.createRefusal == nil)
 
@@ -235,7 +235,7 @@ private final class ParityHarness {
     try read.storeCalendarToken(ParityHarness.sam, client: ParityClients.personalID, scopes: readScopes)
     let reading = try read.session()
     let samRead = try #require(reading.calendarConnections?.calendarProvider(for: read.model(read.samID, ParityHarness.sam)))
-    #expect(samRead.info.createRefusal == "Read-only safe mode: Mail never creates calendar events.")
+    #expect(samRead.info.createRefusal == GoogleCalendarSession.reconnectToCreate)
 }
 
 @MainActor

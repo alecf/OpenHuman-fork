@@ -4,9 +4,9 @@ import OpenHumanCore
 public struct CalendarConsent: Sendable {
     public let flow: OAuthFlow
 
-    public init(client: OAuthClientConfig, mode: SafeMode, transport: any HTTPTransport,
+    public init(client: OAuthClientConfig, transport: any HTTPTransport,
                 receiver: any LoopbackRedirectReceiver, browser: any ExternalBrowser, clock: any OHClock) {
-        flow = OAuthFlow(client: client, scopes: CalendarScopes.requested(for: mode), transport: transport,
+        flow = OAuthFlow(client: client, scopes: CalendarScopes.request.write, transport: transport,
                          receiver: receiver, browser: browser, clock: clock)
     }
 

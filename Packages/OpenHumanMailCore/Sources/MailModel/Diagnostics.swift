@@ -61,16 +61,14 @@ public struct DiagnosticsSnapshot: Sendable, Codable, Hashable {
     }
 
     public var generatedAt: Date
-    public var safeMode: String
     public var schemaVersion: Int?
     public var accounts: [AccountEntry]
     public var operations: [OperationTally]
     public var recentErrors: [ErrorTally]
 
-    public init(generatedAt: Date, safeMode: String, schemaVersion: Int? = nil, accounts: [AccountEntry],
+    public init(generatedAt: Date, schemaVersion: Int? = nil, accounts: [AccountEntry],
                 operations: [OperationTally] = [], recentErrors: [ErrorTally] = []) {
         self.generatedAt = generatedAt
-        self.safeMode = safeMode
         self.schemaVersion = schemaVersion
         self.accounts = accounts
         self.operations = operations

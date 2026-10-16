@@ -27,15 +27,14 @@ final class AutoLabelFixture {
     let center: AutoLabelCenter
     let log = ClassifierLog()
 
-    init(safeMode: SafeModeInfo = .normal, writes: Bool? = true, classifiers: [any AIClassificationProvider]? = nil,
+    init(writes: Bool? = true, isLiveAccount: Bool = false, classifiers: [any AIClassificationProvider]? = nil,
          providers: [any AIProvider] = [], entries: [AutoLabelEntry] = [], sharing existing: FakeMailStore? = nil,
          aiSettings: AISettings = AISettings(),
          verdict: @escaping @Sendable (ClassificationInput) throws -> AutoLabelCategory? = { _ in .marketing }) {
         store = existing ?? FakeMailStore(corpus: .rich(threadCount: 60, now: fixedNow),
-                                          options: .init(remoteAck: .immediate, heldSends: .manual, safeMode: safeMode,
-                                                         now: { fixedNow }))
+                                          options: .init(remoteAck: .immediate, heldSends: .manual, now: { fixedNow }))
         recorder = RecordingCommands(store)
-        rules = FakeImportanceRules(corpus: .rich(threadCount: 60, now: fixedNow), safeMode: safeMode, now: { fixedNow })
+        rules = FakeImportanceRules(corpus: .rich(threadCount: 60, now: fixedNow), now: { fixedNow })
         index = InMemoryAutoLabelStore(entries)
         let log = self.log
         let classifier = FakeClassifier(id: "local.autolabels", autoLabel: { input in
@@ -44,8 +43,11 @@ final class AutoLabelFixture {
         })
         let registry = ProviderRegistry(providers: providers, classifiers: classifiers ?? [classifier])
         let ai = AICenter.make(registry: registry, settings: AISettingsBox(store: InMemoryAISettingsStore(aiSettings)))
-        env = AppEnvironment(data: store, commands: recorder, accounts: store, settings: store, isFake: true,
-                             importance: rules, ai: ai, autoLabelStore: index)
+        env = AppEnvironment(data: store, commands: recorder, accounts: store, settings: store, isFake: !isLiveAccount,
+                             importance: rules,
+                             systemPreferences: SystemPreferences(defaults: UserDefaults(suiteName: "openhuman.test.\(UUID().uuidString)") ?? .standard),
+                             onboardingProgress: InMemoryOnboardingProgress(), ai: ai, isLiveAccount: isLiveAccount,
+                             keymapStore: InMemoryKeymapStore(), autoLabelStore: index)
         center = env.autoLabels!
         center.options = AutoLabelCenter.Options(writesToGmail: writes, promptVersion: 1, now: { fixedNow },
                                                  backfillDays: 36_500)
@@ -228,18 +230,25 @@ final class AutoLabelFixture {
         #expect(try await f.inbox().allSatisfy { Set($0.userLabelIDs).isDisjoint(with: ours) })
     }
 
-    @Test func readOnlyOrTheSwitchOffKeepsLabelsOnThisMac() async throws {
-        let readOnly = F(safeMode: .readOnly, writes: true)
-        await readOnly.center.classifyRecent()
-        #expect(readOnly.recorder.calls.isEmpty, "read-only: nothing is written")
-        #expect(try await readOnly.index.entries(account: F.work).contains { $0.category == "Marketing" })
+    @Test func theSwitchOffOrFakeDataKeepsLabelsOnThisMac() async throws {
         let off = F(writes: true)
         try await off.store.set(AppSettings.autoLabelsApplyToGmail, false)
         await off.center.classifyRecent()
         #expect(off.recorder.calls.isEmpty, "\u{201C}Also apply as Gmail labels\u{201D} off: nothing is written")
+        #expect(try await off.index.entries(account: F.work).contains { $0.category == "Marketing" })
         let fake = F(writes: nil)
+        #expect(!fake.center.canChangeGmail && !fake.center.writesToGmail)
         await fake.center.classifyRecent()
         #expect(fake.recorder.calls.isEmpty)
+    }
+
+    @Test func aLiveAccountWritesAutoLabelsToGmail() async throws {
+        let live = F(writes: nil, isLiveAccount: true)
+        #expect(live.center.canChangeGmail)
+        await live.center.classifyRecent()
+        #expect(live.recorder.calls.contains("createLabel"))
+        let ours = await live.ourLabelIDs()
+        #expect(try await live.inbox().contains { !Set($0.userLabelIDs).isDisjoint(with: ours) })
     }
 
     @Test func labelsWrittenOnOneMacAreReadBackWithoutTheModel() async throws {

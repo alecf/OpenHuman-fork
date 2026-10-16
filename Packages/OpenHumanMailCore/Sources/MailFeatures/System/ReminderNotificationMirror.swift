@@ -132,7 +132,6 @@ public final class ReminderNotificationMirror {
             for id in stale { scheduled[id] = nil }
         }
         guard authorization == .authorized else { return }
-        let category: SystemNotification.Category = data.safeMode().allowsMailChanges ? .reminder : .readOnly
         let pendingSet = Set(pending)
         let hide = hidePreviews()
         for item in wanted {
@@ -142,7 +141,7 @@ public final class ReminderNotificationMirror {
             scheduled[id] = copy
             await notifier.schedule(SystemNotification(
                 identifier: id, title: copy.title,
-                threadIdentifier: "reminders", category: category, deliverAt: item.dueAt, userInfo: NotificationRouting.userInfo(for: item.thread)))
+                threadIdentifier: "reminders", category: .reminder, deliverAt: item.dueAt, userInfo: NotificationRouting.userInfo(for: item.thread)))
         }
     }
 
