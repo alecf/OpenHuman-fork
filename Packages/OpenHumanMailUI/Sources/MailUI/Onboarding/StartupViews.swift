@@ -33,6 +33,8 @@ extension StartupProblem {
     public static let keychainRefusedTitle = "Mail couldn't open your saved sign-in"
     public static let keychainRefusedMessage = "macOS didn't let Mail read it from your Keychain. Try again and choose "
         + "Always Allow, or sign in again."
+    public static let keychainUnreadableTitle = "Mail couldn't read your saved sign-in"
+    public static let keychainUnreadableMessage = "Your Keychain gave an unexpected answer. Try again, or sign in again."
 
     public static func keychainExplainer(continue run: @escaping @MainActor () -> Void) -> StartupProblem {
         StartupProblem(title: keychainExplainerTitle, message: keychainExplainerMessage,
@@ -47,6 +49,15 @@ extension StartupProblem {
                        secondaryAction: (title: "Sign in again", run: signInAgain),
                        actionHint: "Asks macOS for your saved sign-in again.",
                        secondaryHint: "Opens sign-in. Nothing is deleted.", offersQuit: false)
+    }
+
+    public static func keychainUnreadable(status: Int32, tryAgain: @escaping @MainActor () -> Void,
+                                          signInAgain: @escaping @MainActor () -> Void) -> StartupProblem {
+        var problem = keychainRefused(tryAgain: tryAgain, signInAgain: signInAgain)
+        problem.title = keychainUnreadableTitle
+        problem.message = keychainUnreadableMessage
+        problem.details = "Keychain error \(status)"
+        return problem
     }
 }
 

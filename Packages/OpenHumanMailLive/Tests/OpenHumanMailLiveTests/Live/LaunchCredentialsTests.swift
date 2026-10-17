@@ -169,6 +169,11 @@ private struct NoNetwork: HTTPTransport {
 }
 
 @MainActor
+private final class SessionCount {
+    var made = 0
+}
+
+@MainActor
 private struct Harness {
     static let email = "robin@example.com"
     let store: MailStore
@@ -189,7 +194,7 @@ private struct Harness {
         self.calendarTokens = calendarTokens
     }
 
-    func backend() -> LiveBackend {
+    func backend(sessions: SessionCount? = nil) -> LiveBackend {
         LiveBackend(
             store: store,
             accountDependencies: LiveAccountManager.Dependencies(
@@ -197,7 +202,10 @@ private struct Harness {
                 transport: NoNetwork(), makeReceiver: { NoReceiver() }, browser: NoBrowser(), clock: SystemClock(),
                 calendarTokenStore: calendarTokens, credentialAccess: access),
             transports: LiveBackend.Transports(api: NoNetwork(), token: NoNetwork()), userAgent: "OpenHumanMail/test",
-            makeSystemEvents: { nil })
+            makeSystemEvents: {
+                sessions?.made += 1
+                return nil
+            })
     }
 
     static func modifyToken() -> StoredToken {
@@ -389,6 +397,87 @@ private func isLaunching(_ app: AppModel) -> Bool {
         live.forgetKeychainRefusals()
         #expect(live.accounts.knownClients().map(\.clientID) == [RecordingClients.client.clientID])
         #expect(access.forgets == 1)
+    }
+
+    @Test func anUnexpectedKeychainAnswerOffersTryAgainAndSignInAgain() async throws {
+        let h = try Harness(token: Harness.readOnlyToken(), access: FakeAccess())
+        h.tokens.refuse(-25291)
+        let app = AppModel(live: h.backend())
+        await app.launched()
+        let problem = try #require(notice(app))
+        #expect(problem.title == StartupProblem.keychainUnreadableTitle)
+        #expect(problem.message == StartupProblem.keychainUnreadableMessage && problem.details == "Keychain error -25291")
+        #expect(problem.action?.title == "Try again" && problem.secondaryAction?.title == "Sign in again")
+        h.tokens.refuse(nil)
+        problem.action?.run()
+        await app.launched()
+        #expect(signIn(app)?.notice == LiveBackend.writeAccessNotice, "Try again read the sign-in again")
+        #expect(h.tokens.deletes == 0)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aSecondContinueWhileTheFirstIsLoadingStartsNothing() async throws {
+        let sessions = SessionCount()
+        let h = try Harness(token: Harness.modifyToken(), access: FakeAccess(.present))
+        let app = AppModel(live: h.backend(sessions: sessions))
+        await app.launched()
+        let explainer = try #require(notice(app)?.action)
+        let waiting = h.tokens.suspendNextLoad()
+        explainer.run()
+        let first = app.launchTask
+        await waiting.entered()
+        explainer.run()
+        #expect(app.launchTask == first, "the second Continue is ignored")
+        waiting.resume()
+        await first?.value
+        await app.launched()
+        #expect(sessions.made == 1 && app.session != nil)
+        await app.shutdown()
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func tryAgainWithAStaleContinueStartsOneSession() async throws {
+        let sessions = SessionCount()
+        let access = FakeAccess(.present)
+        let h = try Harness(token: Harness.modifyToken(), access: access)
+        h.tokens.refuse(-128)
+        let app = AppModel(live: h.backend(sessions: sessions))
+        await app.launched()
+        let explainer = try #require(notice(app)?.action)
+        explainer.run()
+        await app.launched()
+        #expect(notice(app)?.title == StartupProblem.keychainRefusedTitle)
+        let tryAgain = try #require(notice(app)?.action)
+        h.tokens.refuse(nil)
+        let waiting = h.tokens.suspendNextLoad()
+        tryAgain.run()
+        let first = app.launchTask
+        await waiting.entered()
+        explainer.run()
+        tryAgain.run()
+        #expect(app.launchTask == first, "neither the stale Continue nor a second Try again starts a launch")
+        waiting.resume()
+        await first?.value
+        await app.launched()
+        #expect(sessions.made == 1 && app.session != nil)
+        #expect(access.forgets == 1)
+        await app.shutdown()
+    }
+
+    @Test func aStaleContinueAfterMailOpensKeepsTheOneSession() async throws {
+        let sessions = SessionCount()
+        let h = try Harness(token: Harness.modifyToken(), access: FakeAccess(.present))
+        let app = AppModel(live: h.backend(sessions: sessions))
+        await app.launched()
+        let explainer = try #require(notice(app)?.action)
+        explainer.run()
+        await app.launched()
+        let session = try #require(app.session)
+        explainer.run()
+        await app.launched()
+        #expect(sessions.made == 1 && app.session === session)
+        if case .mail = app.screen {} else { Issue.record("Mail is no longer showing") }
+        await app.shutdown()
     }
 
     @Test(.timeLimit(.minutes(1)))

@@ -127,8 +127,9 @@ public final class SyncedTokenStore: SharedTokenStore {
         KeychainDiagnostics.shared.record(.tokenLocalWrite, 0)
         var record: TokenDeviceRecord
         do { record = try device.load(account: key) ?? TokenDeviceRecord() } catch {
-            Log(.keychain).error("sign-in: this device's record could not be read (\(Self.code(error))); a new one is kept")
-            record = TokenDeviceRecord()
+            Log(.keychain).error("sign-in: this device's record could not be read (\(Self.code(error))); "
+                                 + "the sign-in stays on this device")
+            record = TokenDeviceRecord(choice: .dontSync)
         }
         if record.choice == nil {
             do {
@@ -147,7 +148,7 @@ public final class SyncedTokenStore: SharedTokenStore {
         do { try device.save(record, account: key) } catch {
             KeychainDiagnostics.shared.record(.tokenDeviceRecord, Self.status(error))
             Log(.keychain).error("sign-in: this device's record could not be saved (\(Self.code(error)))")
-            if record.choice == .ownSignIn || record.cannotSync == true { throw error }
+            if record.choice != nil || record.cannotSync == true { throw error }
         }
     }
 

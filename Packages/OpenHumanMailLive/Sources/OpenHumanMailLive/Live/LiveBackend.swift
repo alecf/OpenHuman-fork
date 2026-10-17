@@ -25,6 +25,7 @@ public final class LiveBackend {
         case signIn(loginHint: String, notice: String?)
         case needsWriteAccess(AccountItem)
         case keychainRefused(AccountItem)
+        case keychainUnreadable(AccountItem, status: Int32)
     }
 
     enum Launch: Equatable {
@@ -114,10 +115,12 @@ public final class LiveBackend {
             let token: StoredToken?
             do { token = try tokenStore.load(account: account.email) } catch {
                 Log(.oauth).error("account \(account.id.rawValue): token store read failed (\(Self.code(error)))")
-                if let refused = CredentialOutcome.keychainRefusal(in: error) {
-                    CredentialChainLog.shared.record(.readSignIn, refused,
+                if case TokenStoreError.keychain(let status) = error {
+                    let outcome = CredentialOutcome.keychain(status: status)
+                    CredentialChainLog.shared.record(.readSignIn, outcome,
                                                      subject: CredentialChainLog.subject(account: account.email))
-                    refusal = refusal ?? .keychainRefused(account)
+                    refusal = refusal ?? (outcome.isKeychainRefusal ? .keychainRefused(account)
+                                                                     : .keychainUnreadable(account, status: status))
                 } else {
                     refusal = refusal ?? .signIn(loginHint: account.email, notice: Self.signInAgainNotice)
                 }

@@ -220,6 +220,21 @@ private final class ForgetfulTokenStore: TokenStore {
         #expect(try store.load(account: email)?.refreshToken == "refresh-a")
     }
 
+    @Test func aSignInWhoseDeviceRecordCannotBeReadStaysOnThisDevice() throws {
+        let cloud = InMemorySharedGrantStore()
+        let records = UnreadableRecords()
+        let store = SyncedTokenStore(local: InMemoryTokenStore(), shared: cloud, device: records)
+        try store.save(Synthetic.token(refresh: "refresh-here"), account: email)
+        #expect(cloud.writeCount == 0 && cloud.peek(email) == nil)
+        #expect(records.saved?.choice == .dontSync)
+
+        let unsaved = SyncedTokenStore(local: InMemoryTokenStore(), shared: cloud, device: FailingRecords())
+        #expect(throws: TokenStoreError.keychain(-25308), "a choice that cannot be kept fails the sign-in") {
+            try unsaved.save(Synthetic.token(refresh: "refresh-here"), account: email)
+        }
+        #expect(cloud.writeCount == 0)
+    }
+
     @Test func aBuildThatCannotSyncKeepsEverySignInOnThisDevice() async throws {
         let clock = TestClock()
         let cloud = InMemorySharedGrantStore(available: false)
@@ -534,4 +549,12 @@ private struct FailingRecords: TokenDeviceRecordStore {
     func load(account email: String) throws -> TokenDeviceRecord? { throw TokenStoreError.keychain(-25308) }
     func save(_ record: TokenDeviceRecord, account email: String) throws { throw TokenStoreError.keychain(-25308) }
     func delete(account email: String) throws { throw TokenStoreError.keychain(-25308) }
+}
+
+private final class UnreadableRecords: TokenDeviceRecordStore {
+    private let record = Mutex<TokenDeviceRecord?>(nil)
+    var saved: TokenDeviceRecord? { record.withLock { $0 } }
+    func load(account email: String) throws -> TokenDeviceRecord? { throw TokenStoreError.keychain(-25308) }
+    func save(_ record: TokenDeviceRecord, account email: String) throws { self.record.withLock { $0 = record } }
+    func delete(account email: String) throws { record.withLock { $0 = nil } }
 }

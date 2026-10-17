@@ -119,11 +119,12 @@ public final class KeychainItems: Sendable {
         return result
     }
 
-    func addAttributes(_ item: Item, data: Data, label: String) -> [String: Any] {
+    func addAttributes(_ item: Item, data: Data, label: String, generic: Data? = nil) -> [String: Any] {
         var attributes = query(service: item.service, account: item.account)
         attributes[kSecValueData as String] = data
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         attributes[kSecAttrLabel as String] = label
+        if let generic { attributes[kSecAttrGeneric as String] = generic }
         return attributes
     }
 
@@ -174,12 +175,12 @@ public final class KeychainItems: Sendable {
         }
     }
 
-    func write(_ item: Item, data: Data, label: String) throws {
+    func write(_ item: Item, data: Data, label: String, generic: Data? = nil) throws {
         try withItem(item) {
             let before = state.withLock { $0.entries[item] }
             if case .present(let entry)? = before, entry.data == data { return }
             let request = query(service: item.service, account: item.account)
-            let attributes = addAttributes(item, data: data, label: label)
+            let attributes = addAttributes(item, data: data, label: label, generic: generic)
             do {
                 if case .present? = before {
                     let status = backend.delete(request)
@@ -245,19 +246,30 @@ public final class KeychainItems: Sendable {
         }
     }
 
-    // Why: attributes only, and any item that would need a dialog is skipped, so this check itself never asks
+    private func attributesOnly(service: String, account: String? = nil) -> (OSStatus, [[String: Any]]) {
+        var request = query(service: service, account: account)
+        request[kSecReturnAttributes as String] = true
+        request[kSecMatchLimit as String] = kSecMatchLimitAll
+        request[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUISkip
+        let (status, result) = backend.copyMatching(request)
+        return (status, status == errSecSuccess ? Self.listed(result) : [])
+    }
+
+    func storedAttributes(_ item: Item) -> [String: Any]? {
+        let (status, listed) = attributesOnly(service: item.service, account: item.account)
+        guard status == errSecSuccess else { return nil }
+        return listed.first { ours($0, service: item.service, account: item.account) }
+    }
+
+    // Why: reads attributes only, never a secret; the skip flag may not stop a dialog here, so any failure is unknown
     func presence(services: [String]) -> StoredItemPresence {
         guard style == .macLegacy else { return .absent }
         var found = false
         for service in services {
-            var request = query(service: service)
-            request[kSecReturnAttributes as String] = true
-            request[kSecMatchLimit as String] = kSecMatchLimitAll
-            request[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUISkip
-            let (status, result) = backend.copyMatching(request)
+            let (status, listed) = attributesOnly(service: service)
             if status == errSecItemNotFound { continue }
             guard status == errSecSuccess else { return .unknown }
-            found = found || Self.listed(result).contains { attributes in
+            found = found || listed.contains { attributes in
                 guard let account = attributes[kSecAttrAccount as String] as? String else { return false }
                 return ours(attributes, service: service, account: account)
             }

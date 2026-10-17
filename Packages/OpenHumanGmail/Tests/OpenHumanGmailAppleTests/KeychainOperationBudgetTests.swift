@@ -18,6 +18,7 @@ private final class CountingKeychain: KeychainBackend {
         var key: Key
         var data: Data
         var label: String
+        var generic: Data?
     }
 
     struct Op: Sendable {
@@ -119,7 +120,8 @@ private final class CountingKeychain: KeychainBackend {
                           service: service, account: account,
                           synchronizable: (attributes[kSecAttrSynchronizable as String] as? Bool) ?? false)
             if s.items.contains(where: { $0.key == key }) { status = errSecDuplicateItem; return status }
-            s.items.append(Item(key: key, data: data, label: attributes[kSecAttrLabel as String] as? String ?? ""))
+            s.items.append(Item(key: key, data: data, label: attributes[kSecAttrLabel as String] as? String ?? "",
+                                generic: attributes[kSecAttrGeneric as String] as? Data))
             return status
         }
     }
@@ -159,6 +161,7 @@ private final class CountingKeychain: KeychainBackend {
                     kSecAttrLabel as String: item.label,
                 ]
                 if wantsData { entry[kSecValueData as String] = item.data }
+                if let generic = item.generic { entry[kSecAttrGeneric as String] = generic }
                 return entry as NSDictionary
             }
             if (query[kSecMatchLimit as String] as? String) == (kSecMatchLimitOne as String) {
@@ -182,6 +185,7 @@ private final class CountingKeychain: KeychainBackend {
             }
             if let data = attributes[kSecValueData as String] as? Data { s.items[index].data = data }
             if let label = attributes[kSecAttrLabel as String] as? String { s.items[index].label = label }
+            if let generic = attributes[kSecAttrGeneric as String] as? Data { s.items[index].generic = generic }
             return status
         }
     }
@@ -651,6 +655,83 @@ private func refusedStatus(_ error: any Error) -> OSStatus? {
         #expect(Budget(ops: keychain.ops(since: mark)).total == 0)
     }
 
+    private static let again = StoredToken(refreshToken: "synthetic-refresh-again", grantedScopes: [GmailScope.readonly],
+                                           clientID: Fixture.client.clientID)
+
+    private func signInAgainAfterARefusal(_ keychain: CountingKeychain) throws -> Budget {
+        keychain.refuse(service: Fixture.tokenService, account: Fixture.existing, with: errSecUserCanceled)
+        let install = Install.launch(keychain: keychain, canSync: true)
+        #expect(throws: TokenStoreError.keychain(errSecUserCanceled)) { _ = try install.synced.load(account: Fixture.existing) }
+        let mark = keychain.mark()
+        try install.synced.save(Self.again, account: Fixture.existing)
+        let budget = Budget(ops: keychain.ops(since: mark))
+        keychain.refuse(service: Fixture.tokenService, account: Fixture.existing, with: nil)
+        return budget
+    }
+
+    private func afterRelaunch(_ keychain: CountingKeychain) throws -> (state: TokenSyncState?, shared: SharedGrantRead) {
+        let relaunched = Install.launch(keychain: keychain, canSync: true)
+        #expect(try relaunched.synced.local.load(account: Fixture.existing)?.refreshToken == Self.again.refreshToken)
+        relaunched.synced.migrateLocalSignIns()
+        return (try relaunched.synced.syncState(account: Fixture.existing),
+                try relaunched.synced.shared.read(account: Fixture.existing))
+    }
+
+    private func signIn(_ install: Install) throws {
+        try install.synced.save(StoredToken(refreshToken: "synthetic-refresh-a", grantedScopes: [GmailScope.readonly],
+                                            clientID: Fixture.client.clientID), account: Fixture.existing)
+    }
+
+    @Test func signingInAgainAfterARefusalKeepsASignInThatStaysOnThisMacLocal() throws {
+        let keychain = CountingKeychain()
+        let first = Install.launch(keychain: keychain, canSync: true)
+        try signIn(first)
+        #expect(try first.synced.setSyncEnabled(false, account: Fixture.existing) == .notSyncing)
+
+        let budget = try signInAgainAfterARefusal(keychain)
+        #expect(budget.dataReads.isEmpty, "no secret is read: \(budget.summary)")
+        #expect(budget.dataProtection == 0, "nothing is shared: \(budget.summary)")
+        #expect(budget.ops.allSatisfy { $0.kind != "copy" || ($0.skipsDialogs && !$0.wantsData) }, "\(budget.summary)")
+        let after = try afterRelaunch(keychain)
+        #expect(after.state == .notSyncing && after.shared == .missing)
+    }
+
+    @Test func signingInAgainAfterARefusalWithNoRecordedChoiceStaysOnThisMac() throws {
+        let keychain = CountingKeychain()
+        try Fixture.plantExistingInstall(keychain, TestClock(now: Date(timeIntervalSince1970: 1_790_000_000)))
+
+        let budget = try signInAgainAfterARefusal(keychain)
+        #expect(budget.dataReads.isEmpty, "no secret is read: \(budget.summary)")
+        #expect(budget.dataProtection == 0, "nothing is shared: \(budget.summary)")
+        let after = try afterRelaunch(keychain)
+        #expect(after.state == .notSyncing && after.shared == .missing)
+    }
+
+    @Test func signingInAgainAfterARefusalSharesOnlyWhenThatWasTheRecordedChoice() throws {
+        let keychain = CountingKeychain()
+        let first = Install.launch(keychain: keychain, canSync: true)
+        try signIn(first)
+        #expect(try first.synced.syncState(account: Fixture.existing) == .syncing)
+
+        for lastWrite in ["the device record", "a refresh"] {
+            if lastWrite == "a refresh" {
+                let running = Install.launch(keychain: keychain, canSync: true)
+                try running.synced.local.save(StoredToken(refreshToken: "synthetic-refresh-rotated",
+                                                          grantedScopes: [GmailScope.readonly],
+                                                          clientID: Fixture.client.clientID), account: Fixture.existing)
+            }
+            let budget = try signInAgainAfterARefusal(keychain)
+            #expect(budget.dataReads.isEmpty, "\(lastWrite): no secret is read: \(budget.summary)")
+            let after = try afterRelaunch(keychain)
+            #expect(after.state == .syncing, "\(lastWrite)")
+            guard case .found(let grant) = after.shared else {
+                Issue.record("\(lastWrite): the shared copy is gone: \(after.shared)")
+                return
+            }
+            #expect(grant.refreshToken == Self.again.refreshToken, "\(lastWrite)")
+        }
+    }
+
     @Test func aMissingItemIsNotARefusal() throws {
         let keychain = CountingKeychain()
         let items = KeychainItems(backend: keychain, canHoldSynchronizableItems: false)
@@ -703,6 +784,19 @@ private func refusedStatus(_ error: any Error) -> OSStatus? {
         let access = KeychainCredentialAccess(items: KeychainItems(backend: keychain, style: .macLegacy),
                                               services: services)
         #expect(access.storedItemPresence() == .unknown)
+    }
+
+    @Test(arguments: KeychainRefusalBudgetTests.refusals)
+    func aCheckThatWouldNeedADialogAnswersUnknownAndReadsNoSecret(_ status: OSStatus) throws {
+        let keychain = CountingKeychain()
+        try Fixture.plantExistingInstall(keychain, TestClock(now: Date(timeIntervalSince1970: 1_790_000_000)))
+        keychain.refuseLists(status)
+        let access = KeychainCredentialAccess(items: KeychainItems(backend: keychain, style: .macLegacy),
+                                              services: services)
+        #expect(access.storedItemPresence() == .unknown, "unknown shows no explainer")
+        let ops = keychain.ops(since: 0)
+        #expect(!ops.isEmpty && ops.allSatisfy { $0.kind == "copy" && !$0.wantsData && $0.skipsDialogs })
+        #expect(!access.hasRefusals)
     }
 
     @Test func theDataProtectionKeychainNeverAsksSoNothingIsChecked() throws {

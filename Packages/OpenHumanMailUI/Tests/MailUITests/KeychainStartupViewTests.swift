@@ -45,9 +45,28 @@ private final class Presses {
         }
     }
 
-    @Test func bothScreensLayOutInBothThemes() {
+    @Test func theUnreadableScreenIsNeutralAndOffersTheSameActions() {
+        let tries = Presses()
+        let signIns = Presses()
+        let unreadable = StartupProblem.keychainUnreadable(status: -25291, tryAgain: { tries.count += 1 },
+                                                           signInAgain: { signIns.count += 1 })
+        #expect(unreadable.title == "Mail couldn't read your saved sign-in")
+        #expect(!unreadable.message.contains("Always Allow"), "it does not say the person refused anything")
+        #expect(unreadable.action?.title == "Try again" && unreadable.secondaryAction?.title == "Sign in again")
+        #expect(unreadable.secondaryHint == "Opens sign-in. Nothing is deleted.")
+        #expect(!unreadable.offersQuit && unreadable.details == "Keychain error -25291")
+        unreadable.action?.run()
+        unreadable.secondaryAction?.run()
+        #expect(tries.count == 1 && signIns.count == 1)
+        for sentence in Self.sentences(unreadable.title + ". " + unreadable.message) {
+            #expect(sentence.split(separator: " ").count <= 12, "\(sentence)")
+        }
+    }
+
+    @Test func everyKeychainScreenLaysOutInBothThemes() {
         let screens = [StartupProblem.keychainExplainer(continue: {}),
-                       StartupProblem.keychainRefused(tryAgain: {}, signInAgain: {})]
+                       StartupProblem.keychainRefused(tryAgain: {}, signInAgain: {}),
+                       StartupProblem.keychainUnreadable(status: -25291, tryAgain: {}, signInAgain: {})]
         for problem in screens {
             for theme in [ResolvedTheme.light, .dark] {
                 let hosting = NSHostingView(rootView: StartupProblemView(problem: problem, quit: {}, copy: { _ in })

@@ -52,9 +52,8 @@ public struct KeychainTokenStore: TokenStore {
         }
         try tokenErrors {
             try items.withItem(key) {
-                let entry = try? items.read(key)
-                let previous = entry.flatMap { try? JSONDecoder().decode(TokenItemPayload.self, from: $0.data) }
-                var payload = TokenItemPayload(token, device: previous?.device)
+                let (previous, device) = stored(key)
+                var payload = TokenItemPayload(token, device: device)
                 payload.accessToken = nil
                 payload.accessTokenExpiry = nil
                 var comparable = previous
@@ -63,10 +62,21 @@ public struct KeychainTokenStore: TokenStore {
                 if comparable != payload {
                     let data = try payload.encoded()
                     guard data.count <= Self.maxItemBytes else { throw TokenStoreError.corrupt }
-                    try items.write(key, data: data, label: label)
+                    try items.write(key, data: data, label: label, generic: payload.sharing)
                 }
                 items.setMemory(key, TokenAccessMemory(token))
             }
+        }
+    }
+
+    // Why: an unreadable item is replaced without asking again, so it keeps only the sharing its attributes record
+    private func stored(_ key: KeychainItems.Item) -> (payload: TokenItemPayload?, device: TokenDeviceRecord?) {
+        do {
+            let previous = try items.read(key).map { try JSONDecoder().decode(TokenItemPayload.self, from: $0.data) }
+            return (previous, previous?.device)
+        } catch {
+            let sharing = items.storedAttributes(key)?[kSecAttrGeneric as String] as? Data
+            return (nil, TokenItemPayload.device(sharing: sharing))
         }
     }
 
@@ -170,6 +180,24 @@ struct TokenItemPayload: Codable, Equatable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         return try encoder.encode(self)
+    }
+
+    private enum Sharing: String { case shared, dontSync, ownSignIn }
+
+    var sharing: Data? {
+        guard let device else { return nil }
+        var sharing = Sharing.shared
+        if device.choice == .ownSignIn || device.refused != nil { sharing = .ownSignIn }
+        if device.choice == .dontSync { sharing = .dontSync }
+        return Data(sharing.rawValue.utf8)
+    }
+
+    static func device(sharing: Data?) -> TokenDeviceRecord {
+        switch sharing.flatMap({ String(data: $0, encoding: .utf8) }).flatMap(Sharing.init(rawValue:)) {
+        case .shared?: TokenDeviceRecord()
+        case .ownSignIn?: TokenDeviceRecord(choice: .ownSignIn)
+        case .dontSync?, nil: TokenDeviceRecord(choice: .dontSync)
+        }
     }
 }
 

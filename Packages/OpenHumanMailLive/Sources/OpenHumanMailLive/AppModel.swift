@@ -31,7 +31,8 @@ public final class AppModel {
     @ObservationIgnored public private(set) lazy var intents: IntentActions = IntentActions(router: { [weak self] in self?.router },
                                                                                   links: deepLinks)
     @ObservationIgnored private let live: LiveBackend?
-    @ObservationIgnored private var launchTask: Task<Void, Never>?
+    @ObservationIgnored private(set) var launchTask: Task<Void, Never>?
+    @ObservationIgnored private var starting = false
     public var liveAccounts: LiveAccountManager? { live?.accounts }
     @ObservationIgnored var platform: (@MainActor () -> SystemPlatform)?
 
@@ -60,11 +61,17 @@ public final class AppModel {
         await launchTask?.value
     }
 
+    // Why: a second Continue or Try again must not build a second engine on the same store
+    private var idle: Bool { !starting && session == nil }
+
     private func launch(_ live: LiveBackend, explainFirst: Bool, explained: Bool) {
+        guard idle else { return }
+        starting = true
         screen = .launching
         launchTask = Task { [weak self] in
             let next = await live.loadLaunch(explainFirst: explainFirst, explained: explained)
             await self?.open(next, live: live)
+            self?.starting = false
         }
     }
 
@@ -81,19 +88,26 @@ public final class AppModel {
         case .start(.needsWriteAccess(let account)):
             showSignIn(backend: live, loginHint: account.email, notice: LiveBackend.writeAccessNotice)
         case .start(.keychainRefused(let account)):
-            showKeychainRefused(account, backend: live)
+            showKeychainProblem(account, backend: live)
+        case .start(.keychainUnreadable(let account, let status)):
+            showKeychainProblem(account, unreadable: status, backend: live)
         }
     }
 
-    private func showKeychainRefused(_ account: AccountItem, backend: LiveBackend) {
-        screen = .notice(.keychainRefused(
-            tryAgain: { [weak self] in
-                backend.forgetKeychainRefusals()
-                self?.launch(backend, explainFirst: false, explained: false)
-            },
-            signInAgain: { [weak self] in
-                self?.showSignIn(backend: backend, loginHint: account.email, notice: nil)
-            }))
+    private func showKeychainProblem(_ account: AccountItem, unreadable status: Int32? = nil, backend: LiveBackend) {
+        let tryAgain: @MainActor () -> Void = { [weak self] in
+            guard let self, idle else { return }
+            backend.forgetKeychainRefusals()
+            launch(backend, explainFirst: false, explained: false)
+        }
+        let signInAgain: @MainActor () -> Void = { [weak self] in
+            self?.showSignIn(backend: backend, loginHint: account.email, notice: nil)
+        }
+        if let status {
+            screen = .notice(.keychainUnreadable(status: status, tryAgain: tryAgain, signInAgain: signInAgain))
+        } else {
+            screen = .notice(.keychainRefused(tryAgain: tryAgain, signInAgain: signInAgain))
+        }
     }
 
     private func showSignIn(backend: LiveBackend, loginHint: String, notice: String?) {
@@ -112,7 +126,12 @@ public final class AppModel {
     }
 
     private func proceed(_ account: AccountItem, backend: LiveBackend) {
-        launchTask = Task { [weak self] in await self?.startSession(account, backend: backend) }
+        guard idle else { return }
+        starting = true
+        launchTask = Task { [weak self] in
+            await self?.startSession(account, backend: backend)
+            self?.starting = false
+        }
     }
 
     public func shutdown() async {
@@ -120,6 +139,7 @@ public final class AppModel {
     }
 
     private func startSession(_ account: AccountItem, backend: LiveBackend) async {
+        guard session == nil else { return }
         do {
             let session = try await backend.makeSession(for: account)
             self.session = session
@@ -130,7 +150,7 @@ public final class AppModel {
             Task { await session.start() }
         } catch let error as AccountSetupError where error.kind == .clientMissing {
             if backend.keychainRefused {
-                showKeychainRefused(account, backend: backend)
+                showKeychainProblem(account, backend: backend)
             } else {
                 showSignIn(backend: backend, loginHint: account.email, notice: error.message)
             }

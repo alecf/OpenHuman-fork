@@ -324,7 +324,8 @@ public struct KeychainTokenDeviceStore: TokenDeviceRecordStore {
                         current.device = section
                         let data = try current.encoded()
                         guard data.count <= Self.maxItemBytes else { throw TokenStoreError.corrupt }
-                        try items.write(tokenKey(account), data: data, label: KeychainTokenStore.defaultLabel)
+                        try items.write(tokenKey(account), data: data, label: KeychainTokenStore.defaultLabel,
+                                        generic: current.sharing)
                     }
                     if !hadSection, items.canHoldSynchronizableItems, (try? items.read(memoryKey(account))) != nil {
                         try items.delete(memoryKey(account))
