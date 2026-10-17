@@ -281,7 +281,7 @@ public struct KeychainTokenDeviceStore: TokenDeviceRecordStore {
         try requireAppProcess()
         let account = try KeychainTokenStore.account(email)
         return try tokenErrors {
-            try items.exclusively {
+            try items.withItem(tokenKey(account)) {
                 var record = (try? payload(account))?.device
                 if record == nil, items.canHoldSynchronizableItems,
                    let entry = try items.read(memoryKey(account)) {
@@ -309,7 +309,7 @@ public struct KeychainTokenDeviceStore: TokenDeviceRecordStore {
             throw TokenStoreError.corrupt
         }
         try tokenErrors {
-            try items.exclusively {
+            try items.withItem(tokenKey(account)) {
                 let memory: TokenDeviceRecord? = record == TokenDeviceRecord() ? nil : record
                 items.setMemory(memoryKey(account), memory)
                 var persisted = record
@@ -324,7 +324,8 @@ public struct KeychainTokenDeviceStore: TokenDeviceRecordStore {
                         current.device = section
                         let data = try current.encoded()
                         guard data.count <= Self.maxItemBytes else { throw TokenStoreError.corrupt }
-                        try items.write(tokenKey(account), data: data, label: KeychainTokenStore.defaultLabel)
+                        try items.write(tokenKey(account), data: data, label: KeychainTokenStore.defaultLabel,
+                                        generic: current.sharing)
                     }
                     if !hadSection, items.canHoldSynchronizableItems, (try? items.read(memoryKey(account))) != nil {
                         try items.delete(memoryKey(account))
@@ -343,7 +344,7 @@ public struct KeychainTokenDeviceStore: TokenDeviceRecordStore {
         try requireAppProcess()
         let account = try KeychainTokenStore.account(email)
         try tokenErrors {
-            try items.exclusively {
+            try items.withItem(tokenKey(account)) {
                 if var current = try payload(account), current.device != nil {
                     current.device = nil
                     try items.write(tokenKey(account), data: current.encoded(), label: KeychainTokenStore.defaultLabel)

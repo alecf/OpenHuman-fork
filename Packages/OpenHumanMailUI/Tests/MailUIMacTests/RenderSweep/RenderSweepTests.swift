@@ -354,6 +354,14 @@ struct RenderSweepTests {
         defer { error.orderOut(nil) }
         try await sweepShoot(error, screen: "start-up-error", theme: theme)
 
+        for (screen, keychain) in [("keychain-explainer", StartupProblem.keychainExplainer(continue: {})),
+                                   ("keychain-refused", StartupProblem.keychainRefused(tryAgain: {}, signInAgain: {}))] {
+            let window = sweepStandaloneWindow(StartupProblemView(problem: keychain, quit: {}, copy: { _ in }),
+                                               store: store, size: size)
+            defer { window.orderOut(nil) }
+            try await sweepShoot(window, screen: screen, theme: theme)
+        }
+
         let launching = sweepStandaloneWindow(LaunchingView(), store: store, size: size)
         defer { launching.orderOut(nil) }
         try await sweepShoot(launching, screen: "launching", theme: theme, settle: .seconds(1))

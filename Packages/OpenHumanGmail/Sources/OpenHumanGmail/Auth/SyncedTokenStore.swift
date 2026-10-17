@@ -43,7 +43,22 @@ public final class SyncedTokenStore: SharedTokenStore {
     public let shared: any SharedGrantStore
     public let device: any TokenDeviceRecordStore
     public let log: CredentialChainLog
-    private let lock = Mutex(())
+    private let gates = Mutex<[String: AccountGate]>([:])
+
+    private final class AccountGate: @unchecked Sendable { let lock = NSLock() }
+
+    // Why: one account's Keychain dialog must not hold up another account's sign-in
+    private func exclusively<R>(_ key: String, _ body: () throws -> R) rethrows -> R {
+        let gate = gates.withLock { all -> AccountGate in
+            if let existing = all[key] { return existing }
+            let made = AccountGate()
+            all[key] = made
+            return made
+        }
+        gate.lock.lock()
+        defer { gate.lock.unlock() }
+        return try body()
+    }
 
     public init(local: any TokenStore, shared: any SharedGrantStore, device: any TokenDeviceRecordStore,
                 log: CredentialChainLog = .shared) {
@@ -94,12 +109,12 @@ public final class SyncedTokenStore: SharedTokenStore {
 
     public func load(account email: String) throws -> StoredToken? {
         let key = try normalizedAccount(email)
-        return try lock.withLock { _ in try resolve(key).token }
+        return try exclusively(key) { try resolve(key).token }
     }
 
     public func save(_ token: StoredToken, account email: String) throws {
         let key = try normalizedAccount(email)
-        try lock.withLock { _ in try saveSignIn(token, key) }
+        try exclusively(key) { try saveSignIn(token, key) }
     }
 
     // Write this device's own copy first; failing to share it must not fail the sign-in
@@ -112,8 +127,9 @@ public final class SyncedTokenStore: SharedTokenStore {
         KeychainDiagnostics.shared.record(.tokenLocalWrite, 0)
         var record: TokenDeviceRecord
         do { record = try device.load(account: key) ?? TokenDeviceRecord() } catch {
-            Log(.keychain).error("sign-in: this device's record could not be read (\(Self.code(error))); a new one is kept")
-            record = TokenDeviceRecord()
+            Log(.keychain).error("sign-in: this device's record could not be read (\(Self.code(error))); "
+                                 + "the sign-in stays on this device")
+            record = TokenDeviceRecord(choice: .dontSync)
         }
         if record.choice == nil {
             do {
@@ -132,7 +148,7 @@ public final class SyncedTokenStore: SharedTokenStore {
         do { try device.save(record, account: key) } catch {
             KeychainDiagnostics.shared.record(.tokenDeviceRecord, Self.status(error))
             Log(.keychain).error("sign-in: this device's record could not be saved (\(Self.code(error)))")
-            if record.choice == .ownSignIn || record.cannotSync == true { throw error }
+            if record.choice != nil || record.cannotSync == true { throw error }
         }
     }
 
@@ -183,7 +199,7 @@ public final class SyncedTokenStore: SharedTokenStore {
 
     public func delete(account email: String) throws {
         let key = try normalizedAccount(email)
-        try lock.withLock { _ in
+        try exclusively(key) {
             try local.delete(account: key)
             try device.delete(account: key)
         }
@@ -191,7 +207,7 @@ public final class SyncedTokenStore: SharedTokenStore {
 
     public func deleteEverywhere(account email: String) throws {
         let key = try normalizedAccount(email)
-        try lock.withLock { _ in
+        try exclusively(key) {
             try shared.delete(account: key)
             try local.delete(account: key)
             try device.delete(account: key)
@@ -206,7 +222,7 @@ public final class SyncedTokenStore: SharedTokenStore {
 
     public func saveRefreshed(_ token: StoredToken, account email: String, refreshedWith used: String) throws {
         let key = try normalizedAccount(email)
-        try lock.withLock { _ in
+        try exclusively(key) {
             let now = try resolve(key)
             guard case .shared(let grant) = now.source else {
                 try local.save(token, account: key)
@@ -249,7 +265,7 @@ public final class SyncedTokenStore: SharedTokenStore {
 
     public func sharedTokenRefused(account email: String, refreshToken: String) throws -> SharedRefusal {
         let key = try normalizedAccount(email)
-        return try lock.withLock { _ in
+        return try exclusively(key) {
             let now = try resolve(key)
             guard let current = now.token else { return .notShared }
             if current.refreshToken != refreshToken { return .replaced }
@@ -274,7 +290,7 @@ public final class SyncedTokenStore: SharedTokenStore {
 
     public func syncState(account email: String) throws -> TokenSyncState? {
         let key = try normalizedAccount(email)
-        return try lock.withLock { _ in
+        return try exclusively(key) {
             let now = try resolve(key)
             switch now.record.choice {
             case .dontSync?: return now.own == nil ? nil : .notSyncing
@@ -297,7 +313,7 @@ public final class SyncedTokenStore: SharedTokenStore {
     @discardableResult
     public func setSyncEnabled(_ enabled: Bool, account email: String) throws -> TokenSyncState? {
         let key = try normalizedAccount(email)
-        try lock.withLock { _ in
+        try exclusively(key) {
             let now = try resolve(key)
             var record = now.record
             if !enabled {
@@ -373,7 +389,7 @@ public final class SyncedTokenStore: SharedTokenStore {
             guard let key = try? normalizedAccount(account) else { continue }
             let outcome: Outcome
             do {
-                outcome = try lock.withLock { _ in try migrate(key) }
+                outcome = try exclusively(key) { try migrate(key) }
             } catch {
                 outcome = .skipped(Self.outcome(error))
             }
@@ -458,7 +474,7 @@ public final class SyncedTokenStore: SharedTokenStore {
 
     public func setSource(_ source: CredentialSource?, account email: String) throws {
         let key = try normalizedAccount(email)
-        try lock.withLock { _ in
+        try exclusively(key) {
             var record = try device.load(account: key) ?? TokenDeviceRecord()
             guard record.source != source else { return }
             record.source = source
@@ -469,7 +485,7 @@ public final class SyncedTokenStore: SharedTokenStore {
     public func sharedSignIns() throws -> [String] {
         try shared.allAccounts().compactMap { account -> String? in
             guard let key = try? normalizedAccount(account) else { return nil }
-            let now = try lock.withLock { _ in try resolve(key) }
+            let now = try exclusively(key) { try resolve(key) }
             if case .shared = now.source { return key }
             return nil
         }

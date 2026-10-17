@@ -31,13 +31,15 @@ public final class LiveAccountManager: AccountManaging {
         var remoteSignInTimeout: Duration = .seconds(600)
         var calendarTokenStore: (any TokenStore)? = nil
         var developerClientFile: @Sendable ([String: String]) -> String? = { _ in nil }
+        var credentialAccess: (any CredentialAccess)? = nil
 
         public init(environment: [String: String], storeDirectory: URL, clientStore: any OAuthClientStore = InMemoryOAuthClientStore(),
                     tokenStore: any TokenStore, transport: any HTTPTransport,
                     makeReceiver: @escaping @Sendable () -> any LoopbackRedirectReceiver, browser: any ExternalBrowser,
                     clock: any OHClock, signInTimeout: Duration = .seconds(300), remoteSignInTimeout: Duration = .seconds(600),
                     calendarTokenStore: (any TokenStore)? = nil,
-                    developerClientFile: @escaping @Sendable ([String: String]) -> String? = { _ in nil }) {
+                    developerClientFile: @escaping @Sendable ([String: String]) -> String? = { _ in nil },
+                    credentialAccess: (any CredentialAccess)? = nil) {
             self.environment = environment
             self.storeDirectory = storeDirectory
             self.clientStore = clientStore
@@ -50,6 +52,7 @@ public final class LiveAccountManager: AccountManaging {
             self.remoteSignInTimeout = remoteSignInTimeout
             self.calendarTokenStore = calendarTokenStore
             self.developerClientFile = developerClientFile
+            self.credentialAccess = credentialAccess
         }
     }
 
@@ -69,7 +72,12 @@ public final class LiveAccountManager: AccountManaging {
     private let dependencies: Dependencies
     private let vault: OAuthClientVault
     private let pendingRemote = Mutex<PendingRemote?>(nil)
-    private let watchers = Mutex<[UUID: AsyncStream<OAuthClientStatus>.Continuation]>([:])
+    private struct StatusWatcher {
+        var continuation: AsyncStream<OAuthClientStatus>.Continuation
+        var answered = false
+    }
+    private let watchers = Mutex<[UUID: StatusWatcher]>([:])
+    private let migrated = Mutex(false)
     private let link = Mutex<SessionLink?>(nil)
     private let selectedClientKey = Mutex<String?>(nil)
     private let clientList = Mutex<[OAuthClientConfig]?>(nil)
@@ -78,10 +86,19 @@ public final class LiveAccountManager: AccountManaging {
         SettingKey(name: "oauth.client_key", defaultValue: nil, isSafetyKey: false)
     }
 
-    init(store: MailStore, dependencies: Dependencies) {
+    init(store: MailStore, dependencies: Dependencies, migrateNow: Bool = true) {
         self.store = store
         self.dependencies = dependencies
         vault = OAuthClientVault(store: dependencies.clientStore, storeDirectory: dependencies.storeDirectory)
+        if migrateNow { runLaunchMigrations() }
+    }
+
+    func runLaunchMigrations() {
+        let first = migrated.withLock { done -> Bool in
+            defer { done = true }
+            return !done
+        }
+        guard first else { return }
         vault.migrateLegacyFiles()
         (dependencies.tokenStore as? SyncedTokenStore)?.migrateLocalSignIns()
         vault.migrateSyncWanted()
@@ -116,6 +133,8 @@ public final class LiveAccountManager: AccountManaging {
         clientList.withLock { $0 = fresh }
         return fresh
     }
+
+    func forgetKnownClients() { clientList.withLock { $0 = nil } }
 
     private func selectedClient() -> OAuthClientConfig? {
         guard let key = selectedClientKey.withLock({ $0 }) else { return nil }
@@ -198,7 +217,21 @@ public final class LiveAccountManager: AccountManaging {
 
     private func publishClientStatus() {
         let status = currentClientStatus()
-        for continuation in watchers.withLock({ Array($0.values) }) { continuation.yield(status) }
+        watchers.withLock { all in
+            for id in Array(all.keys) {
+                all[id]?.answered = true
+                all[id]?.continuation.yield(status)
+            }
+        }
+    }
+
+    private func answerFirst(_ id: UUID) {
+        let status = currentClientStatus()
+        watchers.withLock { all in
+            guard let watcher = all[id], !watcher.answered else { return }
+            all[id]?.answered = true
+            watcher.continuation.yield(status)
+        }
     }
 
     func currentClientStatus() -> OAuthClientStatus {
@@ -214,12 +247,13 @@ public final class LiveAccountManager: AccountManaging {
         }
     }
 
+    // Why: the first status reads the Keychain, which must never happen on the caller's (main) thread
     public func oauthClientStatus() -> AsyncStream<OAuthClientStatus> {
         let id = UUID()
         let (stream, continuation) = AsyncStream<OAuthClientStatus>.makeStream()
-        watchers.withLock { $0[id] = continuation }
+        watchers.withLock { $0[id] = StatusWatcher(continuation: continuation) }
         continuation.onTermination = { [weak self] _ in _ = self?.watchers.withLock { $0.removeValue(forKey: id) } }
-        continuation.yield(currentClientStatus())
+        Task.detached(priority: .userInitiated) { [weak self] in self?.answerFirst(id) }
         return stream
     }
 

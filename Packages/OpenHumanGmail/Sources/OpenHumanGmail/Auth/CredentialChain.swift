@@ -60,6 +60,24 @@ public enum CredentialOutcome: Sendable, Equatable, Codable {
     case keptLocal
     case removedElsewhere
 
+    public static let keychainRefusals: Set<Int32> = [-128, -25293, -25308, -25315]
+
+    public var isKeychainRefusal: Bool {
+        if case .keychain(let status) = self { return Self.keychainRefusals.contains(status) }
+        return false
+    }
+
+    public static func keychainRefusal(in error: any Error) -> CredentialOutcome? {
+        let status: Int32
+        switch error {
+        case TokenStoreError.keychain(let code): status = code
+        case OAuthClientStoreError.keychain(let code): status = code
+        default: return nil
+        }
+        let outcome = CredentialOutcome.keychain(status: status)
+        return outcome.isKeychainRefusal ? outcome : nil
+    }
+
     public var summary: String {
         switch self {
         case .ok: "ok"

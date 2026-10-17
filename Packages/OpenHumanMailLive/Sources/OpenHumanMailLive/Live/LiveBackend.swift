@@ -24,6 +24,13 @@ public final class LiveBackend {
         case session(AccountItem)
         case signIn(loginHint: String, notice: String?)
         case needsWriteAccess(AccountItem)
+        case keychainRefused(AccountItem)
+        case keychainUnreadable(AccountItem, status: Int32)
+    }
+
+    enum Launch: Equatable {
+        case explain
+        case start(Start)
     }
 
     let store: MailStore
@@ -37,6 +44,7 @@ public final class LiveBackend {
     private let calendarTokenStore: (any TokenStore)?
     private let makeReceiver: @Sendable () -> any LoopbackRedirectReceiver
     private let browser: any ExternalBrowser
+    private let credentialAccess: (any CredentialAccess)?
 
     public init(store: MailStore, accountDependencies: LiveAccountManager.Dependencies,
                 transports: Transports, userAgent: String, pollInterval: Duration? = nil,
@@ -51,10 +59,51 @@ public final class LiveBackend {
         calendarTokenStore = accountDependencies.calendarTokenStore
         makeReceiver = accountDependencies.makeReceiver
         browser = accountDependencies.browser
-        accounts = LiveAccountManager(store: store, dependencies: accountDependencies)
+        credentialAccess = accountDependencies.credentialAccess
+        accounts = LiveAccountManager(store: store, dependencies: accountDependencies, migrateNow: false)
     }
 
-    func initialStep() -> Start {
+    nonisolated static var promptsExplainedSetting: SettingKey<Bool> {
+        SettingKey(name: "keychain.prompts_explained", defaultValue: false, isSafetyKey: false)
+    }
+
+    // Why: every read that can raise a Keychain dialog runs here, off the main thread and in one fixed order
+    @concurrent
+    nonisolated func loadLaunch(explainFirst: Bool, explained: Bool) async -> Launch {
+        if explained { try? store.setSetting(Self.promptsExplainedSetting, true, scope: .global) }
+        if explainFirst, needsExplainer() { return .explain }
+        accounts.runLaunchMigrations()
+        let signedIn = accounts.signedInAccounts()
+        for account in signedIn { _ = try? tokenStore.load(account: account.email) }
+        _ = accounts.knownClients()
+        if let calendarTokenStore {
+            for account in signedIn { _ = try? calendarTokenStore.load(account: AccountCredentials.accountKey(account.email)) }
+        }
+        return .start(initialStep())
+    }
+
+    private nonisolated func needsExplainer() -> Bool {
+        guard let credentialAccess,
+              (try? store.setting(Self.promptsExplainedSetting, scope: .global)) != true else { return false }
+        switch credentialAccess.storedItemPresence() {
+        case .present:
+            return true
+        case .absent:
+            try? store.setSetting(Self.promptsExplainedSetting, true, scope: .global)
+            return false
+        case .unknown:
+            return false
+        }
+    }
+
+    nonisolated var keychainRefused: Bool { credentialAccess?.hasRefusals ?? false }
+
+    nonisolated func forgetKeychainRefusals() {
+        credentialAccess?.forgetRefusals()
+        accounts.forgetKnownClients()
+    }
+
+    nonisolated func initialStep() -> Start {
         let known = ((try? store.accounts()) ?? []).filter { $0.status != .removing && $0.status != .disabled }
         var refusal: Start?
         for account in known {
@@ -65,8 +114,16 @@ public final class LiveBackend {
             }
             let token: StoredToken?
             do { token = try tokenStore.load(account: account.email) } catch {
-                Log(.oauth).error("account \(account.id.rawValue): token store read failed")
-                refusal = refusal ?? .signIn(loginHint: account.email, notice: Self.signInAgainNotice)
+                Log(.oauth).error("account \(account.id.rawValue): token store read failed (\(Self.code(error)))")
+                if case TokenStoreError.keychain(let status) = error {
+                    let outcome = CredentialOutcome.keychain(status: status)
+                    CredentialChainLog.shared.record(.readSignIn, outcome,
+                                                     subject: CredentialChainLog.subject(account: account.email))
+                    refusal = refusal ?? (outcome.isKeychainRefusal ? .keychainRefused(account)
+                                                                     : .keychainUnreadable(account, status: status))
+                } else {
+                    refusal = refusal ?? .signIn(loginHint: account.email, notice: Self.signInAgainNotice)
+                }
                 continue
             }
             guard let token else {
@@ -86,14 +143,47 @@ public final class LiveBackend {
         return refusal ?? .signIn(loginHint: known.first?.email ?? "", notice: nil)
     }
 
-    static let signInAgainNotice = "Mail needs you to sign in again on this Mac. Your mail here is kept."
+    nonisolated static func code(_ error: any Error) -> String {
+        if case TokenStoreError.keychain(let status) = error { return "OSStatus \(status)" }
+        return String(describing: type(of: error))
+    }
+
+    nonisolated static let signInAgainNotice = "Mail needs you to sign in again on this Mac. Your mail here is kept."
 
     nonisolated static let writeAccessNotice = "To make changes, sign in again and allow Mail to change your mail."
 
-    static let broadAccessNotice = "This account gave Mail more access than it needs. Sign in again and Mail will ask "
+    nonisolated static let broadAccessNotice = "This account gave Mail more access than it needs. Sign in again and Mail will ask "
         + "only for what it uses."
 
-    func makeSession(for account: AccountItem) throws -> SyncSession {
+    struct PreparedSession: Sendable {
+        var client: OAuthClientConfig
+        var factory: DefaultGmailClientFactory
+        var gmail: GmailClientConfig
+        var metrics: SyncMetricsRegistry
+        var api: any GmailAPI
+        var tokenEvents: AsyncStream<TokenEvent>
+        var calendar: GoogleCalendarSession?
+        var connections: LiveCalendarConnections?
+        var pollSeconds: Int
+    }
+
+    func makeSession(for account: AccountItem) async throws -> SyncSession {
+        let prepared = try await prepareSession(for: account)
+        var wiring = SyncSession.Wiring(
+            factory: prepared.factory, gmail: prepared.gmail, metrics: prepared.metrics, tokenStore: tokenStore,
+            oauthClient: prepared.client, clock: clock, pollInterval: pollInterval ?? .seconds(max(prepared.pollSeconds, 15)),
+            systemEvents: makeSystemEvents(), tokenEvents: prepared.tokenEvents, draftsDirectory: store.location.draftsDirectory,
+            unsubscribeTransport: transports.unsubscribe, accounts: accounts)
+        wiring.api = prepared.api
+        wiring.calendar = prepared.calendar
+        wiring.calendarConnections = prepared.connections
+        return try SyncSession(account: account, store: store, wiring: wiring, isFake: false)
+    }
+
+    // Why: everything here may read the Keychain, so it runs before the main actor builds the window
+    @concurrent
+    nonisolated func prepareSession(for account: AccountItem) async throws -> PreparedSession {
+        accounts.runLaunchMigrations()
         let client = try accounts.client(for: account)
         let (tokenEvents, relay) = AsyncStream.makeStream(of: TokenEvent.self)
         let credentials = Self.credentials(tokenStore: tokenStore, accounts: accounts, client: client,
@@ -121,17 +211,14 @@ public final class LiveBackend {
             }
         }
         let calendar = makeCalendar.map { $0(account.email, client) }
-        var wiring = SyncSession.Wiring(
-            factory: factory, gmail: gmail, metrics: metrics, tokenStore: tokenStore, oauthClient: client, clock: clock,
-            pollInterval: pollInterval ?? .seconds(max(seconds, 15)), systemEvents: makeSystemEvents(),
-            tokenEvents: tokenEvents, draftsDirectory: store.location.draftsDirectory,
-            unsubscribeTransport: transports.unsubscribe, accounts: accounts)
-        wiring.calendar = calendar
         let connections = makeCalendar.map {
             LiveCalendarConnections(own: calendar, ownAccount: account.id, accounts: manager, make: $0)
         }
-        wiring.calendarConnections = connections
-        return try SyncSession(account: account, store: store, wiring: wiring, isFake: false)
+        let api = try factory.client(for: account.email)
+        connections?.prepare(accounts.signedInAccounts())
+        return PreparedSession(client: client, factory: factory, gmail: gmail, metrics: metrics, api: api,
+                               tokenEvents: tokenEvents, calendar: calendar, connections: connections,
+                               pollSeconds: seconds)
     }
 
     nonisolated static func credentials(
@@ -160,7 +247,7 @@ public final class LiveBackend {
         return broader.isEmpty ? nil : broader.sorted().joined(separator: " ")
     }
 
-    func account(_ id: AccountID) -> AccountItem? {
+    nonisolated func account(_ id: AccountID) -> AccountItem? {
         (try? store.accounts())?.first { $0.id == id }
     }
 }

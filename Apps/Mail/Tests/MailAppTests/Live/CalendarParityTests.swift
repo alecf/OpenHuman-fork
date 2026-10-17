@@ -114,8 +114,8 @@ private final class ParityHarness {
         Account(id: id, email: email, displayName: nil, alias: nil, health: .active)
     }
 
-    func session(_ id: AccountID? = nil) throws -> SyncSession {
-        try backend.makeSession(for: try account(id ?? robinID))
+    func session(_ id: AccountID? = nil) async throws -> SyncSession {
+        try await backend.makeSession(for: try account(id ?? robinID))
     }
 
     func storeCalendarToken(_ email: String, client: String, scopes: [String], expired: Bool = false) throws {
@@ -132,7 +132,7 @@ private final class ParityHarness {
 @MainActor
 @Test(.timeLimit(.minutes(2))) func twoAccountsCalendarsUseTheirOwnClients() async throws {
     let h = try ParityHarness()
-    let session = try h.session()
+    let session = try await h.session()
     let connections = try #require(session.calendarConnections)
     #expect(connections.routesByAccount)
     let robin = try #require(connections.calendarConnection(for: h.model(h.robinID, ParityHarness.robin)))
@@ -168,7 +168,7 @@ private final class ParityHarness {
 
     try h.storeCalendarToken(ParityHarness.robin, client: ParityClients.workID, scopes: writeScopes, expired: true)
     try h.storeCalendarToken(ParityHarness.sam, client: ParityClients.personalID, scopes: writeScopes, expired: true)
-    let relaunched = try h.session()
+    let relaunched = try await h.session()
     let before = h.tokenRequests.count
     try await #require(relaunched.calendarConnections).resume([(id: h.robinID, email: ParityHarness.robin),
                                                               (id: h.samID, email: ParityHarness.sam)])
@@ -185,7 +185,7 @@ private final class ParityHarness {
                                              requested: readScopes)
     try h.storeCalendarToken(ParityHarness.sam, client: ParityClients.personalID, scopes: writeScopes)
     try h.storeCalendarToken(ParityHarness.robin, client: ParityClients.workID, scopes: readScopes)
-    let session = try h.session()
+    let session = try await h.session()
     let connections = try #require(session.calendarConnections)
     let sam = try #require(connections.calendarConnection(for: h.model(h.samID, ParityHarness.sam)))
     var states = sam.connectionStates().makeAsyncIterator()
@@ -198,7 +198,7 @@ private final class ParityHarness {
     let robinMail = try h.mailTokens.load(account: ParityHarness.robin)
     try h.storeCalendarToken(ParityHarness.robin, client: ParityClients.workID, scopes: readScopes, expired: true)
     h.granted.set(readScopes + [CalendarScope.events])
-    let relaunched = try h.session()
+    let relaunched = try await h.session()
     let robin = try #require(relaunched.calendarConnections?.calendarConnection(for: h.model(h.robinID, ParityHarness.robin)))
     try await #require(relaunched.calendarConnections).resume([(id: h.robinID, email: ParityHarness.robin)])
     #expect(try h.calendarTokens.load(account: ParityHarness.robin) == nil)
@@ -209,10 +209,10 @@ private final class ParityHarness {
 }
 
 @MainActor
-@Test(.timeLimit(.minutes(2))) func eachAccountsProviderIsItsOwnAndTheModuleRunsForAny() throws {
+@Test(.timeLimit(.minutes(2))) func eachAccountsProviderIsItsOwnAndTheModuleRunsForAny() async throws {
     let h = try ParityHarness()
     try h.storeCalendarToken(ParityHarness.sam, client: ParityClients.personalID, scopes: readScopes)
-    let session = try h.session()
+    let session = try await h.session()
     #expect(session.environment.modules.modules.contains(.calendar))
     let connections = try #require(session.environment.calendarConnections)
     #expect(connections.routesByAccount)
@@ -224,16 +224,16 @@ private final class ParityHarness {
 }
 
 @MainActor
-@Test(.timeLimit(.minutes(2))) func creatingNeedsAWriteGrantForEveryAccount() throws {
+@Test(.timeLimit(.minutes(2))) func creatingNeedsAWriteGrantForEveryAccount() async throws {
     let write = try ParityHarness()
     try write.storeCalendarToken(ParityHarness.sam, client: ParityClients.personalID, scopes: writeScopes)
-    let writing = try write.session()
+    let writing = try await write.session()
     let samWrite = try #require(writing.calendarConnections?.calendarProvider(for: write.model(write.samID, ParityHarness.sam)))
     #expect(samWrite.info.createRefusal == nil)
 
     let read = try ParityHarness()
     try read.storeCalendarToken(ParityHarness.sam, client: ParityClients.personalID, scopes: readScopes)
-    let reading = try read.session()
+    let reading = try await read.session()
     let samRead = try #require(reading.calendarConnections?.calendarProvider(for: read.model(read.samID, ParityHarness.sam)))
     #expect(samRead.info.createRefusal == GoogleCalendarSession.reconnectToCreate)
 }
@@ -243,7 +243,7 @@ private final class ParityHarness {
     let h = try ParityHarness()
     h.consentFails.set(true)
     let mailBefore = try (h.mailTokens.load(account: ParityHarness.robin), h.mailTokens.load(account: ParityHarness.sam))
-    let session = try h.session()
+    let session = try await h.session()
     let sam = try #require(session.calendarConnections?.calendarConnection(for: h.model(h.samID, ParityHarness.sam)))
     await #expect(throws: CalendarError.self) { try await sam.connect(client: nil) }
     #expect(try h.calendarTokens.load(account: ParityHarness.sam) == nil, "nothing stored")

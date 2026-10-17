@@ -88,6 +88,7 @@ private final class Flag {
     let backend = liveBackend(google: google, store: store, tokens: tokens, browser: RecordingBrowser(),
                               clientPath: try SyntheticClient.writeJSON())
     let app = AppModel(live: backend)
+    await app.launched()
     guard case .mail = app.screen, let session = app.session else {
         Issue.record("expected the mail window")
         return

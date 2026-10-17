@@ -214,7 +214,7 @@ private func realAccountBackend(scopes: [String], storedSwitch: ((MailStore) thr
             Issue.record("\(name): expected the account to open")
             continue
         }
-        let session = try f.backend.makeSession(for: item)
+        let session = try await f.backend.makeSession(for: item)
         let environment = session.environment
         #expect(environment.isLiveAccount && environment.draftsDirectory != nil, "\(name)")
         #expect(await refusedByTheDenyList { try await session.api.deleteDraft(id: "../messages/m1") },
@@ -234,8 +234,9 @@ private func realAccountBackend(scopes: [String], storedSwitch: ((MailStore) thr
     let f = try realAccountBackend(scopes: [GmailScope.readonly])
     let item = try #require(try f.store.accounts().first)
     #expect(f.backend.initialStep() == .needsWriteAccess(item))
-    #expect(throws: GmailError.self) { _ = try f.backend.makeSession(for: item) }
+    await #expect(throws: GmailError.self) { _ = try await f.backend.makeSession(for: item) }
     let app = AppModel(live: f.backend)
+    await app.launched()
     guard case .signIn(let signIn) = app.screen else {
         Issue.record("expected the sign-in screen")
         return
@@ -350,7 +351,7 @@ private enum RepoSources {
     #expect(backend.contains("if !token.grantedScopes.contains(GmailScope.modify) {\n                refusal = refusal ?? .needsWriteAccess(account)"))
     #expect(AppSources.files(sources, matching: #"makeSession\(for:"#) == ["AppModel.swift"])
     let appModel = try text("AppModel.swift")
-    #expect(codeLines(appModel, containing: "makeSession(for:") == ["let session = try backend.makeSession(for: account)"])
+    #expect(codeLines(appModel, containing: "makeSession(for:") == ["let session = try await backend.makeSession(for: account)"])
     #expect(codeLines(appModel, containing: "LiveBackend.writeAccessNotice") == [
         "showSignIn(backend: live, loginHint: account.email, notice: LiveBackend.writeAccessNotice)",
     ])
@@ -494,7 +495,7 @@ private enum RepoSources {
     #expect(AppSources.files(sources, matching: #"CalendarGuardTransport|CalendarScope\.|include_granted"#).isEmpty)
     #expect(!(try text("FakeGmailLaunch.swift")).contains("calendar"))
     #expect(try text("CompositionRoot.swift").contains("guard !arguments.contains(\"-UseFakeCalendar\") else { return nil }"))
-    #expect(AppSources.files(sources, matching: #"calendarTokenStore: liveCalendarTokenStore\("#) == ["CompositionRoot.swift"])
+    #expect(AppSources.files(sources, matching: #"= liveCalendarTokenStore\("#) == ["CompositionRoot.swift"])
     let manager = try text("LiveAccountManager.swift")
     #expect(AppSources.files(sources, matching: #"OAuthFlow\("#) == ["LiveAccountManager.swift"])
     #expect(codeLines(manager, containing: "OAuthFlow(") == [

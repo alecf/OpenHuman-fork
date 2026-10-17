@@ -11,7 +11,12 @@ final class LiveCalendarConnections: CalendarConnectionsProviding, Sendable {
     private let ownAccount: AccountID
     private let accounts: LiveAccountManager
     private let make: MakeSession
-    private let cache = Mutex<[AccountID: LiveInboxCalendar]>([:])
+    private let cache = Mutex<Cache>(Cache())
+
+    private struct Cache {
+        var inboxes: [AccountID: LiveInboxCalendar] = [:]
+        var building: Set<AccountID> = []
+    }
 
     init(own: GoogleCalendarSession?, ownAccount: AccountID, accounts: LiveAccountManager, make: @escaping MakeSession) {
         self.own = own
@@ -39,13 +44,34 @@ final class LiveCalendarConnections: CalendarConnectionsProviding, Sendable {
     }
 
     func resume(_ accounts: [(id: AccountID, email: String)]) async {
-        for (id, email) in accounts {
-            await inbox(id, email: email)?.primary.resume()
+        prepare(accounts)
+        for (id, _) in accounts {
+            await cache.withLock({ $0.inboxes[id] })?.primary.resume()
         }
     }
 
+    func prepare(_ accounts: [(id: AccountID, email: String)]) {
+        for (id, email) in accounts { _ = build(id, email: email) }
+    }
+
+    // Why: building reads the Keychain, and these lookups come from the main thread; a miss builds in the background
     private func inbox(_ id: AccountID, email: String) -> LiveInboxCalendar? {
-        if let cached = cache.withLock({ $0[id] }) { return cached }
+        let (found, start) = cache.withLock { cache -> (LiveInboxCalendar?, Bool) in
+            if let found = cache.inboxes[id] { return (found, false) }
+            return (nil, cache.building.insert(id).inserted)
+        }
+        if let found { return found }
+        if start {
+            Task.detached(priority: .utility) { [self] in
+                _ = build(id, email: email)
+                cache.withLock { _ = $0.building.remove(id) }
+            }
+        }
+        return nil
+    }
+
+    private func build(_ id: AccountID, email: String) -> LiveInboxCalendar? {
+        if let cached = cache.withLock({ $0.inboxes[id] }) { return cached }
         guard let client = accounts.ownClient(email: email, account: id) ?? (try? accounts.loadClient())
         else { return nil }
         let primary = id == ownAccount ? (own ?? make(email, client)) : make(email, client)
@@ -55,14 +81,14 @@ final class LiveCalendarConnections: CalendarConnectionsProviding, Sendable {
             accounts.knownClients().first { $0.registryKey == key }.map { make(email, $0) }
         }, recordedClientKey: { accounts.calendarClientKey(email: email) })
         return cache.withLock { cache in
-            if let raced = cache[id] { return raced }
-            cache[id] = made
+            if let raced = cache.inboxes[id] { return raced }
+            cache.inboxes[id] = made
             return made
         }
     }
 
     func forget(_ account: AccountID) async {
-        guard let gone = cache.withLock({ $0.removeValue(forKey: account) }) else { return }
+        guard let gone = cache.withLock({ $0.inboxes.removeValue(forKey: account) }) else { return }
         if account != ownAccount { await gone.primary.forget() }
     }
 }

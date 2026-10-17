@@ -170,6 +170,7 @@ private func setupError(_ rig: Rig, _ pasted: String) async -> AccountSetupError
         transports: LiveBackend.Transports(api: google.http, token: google.http), userAgent: "OpenHumanMail/test",
         makeSystemEvents: { AppSystemEvents() })
     let app = AppModel(live: backend)
+    await app.launched()
     guard case .signIn(let signIn) = app.screen else {
         Issue.record("expected the sign-in screen")
         return
