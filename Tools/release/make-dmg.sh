@@ -279,11 +279,11 @@ else
     SIGNING=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=$XCODE_IDENTITY" "DEVELOPMENT_TEAM=$TEAM" PROVISIONING_PROFILE_SPECIFIER=
              ENABLE_HARDENED_RUNTIME=YES OTHER_CODE_SIGN_FLAGS=--timestamp CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO)
 fi
-run_logged "$LOGS/archive.log" xcodebuild archive \
+run_logged "$LOGS/archive.log" xcodebuild archive -jobs 2 \
     -project "$ROOT/Apps/Mail/Mail.xcodeproj" -scheme Mail -configuration Release \
     -destination 'generic/platform=macOS' -derivedDataPath "$DD" -archivePath "$ARCHIVE" \
     "${SIGNING[@]}" "OH_BUNDLE_ID_PREFIX=$PREFIX" OH_ENTITLEMENTS=Entitlements/Mail.entitlements \
-    "OH_GIT_COMMIT=$STAMP" "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" "OH_RELEASE_CHANNEL=$CHANNEL"
+    "OH_GIT_COMMIT=$STAMP" "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" "OH_RELEASE_CHANNEL=$CHANNEL" SWIFT_USE_INTEGRATED_DRIVER=YES
 need_dir "$ARCHIVE/Products/Applications/OpenHumanMail.app"
 
 step "Export the app"
