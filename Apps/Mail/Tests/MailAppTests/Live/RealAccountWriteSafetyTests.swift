@@ -495,7 +495,7 @@ private enum RepoSources {
     #expect(AppSources.files(sources, matching: #"CalendarGuardTransport|CalendarScope\.|include_granted"#).isEmpty)
     #expect(!(try text("FakeGmailLaunch.swift")).contains("calendar"))
     #expect(try text("CompositionRoot.swift").contains("guard !arguments.contains(\"-UseFakeCalendar\") else { return nil }"))
-    #expect(AppSources.files(sources, matching: #"calendarTokenStore: liveCalendarTokenStore\("#) == ["CompositionRoot.swift"])
+    #expect(AppSources.files(sources, matching: #"= liveCalendarTokenStore\("#) == ["CompositionRoot.swift"])
     let manager = try text("LiveAccountManager.swift")
     #expect(AppSources.files(sources, matching: #"OAuthFlow\("#) == ["LiveAccountManager.swift"])
     #expect(codeLines(manager, containing: "OAuthFlow(") == [

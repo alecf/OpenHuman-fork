@@ -1,0 +1,55 @@
+DEFINE SCHEMA
+
+    RECORD TYPE ImportanceRule (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        "asset"         ASSET,
+        "blob"          ENCRYPTED BYTES,
+        "del"           INT64,
+        "dev"           STRING,
+        "f"             INT64,
+        "hlc"           STRING,
+        "kid"           STRING,
+        GRANT READ TO "_creator",
+        GRANT WRITE TO "_creator"
+    );
+
+    RECORD TYPE Setting (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        "asset"         ASSET,
+        "blob"          ENCRYPTED BYTES,
+        "del"           INT64,
+        "dev"           STRING,
+        "f"             INT64,
+        "hlc"           STRING,
+        "kid"           STRING,
+        GRANT READ TO "_creator",
+        GRANT WRITE TO "_creator"
+    );
+
+    RECORD TYPE Split (
+        "___createTime" TIMESTAMP,
+        "___createdBy"  REFERENCE,
+        "___etag"       STRING,
+        "___modTime"    TIMESTAMP,
+        "___modifiedBy" REFERENCE,
+        "___recordID"   REFERENCE,
+        "asset"         ASSET,
+        "blob"          ENCRYPTED BYTES,
+        "del"           INT64,
+        "dev"           STRING,
+        "f"             INT64,
+        "hlc"           STRING,
+        "kid"           STRING,
+        GRANT READ TO "_creator",
+        GRANT WRITE TO "_creator"
+    );

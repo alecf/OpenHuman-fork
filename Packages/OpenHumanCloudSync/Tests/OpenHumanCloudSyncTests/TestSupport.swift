@@ -6,6 +6,7 @@ import OpenHumanCore
 let splitType = CloudRecordType("Split", policy: .perField)
 let settingType = CloudRecordType("Setting", policy: .lastWriterWins)
 let ruleType = CloudRecordType("ImportanceRule", policy: .lastWriterWins)
+let registeredTypes = [splitType, settingType, ruleType]
 
 let workZone = CloudZoneID.account(email: "someone@example.test")
 
@@ -31,7 +32,7 @@ struct TestDevice {
         let local = InMemoryCloudLocal()
         let key = testKey(keyID ?? "key-" + name.lowercased())
         let configuration = CloudSync.Configuration(deviceID: "device-" + name.lowercased(),
-                                                    types: [splitType, settingType, ruleType], limits: limits)
+                                                    types: registeredTypes, limits: limits)
         self.name = name
         self.cloud = cloud
         self.local = local
