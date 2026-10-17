@@ -20,7 +20,8 @@ let package = Package(
         .target(name: "OpenHumanCloudSyncTesting", dependencies: ["OpenHumanCloudSync", "OpenHumanCore"]),
         .target(name: "OpenHumanCloudSyncApple", dependencies: ["OpenHumanCloudSync"]),
         .testTarget(name: "OpenHumanCloudSyncTests",
-                    dependencies: ["OpenHumanCloudSync", "OpenHumanCloudSyncTesting", "OpenHumanCore"]),
+                    dependencies: ["OpenHumanCloudSync", "OpenHumanCloudSyncApple", "OpenHumanCloudSyncTesting",
+                                   "OpenHumanCore"]),
         .testTarget(name: "OpenHumanCloudSyncAppleTests", dependencies: ["OpenHumanCloudSyncApple", "OpenHumanCloudSync"]),
     ],
     swiftLanguageModes: [.v6]
