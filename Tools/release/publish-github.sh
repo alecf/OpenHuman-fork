@@ -26,6 +26,10 @@ It refuses to run unless the working tree is clean, <version> is the version in
 Apps/Mail/Config/Version.xcconfig, a local tag v<version> (if there is one) points at HEAD, and
 the DMG's release-info.txt names HEAD, this version, the early development channel and the
 DMG's SHA-256.
+
+Uploading is the one manual release step: outside GitHub Actions it runs only in a terminal, shows
+what it will send where, and asks you to type the tag (v<version>) before it changes anything on
+GitHub. Building, signing and notarizing (Tools/release/make-dmg.sh) need no confirmation.
 EOF
 }
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -132,6 +136,17 @@ if [[ "$DRY" == 1 ]]; then
     run "$HERE/check-release.sh" --github-release "$TAG"
     say "dry run: nothing was built or sent."
     exit 0
+fi
+
+if [[ "${GITHUB_ACTIONS:-}" != true ]]; then
+    [[ -t 0 ]] || die "uploading to GitHub is the manual release step: run this command yourself in a terminal. It shows what it will send and asks you to type $TAG first. Nothing was sent."
+    if [[ "$PUBLISH" == 1 ]]; then WHAT="create or update, and PUBLISH,"; else WHAT="create or update the DRAFT"; fi
+    say "about to $WHAT pre-release $TAG \"$TITLE\" on ${GH_REPO:-the repository gh picks for this checkout}"
+    say "  target commit: $HEAD_SHA (a missing tag $TAG is created there)"
+    for f in "${FILES[@]}"; do say "  upload: $f"; done
+    say "  notes: $NOTES"
+    read -r -p "publish-github: type $TAG to continue, anything else stops: " ANSWER
+    [[ "$ANSWER" == "$TAG" ]] || die "not confirmed. Nothing was sent to GitHub."
 fi
 
 rc=0; state="$(gh release view "$TAG" --json isDraft --jq .isDraft 2>&1)" || rc=$?

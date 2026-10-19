@@ -9,9 +9,11 @@ Makes a signed, notarized, stapled DMG of OpenHuman Mail that other people can o
 Macs (docs/release/RELEASE-HOWTO.md), or with --unsigned an ad-hoc signed DMG that needs no
 Apple Developer account. Every release is an early development build: the app, release-info.txt
 and the release notes say so, and the GitHub release is a pre-release. For a signed build, run
-it in Terminal.app on the Mac that holds your Developer ID certificate (a shell without access
-to the login keychain, such as an SSH session, cannot sign). A signed build sends two files to
-Apple's notary service (the app, then the dmg). Nothing else is sent anywhere: no push, no tag.
+it on the Mac that holds your Developer ID certificate: in Terminal.app, or from any shell, such as
+an SSH login, once Tools/signing/setup.sh has set up the signing keychain (an SSH login cannot
+unlock the login keychain). A signed build sends two files to Apple's notary service (the app,
+then the dmg). Nothing else is sent anywhere: no push, no tag. caffeinate keeps the Mac awake
+while it runs.
 
 A signed build carries the iCloud entitlements in
 Apps/Mail/Entitlements/Mail-iCloud.entitlements (CloudKit, push and the shared keychain group).
@@ -34,10 +36,15 @@ build before anything is built.
                        archive (fallback)
   -h, --help           show this help
 
-Settings (environment, or Tools/release/release.env, which git ignores; copy
-release.env.example):
+Settings (environment, then ~/.config/openhuman/release.env, which Tools/signing/setup.sh writes,
+then Tools/release/release.env, which git ignores; copy release.env.example). The first one to set
+a name wins:
   OH_NOTARY_PROFILE    the notarytool keychain profile you saved once with "xcrun notarytool
                        store-credentials"
+  OH_SIGNING_KEYCHAIN  a keychain to sign and notarize from instead of the login keychain; it is
+                       unlocked with the password in OH_SIGNING_KEYCHAIN_PASSWORD_FILE (a file
+                       only you can read). Set it empty to use the login keychain
+  OH_RELEASE_ENV       another file to read instead of ~/.config/openhuman/release.env
   OH_SIGN_IDENTITY     your "Developer ID Application" identity, by full name or SHA-1 hash
                        (default: the only one in your keychain)
   OH_BUNDLE_ID_PREFIX  default dev.openhuman, giving the bundle id dev.openhuman.mail
@@ -98,10 +105,12 @@ on_exit() {
 }
 trap on_exit EXIT
 
-if [[ -f "$HERE/release.env" ]]; then
-    # shellcheck disable=SC1091
-    source "$HERE/release.env"
-fi
+for settings in "${OH_RELEASE_ENV:-$HOME/.config/openhuman/release.env}" "$HERE/release.env"; do
+    if [[ -f "$settings" ]]; then
+        # shellcheck disable=SC1090
+        source "$settings"
+    fi
+done
 
 step "Checks before building"
 [[ "$(uname -s)" == Darwin ]] || die "run this on a Mac."
@@ -109,6 +118,10 @@ for tool in xcodebuild xcrun codesign hdiutil ditto shasum security plutil git p
     command -v "$tool" >/dev/null 2>&1 || die "'$tool' is missing. Install Xcode 27 and open it once."
 done
 [[ "$DRY" == 0 ]] || say "dry run: commands are printed, not run."
+if [[ "$DRY" == 0 ]] && command -v caffeinate >/dev/null 2>&1; then
+    # Why: idle sleep drops the network during the notarization waits, which can take many minutes.
+    caffeinate -i -s -w $$ &
+fi
 
 COMMIT="$(git -C "$ROOT" rev-parse --short HEAD)"
 BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)"
@@ -146,13 +159,30 @@ if [[ -f "$ROOT/Apps/Mail/Config/Local.xcconfig" ]]; then
     say "note: Apps/Mail/Config/Local.xcconfig exists. Its signing settings and OH_ENTITLEMENTS are overridden here; the bundle id is $PREFIX.mail."
 fi
 
+KEYCHAIN=(); SEARCH=()
+if [[ "$UNSIGNED" == 0 && -n "${OH_SIGNING_KEYCHAIN:-}" ]]; then
+    step "Signing keychain"
+    KC="$OH_SIGNING_KEYCHAIN"; KC_PASSWORD="${OH_SIGNING_KEYCHAIN_PASSWORD_FILE:-}"
+    [[ "$KC" != *[[:space:]]* ]] || die "OH_SIGNING_KEYCHAIN must be a path without spaces (got '$KC')."
+    KEYCHAIN=(--keychain "$KC"); SEARCH=("$KC")
+    if [[ "$DRY" == 1 ]]; then
+        say "dry run: a real run unlocks $KC with the password in ${KC_PASSWORD:-<OH_SIGNING_KEYCHAIN_PASSWORD_FILE>}"
+    else
+        [[ -f "$KC" ]] || die "OH_SIGNING_KEYCHAIN is $KC, which does not exist. Run Tools/signing/setup.sh --builds in Terminal.app, or set OH_SIGNING_KEYCHAIN empty to use the login keychain."
+        [[ -n "$KC_PASSWORD" && -f "$KC_PASSWORD" ]] || die "OH_SIGNING_KEYCHAIN_PASSWORD_FILE ('$KC_PASSWORD') is not a file. Tools/signing/setup.sh --builds writes it."
+        [[ -O "$KC_PASSWORD" && "$(stat -f '%Lp' "$KC_PASSWORD")" == 600 ]] || die "$KC_PASSWORD must belong to you and be readable only by you (chmod 600)."
+        security unlock-keychain -p "$(cat "$KC_PASSWORD")" "$KC" || die "the password in $KC_PASSWORD does not unlock $KC."
+        say "signing keychain $KC is unlocked"
+    fi
+fi
+
 if [[ "$UNSIGNED" == 1 ]]; then
     step "Signing"
     say "--unsigned: ad-hoc signature, no Developer ID, no notarization. macOS blocks the app at first open until the person allows it in System Settings."
     SIGN_HASH=""; TEAM=""
 else
     step "Signing identity"
-    IDS="$(security find-identity -v -p codesigning 2>/dev/null \
+    IDS="$(security find-identity -v -p codesigning ${SEARCH[@]+"${SEARCH[@]}"} 2>/dev/null \
         | sed -n 's/^[[:space:]]*[0-9][0-9]*)[[:space:]]*\([0-9A-Fa-f]\{40\}\)[[:space:]]*"\(Developer ID Application: .*\)"[[:space:]]*$/\1 \2/p' || true)"
     if [[ -n "${OH_SIGN_IDENTITY:-}" ]]; then
         MATCH="$(printf '%s\n' "$IDS" | awk -v want="$OH_SIGN_IDENTITY" 'NF { if (toupper($1) == toupper(want) || substr($0, 42) == want) print }')"
@@ -164,7 +194,7 @@ else
     fi
     COUNT="$(printf '%s\n' "$MATCH" | grep -c . || true)"
     if [[ "$COUNT" == 0 ]]; then
-        [[ "$DRY" == 1 ]] || die "no 'Developer ID Application' certificate in your keychain. One-time setup: docs/release/RELEASE-HOWTO.md, 'Signing setup'. An 'Apple Development' certificate is not enough: Apple only notarizes apps signed with Developer ID. Without one, --unsigned makes an ad-hoc signed build."
+        [[ "$DRY" == 1 ]] || die "no 'Developer ID Application' certificate in ${OH_SIGNING_KEYCHAIN:-your keychain}. One-time setup: docs/release/RELEASE-HOWTO.md, 'Signing setup'. An 'Apple Development' certificate is not enough: Apple only notarizes apps signed with Developer ID. Without one, --unsigned makes an ad-hoc signed build."
         say "no 'Developer ID Application' identity in your keychain; the dry run uses placeholders. A real run stops here."
         SIGN_HASH="<SHA-1-of-your-Developer-ID-Application-certificate>"
         SIGN_NAME="Developer ID Application: <Your Name> (<TEAMID>)"; TEAM="<TEAMID>"
@@ -178,6 +208,8 @@ else
     fi
     XCODE_IDENTITY="$SIGN_NAME"
     if [[ "$(printf '%s\n' "$IDS" | awk -v n="$SIGN_NAME" 'substr($0, 42) == n' | grep -c . || true)" -gt 1 ]]; then XCODE_IDENTITY="$SIGN_HASH"; fi
+    # Why: the login keychain may hold another certificate with the same name.
+    [[ -z "${OH_SIGNING_KEYCHAIN:-}" ]] || XCODE_IDENTITY="$SIGN_HASH"
     say "signing with Developer ID Application, team $TEAM (certificate $SIGN_HASH)"
 fi
 
@@ -189,8 +221,8 @@ elif [[ "$UNSIGNED" == 0 ]]; then
         [[ "$DRY" == 1 ]] || die "set OH_NOTARY_PROFILE to the profile name you saved with 'xcrun notarytool store-credentials' (RELEASE-HOWTO, 'Signing setup'), or put it in Tools/release/release.env."
         OH_NOTARY_PROFILE="<your-notary-profile>"; say "OH_NOTARY_PROFILE is not set; the dry run uses a placeholder. A real run stops here."
     elif [[ "$DRY" == 0 ]]; then
-        xcrun notarytool history --keychain-profile "$OH_NOTARY_PROFILE" >/dev/null 2>&1 \
-            || die "notarytool cannot use the keychain profile '$OH_NOTARY_PROFILE'. Redo the notarytool step in RELEASE-HOWTO, 'Signing setup', and run this in Terminal.app (not over SSH) so the keychain can be unlocked."
+        xcrun notarytool history --keychain-profile "$OH_NOTARY_PROFILE" ${KEYCHAIN[@]+"${KEYCHAIN[@]}"} >/dev/null 2>&1 \
+            || die "notarytool cannot use the keychain profile '$OH_NOTARY_PROFILE'${OH_SIGNING_KEYCHAIN:+ in $OH_SIGNING_KEYCHAIN}. Redo the notarytool step in RELEASE-HOWTO, 'Signing setup', and run this in Terminal.app, or set up the signing keychain for SSH logins (docs/release/LOCAL-SIGNING.md)."
         say "notary profile '$OH_NOTARY_PROFILE' works"
     fi
 fi
@@ -252,17 +284,17 @@ notarize() {
     local file="$1" label="$2" result="$OUT/notary-$2.json" rc=0 status=""
     say "sending the $label to Apple's notary service and waiting for the answer (often minutes; Apple publishes no maximum)"
     if [[ "$DRY" == 1 ]]; then
-        printf '  $'; printf ' %q' xcrun notarytool submit "$file" --keychain-profile "$OH_NOTARY_PROFILE" --wait --output-format json
+        printf '  $'; printf ' %q' xcrun notarytool submit "$file" --keychain-profile "$OH_NOTARY_PROFILE" ${KEYCHAIN[@]+"${KEYCHAIN[@]}"} --wait --output-format json
         printf ' > %q\n' "$result"
         SUBMISSION="<submission-id>"; return 0
     fi
-    xcrun notarytool submit "$file" --keychain-profile "$OH_NOTARY_PROFILE" --wait --output-format json >"$result" || rc=$?
+    xcrun notarytool submit "$file" --keychain-profile "$OH_NOTARY_PROFILE" ${KEYCHAIN[@]+"${KEYCHAIN[@]}"} --wait --output-format json >"$result" || rc=$?
     SUBMISSION="$(plutil -extract id raw -o - "$result" 2>/dev/null \
         || grep -Eo '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' "$result" | head -1 || true)"
     status="$(plutil -extract status raw -o - "$result" 2>/dev/null || true)"
     if [[ "$rc" == 0 && "$status" == Accepted ]]; then say "Apple accepted the $label (submission $SUBMISSION)"; return 0; fi
     if [[ -n "$SUBMISSION" ]]; then
-        xcrun notarytool log "$SUBMISSION" --keychain-profile "$OH_NOTARY_PROFILE" "$OUT/notary-log-$label.json" >/dev/null 2>&1 || true
+        xcrun notarytool log "$SUBMISSION" --keychain-profile "$OH_NOTARY_PROFILE" ${KEYCHAIN[@]+"${KEYCHAIN[@]}"} "$OUT/notary-log-$label.json" >/dev/null 2>&1 || true
     fi
     die "Apple did not accept the $label (status: ${status:-unknown}; answer saved in $result). Read $OUT/notary-log-$label.json first: its \"issues\" list names each problem. To fetch it again: xcrun notarytool log ${SUBMISSION:-<submission-id>} --keychain-profile $OH_NOTARY_PROFILE notary-log.json."
 }
@@ -277,7 +309,7 @@ if [[ "$UNSIGNED" == 1 ]]; then
              CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO)
 else
     SIGNING=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=$XCODE_IDENTITY" "DEVELOPMENT_TEAM=$TEAM" PROVISIONING_PROFILE_SPECIFIER=
-             ENABLE_HARDENED_RUNTIME=YES OTHER_CODE_SIGN_FLAGS=--timestamp CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO)
+             ENABLE_HARDENED_RUNTIME=YES "OTHER_CODE_SIGN_FLAGS=--timestamp${KEYCHAIN[*]:+ ${KEYCHAIN[*]}}" CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO)
 fi
 run_logged "$LOGS/archive.log" xcodebuild archive -jobs 2 \
     -project "$ROOT/Apps/Mail/Mail.xcodeproj" -scheme Mail -configuration Release \
@@ -305,7 +337,7 @@ if [[ "$ICLOUD" == 1 ]]; then
     run "${CHECK_PROFILE[@]}" --write "$WORK/Mail-iCloud.entitlements" \
         || die "the provisioning profile does not fit this app (above). Nothing was sent to Apple."
     run cp "$PROFILE" "$APP/Contents/embedded.provisionprofile"
-    run codesign --force --sign "$SIGN_HASH" --options runtime --timestamp \
+    run codesign --force --sign "$SIGN_HASH" ${KEYCHAIN[@]+"${KEYCHAIN[@]}"} --options runtime --timestamp \
         --entitlements "$WORK/Mail-iCloud.entitlements" "$APP"
 fi
 
@@ -333,7 +365,7 @@ if [[ "$UNSIGNED" == 1 ]]; then
     step "Final checks: the disk image and the app inside it"
     run "${CHECK[@]}" "$DMG" || die "the disk image failed the checks above."
 else
-    run codesign --sign "$SIGN_HASH" --timestamp --verbose=2 "$DMG"
+    run codesign --sign "$SIGN_HASH" ${KEYCHAIN[@]+"${KEYCHAIN[@]}"} --timestamp --verbose=2 "$DMG"
     if [[ "$SIGN_ONLY" == 0 ]]; then
         step "Notarize and staple the disk image"
         notarize "$DMG" dmg; DMG_SUBMISSION="$SUBMISSION"
