@@ -31,7 +31,7 @@ It is Swift-native, runs locally (including its AI features), and is agent-ready
 
 It has only been tested on Apple silicon, macOS 27, Xcode 27, and Swift 6.4.
 
-This is early software under active development. Unsigned builds and source builds are available now. Signed binary downloads and Homebrew installation will be announced when ready.
+This is early software under active development. Downloadable builds, when published, are on [Releases](https://github.com/michaelmagan/OpenHuman/releases). You can also build from source. Maintainers can follow the [release guide](docs/release/RELEASE-HOWTO.md) to build, verify and publish a DMG. Homebrew installation will be announced when ready.
 
 <br>
 
