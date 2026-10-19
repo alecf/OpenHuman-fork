@@ -1,0 +1,15 @@
+{
+  "id": "calendar.polish-card-and-editor",
+  "area": "Calendar",
+  "title": "Event card and editor: details first, Save at the bottom, guest suggestions, calendar menu",
+  "steps": [
+    "Launch with -UseFakeData -UseFakeCalendar and press 2",
+    "Click an invitation, then one of your own events",
+    "Click a free slot; in Add guests type the first letters of a contact and press Return",
+    "Pick another calendar in the Calendar menu, then press Esc"
+  ],
+  "deepLink": null,
+  "expected": "An invitation shows its time, a Join Google Meet button, place, guests with their answers, notes and Going? at the bottom. Your own event shows the form with Cancel and Save at the bottom and Duplicate and Delete in •••. Add guests suggests contacts as in the composer. No sentence about Google emailing guests shows.",
+  "requires": "fake",
+  "addedIn": "2026-10-19"
+}

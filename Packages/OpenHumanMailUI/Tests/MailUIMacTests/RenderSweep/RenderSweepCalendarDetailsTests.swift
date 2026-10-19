@@ -53,7 +53,7 @@ enum SidebarDetailsSweep {
 }
 
 extension RenderSweepTests {
-    @Test(arguments: SweepTheme.lightAndDark)
+    @Test(arguments: SweepTheme.builtIns)
     func calendarSidebarEventDetails(_ theme: SweepTheme) async throws {
         let environment = SidebarDetailsSweep.environment()
         let w = try await SweepWindow.make(environment, theme: theme)

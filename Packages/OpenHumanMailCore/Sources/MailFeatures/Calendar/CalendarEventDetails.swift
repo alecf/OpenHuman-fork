@@ -61,7 +61,7 @@ public struct CalendarEventDetails: Sendable, Hashable {
 
     @MainActor
     public init(event: CalendarEvent, timeZone: TimeZone, calendarName: String, calendarKey: String,
-                myAddresses: Set<String> = []) {
+                myAddresses: Set<String> = [], myResponse: CalendarResponse? = nil) {
         self.event = event
         let trimmedTitle = event.title.trimmingCharacters(in: .whitespacesAndNewlines)
         title = trimmedTitle.isEmpty ? String(localized: "(No title)") : trimmedTitle
@@ -78,8 +78,8 @@ public struct CalendarEventDetails: Sendable, Hashable {
         let people = event.extras.guests.isEmpty ? event.attendees.map { CalendarGuest($0) } : event.extras.guests
         let shownGuests = people.map { person in
             let isMe = mine.contains(person.email.lowercased())
-            return Guest(email: person.email, name: person.name, isOptional: person.isOptional, isMe: isMe,
-                         response: person.response ?? (isMe ? event.myResponse : nil))
+            let answer = isMe ? (myResponse ?? person.response ?? event.myResponse) : person.response
+            return Guest(email: person.email, name: person.name, isOptional: person.isOptional, isMe: isMe, response: answer)
         }
         guests = shownGuests
         guestSummary = Self.summary(shownGuests)

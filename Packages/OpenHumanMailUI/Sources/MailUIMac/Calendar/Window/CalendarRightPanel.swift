@@ -11,6 +11,7 @@ struct CalendarRightPanel: View {
     let router: AppRouter
     @Environment(\.theme) private var theme
     @State private var meetText = ""
+    @FocusState private var meetFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -116,40 +117,47 @@ struct CalendarRightPanel: View {
 
     private var meetRow: some View {
         VStack(alignment: .leading, spacing: theme.space2) {
-            Text("Meet").themeFont(theme.typeLabel).foregroundStyle(theme.textTertiary.color)
-                .accessibilityAddTraits(.isHeader)
-            HStack(spacing: theme.space2) {
-                Image(systemName: "person.badge.plus").foregroundStyle(theme.textTertiary.color)
-                    .accessibilityHidden(true)
-                TextField("Enter name or email", text: $meetText)
-                    .textFieldStyle(.plain)
-                    .themeFont(theme.typeMeta)
-                    .onSubmit {
-                        let typed = meetText
-                        Task {
-                            if await model.meet(with: typed) == nil { meetText = "" }
-                        }
+            sectionHeading("Meet", symbol: "person.2")
+            TextField("Enter name or email", text: $meetText)
+                .textFieldStyle(.plain)
+                .themeFont(theme.typeMeta)
+                .focused($meetFocused)
+                .onSubmit {
+                    let typed = meetText
+                    Task {
+                        if await model.meet(with: typed) == nil { meetText = "" }
                     }
-                    .accessibilityIdentifier("calendar.window.meet")
-            }
-            .padding(.horizontal, theme.space3).padding(.vertical, theme.space2)
-            .background(RoundedRectangle(cornerRadius: theme.radiusMD).fill(theme.bgWindow.color))
-            .overlay(RoundedRectangle(cornerRadius: theme.radiusMD)
-                .strokeBorder(theme.borderControl.color, lineWidth: theme.borderWidthHairline))
+                }
+                .padding(.horizontal, theme.space3)
+                .frame(height: 30)
+                .background(RoundedRectangle(cornerRadius: theme.radiusMD).fill(theme.bgWindow.color))
+                .overlay(RoundedRectangle(cornerRadius: theme.radiusMD)
+                    .strokeBorder(meetFocused ? theme.component.focus.ring.color : theme.borderControl.color,
+                                  lineWidth: meetFocused ? theme.component.focus.width : theme.borderWidthHairline))
+                .help("Finds a free half hour on your calendars and opens the event with them.")
+                .accessibilityHint("Finds a free half hour on your calendars and opens the event with them.")
+                .accessibilityIdentifier("calendar.window.meet")
             if let note = model.meetNote {
                 Text(note).themeFont(theme.typeCaption).foregroundStyle(theme.textWarning.color)
             }
-            Text("Finds a free half hour on your calendars and opens the event with them.")
-                .themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
-                .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func sectionHeading(_ title: LocalizedStringKey, symbol: String) -> some View {
+        HStack(spacing: theme.space2) {
+            Image(systemName: symbol).font(.system(size: 12)).foregroundStyle(theme.textSecondary.color)
+                .frame(width: 16)
+                .accessibilityHidden(true)
+            Text(title).themeFont(theme.typeBodyStrong).foregroundStyle(theme.textPrimary.color)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 
     @ViewBuilder
     private var calendars: some View {
         VStack(alignment: .leading, spacing: theme.space2) {
-            Text("Calendars").themeFont(theme.typeLabel).foregroundStyle(theme.textTertiary.color)
-                .accessibilityAddTraits(.isHeader)
+            sectionHeading("Calendars", symbol: "calendar")
             if model.sources.isEmpty, model.state != .loading {
                 Text("No calendar is connected. Connect one in Settings › Calendar.")
                     .themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
@@ -177,8 +185,6 @@ struct CalendarRightPanel: View {
         VStack(alignment: .leading, spacing: 2) {
             if let progress = model.progress {
                 Text(progress.text).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
-            } else if let updated = model.updatedText {
-                Text(updated).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
             }
             if let note = model.note {
                 Text(note).themeFont(theme.typeCaption).foregroundStyle(theme.textSecondary.color)
@@ -194,6 +200,8 @@ struct CalendarRightPanel: View {
         HStack(spacing: theme.space3) {
             Image(systemName: "calendar").foregroundStyle(theme.textSecondary.color).accessibilityHidden(true)
             Text("Google Calendar").themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
+                .help(model.updatedText ?? "")
+                .accessibilityValue(model.updatedText ?? "")
             Spacer(minLength: 0)
             Button {
                 _ = router.environment.actions.perform(.settingsPage("calendar"), source: .toolbar, host: router)

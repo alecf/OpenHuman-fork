@@ -62,7 +62,7 @@ enum CalendarWindowSweep {
 }
 
 extension RenderSweepTests {
-    @Test(arguments: SweepTheme.lightAndDark)
+    @Test(arguments: SweepTheme.builtIns)
     func calendarWindowScreens(_ theme: SweepTheme) async throws {
         let (environment, now) = CalendarWindowSweep.environment()
         let w = try await SweepWindow.make(environment, theme: theme)

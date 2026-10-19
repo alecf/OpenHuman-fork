@@ -1,0 +1,14 @@
+{
+  "id": "calendar.polish-week-colours",
+  "area": "Calendar",
+  "title": "The week opens on a whole hour and every calendar has a readable colour",
+  "steps": [
+    "Launch with -UseFakeData -UseFakeCalendar and press 2",
+    "Look at the top of the Week grid, today's earlier events and an unanswered invitation",
+    "Switch Settings › Appearance to Dark, Midnight and the System themes and look again"
+  ],
+  "deepLink": null,
+  "expected": "The grid opens on a whole hour with no event cut at the top. Each calendar has its own colour: a tinted block with a coloured bar and readable text. Past events are paler, unanswered invitations have a dashed outline and declined ones are struck through, in every theme.",
+  "requires": "fake",
+  "addedIn": "2026-10-19"
+}

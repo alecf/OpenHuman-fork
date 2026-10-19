@@ -11,7 +11,7 @@ import Testing
 @testable import MailUIMac
 
 extension RenderSweepTests {
-    @Test(arguments: SweepTheme.lightAndDark)
+    @Test(arguments: SweepTheme.builtIns)
     func calendarDayViewAndCreateEvent(_ theme: SweepTheme) async throws {
         let environment = SweepWindow.environment(calendar: true)
         let w = try await SweepWindow.make(environment, theme: theme)

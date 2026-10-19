@@ -6,6 +6,12 @@ import MailUI
 import OpenHumanCore
 import SwiftUI
 
+struct CalendarFormCalendarMenu {
+    let selected: String
+    let choices: [(id: String, title: String)]
+    let choose: (String) -> Void
+}
+
 struct CalendarEventFormView: View {
     @Binding var form: CalendarEventForm
     var rights: CalendarFieldRights
@@ -18,11 +24,15 @@ struct CalendarEventFormView: View {
     var asksSendUpdates = false
     var sendUpdates: Binding<CalendarSendUpdates>?
     var calendarName: String = ""
+    var calendarMenu: CalendarFormCalendarMenu?
+    var suggestGuests: (@Sendable (String) async -> [EmailAddress])?
+
+    enum Field: Hashable { case title, guest, location, notes }
 
     @Environment(\.theme) private var theme
     @Environment(\.openURL) private var openURL
-    @FocusState private var titleFocused: Bool
-    @State private var guestText = ""
+    @FocusState private var focused: Field?
+    @State private var guestField: RecipientFieldModel?
     @State private var guestNote: String?
     @State private var firstNotes: CalendarDescription.Parsed?
     @State private var notesText = ""
@@ -36,11 +46,14 @@ struct CalendarEventFormView: View {
             timeRows
             guestRows
             row(.location, symbol: "mappin.and.ellipse") {
-                TextField("Location", text: $form.location).textFieldStyle(.plain)
+                TextField("Add location", text: $form.location).textFieldStyle(.plain)
+                    .focused($focused, equals: .location)
+                    .calendarInputChrome(focused: focused == .location)
                     .accessibilityIdentifier("\(idPrefix).location")
             }
             meetRow
             notesRow
+            calendarRow
             row(.repeats, symbol: "repeat") { repeatPicker }
             row(.reminders, symbol: "bell") { remindersRow }
             row(.busy, symbol: "circle.lefthalf.filled") {
@@ -58,7 +71,6 @@ struct CalendarEventFormView: View {
                 .accessibilityIdentifier("\(idPrefix).visibility")
             }
             row(.color, symbol: "paintpalette") { colorRow }
-            row(.calendar, symbol: "calendar") { calendarRow }
             if asksSendUpdates, let sendUpdates {
                 sendUpdatesRow(sendUpdates)
             }
@@ -70,7 +82,8 @@ struct CalendarEventFormView: View {
                 firstNotes = parsed
                 notesText = parsed.editableText
             }
-            if focusesTitle { titleFocused = true }
+            if guestField == nil { guestField = makeGuestField() }
+            if focusesTitle { focused = .title }
         }
     }
 
@@ -91,21 +104,25 @@ struct CalendarEventFormView: View {
     @ViewBuilder
     private var titleRow: some View {
         let access = rights.access(.title)
-        VStack(alignment: .leading, spacing: 2) {
-            if access.reason == nil {
-                TextField("Title", text: $form.title).textFieldStyle(.plain)
-                    .themeFont(theme.typeHeadline).foregroundStyle(theme.textPrimary.color)
-                    .focused($titleFocused)
-                    .padding(.horizontal, theme.space2).padding(.vertical, theme.space1)
-                    .background(RoundedRectangle(cornerRadius: 4)
-                        .fill((titleIsSuggested ? theme.accentSubtle : theme.bgWindow).color))
-                    .accessibilityIdentifier("\(idPrefix).title")
-            } else {
-                Text(form.title).themeFont(theme.typeHeadline).foregroundStyle(theme.textPrimary.color)
-                    .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                    .lockedReason(access.reason)
-                    .accessibilityIdentifier("\(idPrefix).title")
-            }
+        if access.reason == nil {
+            TextField("Add title", text: $form.title).textFieldStyle(.plain)
+                .themeFont(theme.typeTitle).foregroundStyle(theme.textPrimary.color)
+                .focused($focused, equals: .title)
+                .padding(.horizontal, theme.space1).padding(.vertical, theme.space1)
+                .background(RoundedRectangle(cornerRadius: theme.radiusSM)
+                    .fill(titleIsSuggested ? theme.accentSubtle.color : Color.clear))
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill((focused == .title ? theme.component.focus.ring : theme.borderControl).color)
+                        .frame(height: focused == .title ? theme.component.focus.width : theme.borderWidthHairline)
+                }
+                .padding(.bottom, theme.space1)
+                .accessibilityIdentifier("\(idPrefix).title")
+        } else {
+            Text(form.title).themeFont(theme.typeTitle).foregroundStyle(theme.textPrimary.color)
+                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                .lockedReason(access.reason)
+                .accessibilityIdentifier("\(idPrefix).title")
         }
     }
 
@@ -113,9 +130,7 @@ struct CalendarEventFormView: View {
     @ViewBuilder
     private var timeRows: some View {
         row(.time, symbol: "clock") {
-            VStack(alignment: .leading, spacing: theme.space1) {
-                Toggle("All day", isOn: Binding(get: { form.isAllDay }, set: { form.setAllDay($0) }))
-                    .toggleStyle(.checkbox).accessibilityIdentifier("\(idPrefix).allDay")
+            VStack(alignment: .leading, spacing: theme.space2) {
                 HStack(spacing: theme.space2) {
                     CalendarDateFieldView(date: form.start, zone: timeZone, idPrefix: "\(idPrefix).startDate") { form.setStart($0) }
                     if !form.isAllDay {
@@ -124,7 +139,6 @@ struct CalendarEventFormView: View {
                     }
                 }
                 HStack(spacing: theme.space2) {
-                    Text("to").foregroundStyle(theme.textTertiary.color)
                     CalendarDateFieldView(date: form.isAllDay ? form.lastDay : form.end, zone: timeZone,
                                           idPrefix: "\(idPrefix).endDate") { day in
                         if form.isAllDay { form.setLastDay(day) } else { form.setEnd(day) }
@@ -134,14 +148,18 @@ struct CalendarEventFormView: View {
                                    displayedComponents: .hourAndMinute).labelsHidden()
                     }
                 }
+                Toggle("All day", isOn: Binding(get: { form.isAllDay }, set: { form.setAllDay($0) }))
+                    .toggleStyle(.checkbox).accessibilityIdentifier("\(idPrefix).allDay")
             }
         }
-        row(.timeZone, symbol: "globe") {
-            Picker("Time zone", selection: Binding(get: { form.timeZone }, set: { form.setTimeZone($0) })) {
-                ForEach(Self.zoneChoices(including: form.timeZone), id: \.self) { Text(Self.zoneTitle($0)).tag($0) }
+        if !form.isAllDay {
+            row(.timeZone, symbol: "globe") {
+                Picker("Time zone", selection: Binding(get: { form.timeZone }, set: { form.setTimeZone($0) })) {
+                    ForEach(Self.zoneChoices(including: form.timeZone), id: \.self) { Text(Self.zoneTitle($0)).tag($0) }
+                }
+                .labelsHidden().pickerStyle(.menu).fixedSize()
+                .accessibilityIdentifier("\(idPrefix).timeZone")
             }
-            .labelsHidden().pickerStyle(.menu).fixedSize()
-            .accessibilityIdentifier("\(idPrefix).timeZone")
         }
     }
 
@@ -153,40 +171,43 @@ struct CalendarEventFormView: View {
     static func zoneTitle(_ identifier: String) -> String { identifier.replacingOccurrences(of: "_", with: " ") }
 
 
+    private func makeGuestField() -> RecipientFieldModel {
+        let field = RecipientFieldModel(kind: .to, suggest: suggestGuests)
+        let form = $form
+        field.onChange = { [weak field] tokens in
+            guard let field else { return }
+            var refused = false
+            for address in tokens {
+                if RecipientParser.isValid(address.email) {
+                    form.wrappedValue.addGuest(address)
+                } else {
+                    refused = true
+                }
+            }
+            guestNote = refused ? String(localized: "Type an email address.") : nil
+            field.setTokens([])
+        }
+        return field
+    }
+
     @ViewBuilder
     private var guestRows: some View {
         let access = rights.access(.guests)
         VStack(alignment: .leading, spacing: theme.space2) {
             row(.guests, symbol: "person.2") {
-                TextField("Enter name or email", text: $guestText).textFieldStyle(.plain)
-                    .onSubmit { addGuest() }
-                    .disabled(access.reason != nil)
-                    .accessibilityIdentifier("\(idPrefix).addGuest")
+                VStack(alignment: .leading, spacing: theme.space1) {
+                    guestInput
+                    if focused == .guest, let field = guestField, !field.suggestions.isEmpty {
+                        CalendarGuestSuggestions(field: field)
+                    }
+                }
             }
             if let guestNote {
                 Text(guestNote).themeFont(theme.typeCaption).foregroundStyle(theme.textWarning.color)
                     .padding(.leading, iconColumn)
             }
             ForEach(form.guests) { guest in
-                HStack(spacing: theme.space2) {
-                    Text(guest.name.map { "\($0) <\(guest.email)>" } ?? guest.email)
-                        .themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
-                        .lineLimit(1).truncationMode(.middle)
-                    if let answer = guest.response, answer != .needsAction {
-                        Text(answer.title).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
-                    }
-                    Spacer(minLength: 0)
-                    Toggle("Optional", isOn: Binding(get: { guest.isOptional }, set: { form.setOptional(guest.email, $0) }))
-                        .toggleStyle(.checkbox).themeFont(theme.typeCaption)
-                        .disabled(access != .editable)
-                        .accessibilityIdentifier("\(idPrefix).optional")
-                    if access == .editable {
-                        Button { form.removeGuest(guest.email) } label: { Image(systemName: "xmark.circle.fill") }
-                            .buttonStyle(.plain).foregroundStyle(theme.textTertiary.color)
-                            .accessibilityLabel("Remove \(guest.name ?? guest.email)")
-                    }
-                }
-                .padding(.leading, iconColumn)
+                guestRow(guest, access: access)
             }
             if !form.guests.isEmpty {
                 guestPermissions
@@ -194,30 +215,72 @@ struct CalendarEventFormView: View {
         }
     }
 
+    @ViewBuilder
+    private var guestInput: some View {
+        if let field = guestField {
+            TextField("Add guests", text: Binding(get: { field.text }, set: { field.text = $0 }))
+                .textFieldStyle(.plain)
+                .autocorrectionDisabled(true)
+                .focused($focused, equals: .guest)
+                .onSubmit { field.commit() }
+                .onKeyPress(.downArrow) { field.suggestions.isEmpty ? .ignored : (field.moveSuggestion(by: 1), .handled).1 }
+                .onKeyPress(.upArrow) { field.suggestions.isEmpty ? .ignored : (field.moveSuggestion(by: -1), .handled).1 }
+                .onKeyPress(.tab) { field.suggestions.isEmpty ? .ignored : (field.commit(), .handled).1 }
+                .onChange(of: focused) { _, now in if now != .guest { field.commitText() } }
+                .calendarInputChrome(focused: focused == .guest)
+                .help("Type a name or an email address; Return adds the guest")
+                .accessibilityLabel("Add guests")
+                .accessibilityIdentifier("\(idPrefix).addGuest")
+        }
+    }
+
+    private func guestRow(_ guest: CalendarGuest, access: CalendarFieldAccess) -> some View {
+        HStack(spacing: theme.space2) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(verbatim: guest.name ?? guest.email)
+                    .themeFont(theme.typeMeta).foregroundStyle(theme.textPrimary.color)
+                    .lineLimit(1).truncationMode(.middle)
+                if guest.name != nil {
+                    Text(verbatim: guest.email).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
+                        .lineLimit(1).truncationMode(.middle)
+                }
+            }
+            if let answer = guest.response, answer != .needsAction {
+                Text(answer.title).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
+            }
+            Spacer(minLength: 0)
+            Toggle("Optional", isOn: Binding(get: { guest.isOptional }, set: { form.setOptional(guest.email, $0) }))
+                .toggleStyle(.checkbox).themeFont(theme.typeCaption)
+                .disabled(access != .editable)
+                .accessibilityIdentifier("\(idPrefix).optional")
+            if access == .editable {
+                Button { form.removeGuest(guest.email) } label: {
+                    Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
+                        .frame(width: 20, height: 20).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).foregroundStyle(theme.textSecondary.color)
+                .help("Remove \(guest.email)")
+                .accessibilityLabel("Remove \(guest.name ?? guest.email)")
+            }
+        }
+        .padding(.leading, iconColumn)
+    }
+
     private var guestPermissions: some View {
         let access = rights.access(.guestPermissions)
-        return VStack(alignment: .leading, spacing: 2) {
+        return Menu {
             Toggle("Guests can modify the event", isOn: $form.permissions.canModify)
             Toggle("Guests can invite others", isOn: $form.permissions.canInviteOthers)
             Toggle("Guests can see the guest list", isOn: $form.permissions.canSeeGuestList)
+        } label: {
+            Text("Guest permissions").themeFont(theme.typeCaption)
         }
-        .toggleStyle(.checkbox).themeFont(theme.typeCaption)
+        .menuStyle(.borderlessButton)
+        .fixedSize()
         .disabled(access.reason != nil)
         .lockedReason(access.reason)
         .padding(.leading, iconColumn)
         .accessibilityIdentifier("\(idPrefix).guestPermissions")
-    }
-
-    private func addGuest() {
-        let typed = guestText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !typed.isEmpty else { return }
-        guard let address = CalendarDraftEditor.address(typed) else {
-            guestNote = String(localized: "Type an email address.")
-            return
-        }
-        guestNote = nil
-        guestText = ""
-        form.addGuest(address)
     }
 
 
@@ -242,26 +305,34 @@ struct CalendarEventFormView: View {
         row(.notes, symbol: "text.alignleft") {
             let parsed = firstNotes ?? CalendarDescription.parse(form.notes)
             if editingNotes {
-                TextField("Agenda or notes", text: $notesText, axis: .vertical)
-                    .textFieldStyle(.plain).lineLimit(1...8)
+                TextField("Add agenda or notes", text: $notesText, axis: .vertical)
+                    .textFieldStyle(.plain).lineLimit(2...8)
+                    .focused($focused, equals: .notes)
+                    .calendarInputChrome(focused: focused == .notes)
                     .onChange(of: notesText) { _, new in
                         form.notes = CalendarDescription.textToWrite(edited: new, from: parsed)
                     }
+                    .onAppear { focused = .notes }
                     .accessibilityIdentifier("\(idPrefix).notes")
+            } else if CalendarDescription.parse(form.notes).isEmpty {
+                Button { editingNotes = true } label: {
+                    Text("Add agenda or notes").foregroundStyle(theme.textTertiary.color)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .calendarInputChrome(focused: false)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("\(idPrefix).notes")
             } else {
                 HStack(alignment: .firstTextBaseline) {
-                    if CalendarDescription.parse(form.notes).isEmpty {
-                        Text("Agenda or notes").foregroundStyle(theme.textTertiary.color)
-                    } else {
-                        Text(CalendarDescription.attributed(CalendarDescription.parse(form.notes).document))
-                            .themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
-                            .lineLimit(12).textSelection(.enabled)
-                            .environment(\.openURL, OpenURLAction { url in
-                                guard let safe = CalendarDescription.openableURL(url) else { return .discarded }
-                                openURL(safe)
-                                return .handled
-                            })
-                    }
+                    Text(CalendarDescription.attributed(CalendarDescription.parse(form.notes).document))
+                        .themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
+                        .lineLimit(12).textSelection(.enabled)
+                        .environment(\.openURL, OpenURLAction { url in
+                            guard let safe = CalendarDescription.openableURL(url) else { return .discarded }
+                            openURL(safe)
+                            return .handled
+                        })
                     Spacer(minLength: 0)
                     Button("Edit") { editingNotes = true }.buttonStyle(.link)
                         .accessibilityIdentifier("\(idPrefix).editNotes")
@@ -352,32 +423,113 @@ struct CalendarEventFormView: View {
 
     @ViewBuilder
     private var calendarRow: some View {
-        if calendarChoices.count > 1, rights.access(.calendar).reason == nil {
-            Picker("Calendar", selection: $form.calendarKey) {
-                ForEach(calendarChoices, id: \.key) { Text($0.title).tag($0.key) }
+        if let menu = calendarMenu, menu.choices.count > 1 {
+            HStack(alignment: .firstTextBaseline, spacing: theme.space2) {
+                Image(systemName: "calendar").font(.system(size: 12)).foregroundStyle(theme.textTertiary.color)
+                    .frame(width: iconColumn - theme.space2, alignment: .leading).accessibilityHidden(true)
+                Picker("Calendar", selection: Binding(get: { menu.selected }, set: { menu.choose($0) })) {
+                    ForEach(menu.choices, id: \.id) { Text(verbatim: $0.title).tag($0.id) }
+                }
+                .labelsHidden().pickerStyle(.menu).fixedSize()
+                .help("The calendar the event is saved to")
+                .accessibilityLabel("Calendar")
+                .accessibilityIdentifier("\(idPrefix).calendarPicker")
             }
-            .labelsHidden().pickerStyle(.menu).fixedSize()
-            .accessibilityIdentifier("\(idPrefix).calendarPicker")
+            .themeFont(theme.typeMeta)
         } else {
-            Text(verbatim: calendarName.isEmpty ? form.calendarKey : calendarName)
-                .themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
-                .lineLimit(1).truncationMode(.middle)
-                .accessibilityIdentifier("\(idPrefix).calendar")
+            row(.calendar, symbol: "calendar") {
+                if calendarChoices.count > 1, rights.access(.calendar).reason == nil {
+                    Picker("Calendar", selection: $form.calendarKey) {
+                        ForEach(calendarChoices, id: \.key) { Text($0.title).tag($0.key) }
+                    }
+                    .labelsHidden().pickerStyle(.menu).fixedSize()
+                    .accessibilityLabel("Calendar")
+                    .accessibilityIdentifier("\(idPrefix).calendarPicker")
+                } else {
+                    Text(verbatim: calendarName.isEmpty ? form.calendarKey : calendarName)
+                        .themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
+                        .lineLimit(1).truncationMode(.middle)
+                        .accessibilityIdentifier("\(idPrefix).calendar")
+                }
+            }
         }
     }
 
 
     private func sendUpdatesRow(_ choice: Binding<CalendarSendUpdates>) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: theme.space3) {
+            Image(systemName: "envelope").font(.system(size: 12)).foregroundStyle(theme.textTertiary.color)
+                .frame(width: iconColumn - theme.space2, alignment: .leading).accessibilityHidden(true)
             Picker("Guests", selection: choice) {
                 ForEach(CalendarSendUpdatesPolicy.options, id: \.self) { Text(CalendarSendUpdatesPolicy.title($0)).tag($0) }
             }
-            .pickerStyle(.segmented).labelsHidden()
+            .pickerStyle(.segmented).labelsHidden().fixedSize()
+            .help("Whether Google emails the guests about this change")
+            .accessibilityLabel("Email the guests")
             .accessibilityIdentifier("\(idPrefix).sendUpdates")
-            Text("Google emails the guests only if you choose so. Undo (⌘Z) stops it for a few seconds.")
-                .themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
         }
-        .padding(.leading, iconColumn)
+    }
+}
+
+struct CalendarGuestSuggestions: View {
+    let field: RecipientFieldModel
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(field.suggestions.enumerated()), id: \.offset) { index, address in
+                Button { field.accept(address) } label: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(verbatim: RecipientParser.displayName(address))
+                            .themeFont(theme.typeMeta).foregroundStyle(theme.textPrimary.color)
+                        if address.name != nil {
+                            Text(verbatim: address.email)
+                                .themeFont(theme.typeCaption).foregroundStyle(theme.textSecondary.color)
+                        }
+                    }
+                    .lineLimit(1)
+                    .padding(.horizontal, theme.space3)
+                    .padding(.vertical, theme.space1 + 1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(index == field.suggestionCursor ? theme.bgRowSelected.color : Color.clear)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(RecipientParser.displayName(address))
+                .accessibilityAddTraits(index == field.suggestionCursor ? .isSelected : [])
+            }
+        }
+        .padding(.vertical, theme.space1)
+        .background(RoundedRectangle(cornerRadius: theme.radiusMD).fill(theme.bgWindow.color))
+        .overlay(RoundedRectangle(cornerRadius: theme.radiusMD)
+            .strokeBorder(theme.borderElevated.color, lineWidth: theme.borderWidthHairline))
+        .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Suggested guests")
+        .accessibilityIdentifier("calendar.guestSuggestions")
+    }
+}
+
+struct CalendarInputChrome: ViewModifier {
+    let focused: Bool
+    @Environment(\.theme) private var theme
+    @Environment(\.isEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, theme.space2)
+            .padding(.vertical, theme.space1 + 1)
+            .background(RoundedRectangle(cornerRadius: theme.radiusMD).fill(theme.bgWindow.color))
+            .overlay(RoundedRectangle(cornerRadius: theme.radiusMD)
+                .strokeBorder((focused ? theme.component.focus.ring : theme.borderControl).color
+                                  .opacity(isEnabled ? 1 : 0.5),
+                              lineWidth: focused ? theme.component.focus.width : theme.borderWidthHairline))
+    }
+}
+
+extension View {
+    func calendarInputChrome(focused: Bool) -> some View {
+        modifier(CalendarInputChrome(focused: focused))
     }
 }
 

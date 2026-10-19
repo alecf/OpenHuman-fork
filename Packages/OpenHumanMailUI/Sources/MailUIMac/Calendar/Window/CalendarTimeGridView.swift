@@ -11,6 +11,7 @@ struct CalendarTimeGridView: View {
     @Environment(\.theme) private var theme
     @Environment(\.openURL) private var openURL
     @State private var drag: GridDrag?
+    @State private var userScrolled = false
 
     static let hourHeight: CGFloat = 44
     static let axisWidth: CGFloat = 56
@@ -64,8 +65,18 @@ struct CalendarTimeGridView: View {
                     .padding(.top, theme.space2)
                     .padding(.bottom, theme.space4)
                 }
+                .onScrollPhaseChange { _, phase in
+                    if phase == .interacting || phase == .tracking { userScrolled = true }
+                }
                 .onAppear { scroll(proxy) }
-                .onChange(of: model.period) { scroll(proxy) }
+                .onChange(of: model.period) {
+                    userScrolled = false
+                    scroll(proxy)
+                }
+                .onChange(of: model.state) { _, state in
+                    // Why: the first read lands after the grid appeared; keep the opening hour until the user scrolls
+                    if state == .loaded, !userScrolled { scroll(proxy) }
+                }
             }
         }
         .accessibilityElement(children: .contain)
@@ -117,15 +128,17 @@ struct CalendarTimeGridView: View {
                 let columnWidth = geometry.size.width / CGFloat(max(grid.days.count, 1))
                 ZStack(alignment: .topLeading) {
                     ForEach(grid.allDay) { bar in
-                        let color = CalendarDayView.calendarColor(bar.colorIndex, theme: theme)
+                        let selected = model.selectedEventID == bar.event.id
+                        let colors = CalendarPalette.block(bar.colorIndex, state: selected ? .selected : .normal,
+                                                           tokens: theme.tokens)
                         let span = CGFloat(bar.lastDay - bar.firstDay + 1)
                         Button { model.openEvent(bar.event) } label: {
-                            Text(bar.event.title).themeFont(theme.typeCaption).foregroundStyle(theme.textPrimary.color)
+                            Text(bar.event.title).themeFont(theme.typeCaption).fontWeight(.semibold)
+                                .foregroundStyle(colors.text.color)
                                 .lineLimit(1).truncationMode(.tail)
                                 .padding(.horizontal, theme.space2)
                                 .frame(width: max(span * columnWidth - 4, 8), height: Self.laneHeight - 2, alignment: .leading)
-                                .background(RoundedRectangle(cornerRadius: 4)
-                                    .fill(color.opacity(model.selectedEventID == bar.event.id ? 0.45 : 0.2)))
+                                .background(RoundedRectangle(cornerRadius: theme.radiusSM).fill(colors.fill.color))
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -143,7 +156,8 @@ struct CalendarTimeGridView: View {
 
     private func scrollMarker(_ grid: CalendarTimeGrid) -> some View {
         VStack(spacing: 0) {
-            Color.clear.frame(width: 1, height: max(CGFloat(grid.scrollTarget) * height - Self.hourHeight / 4, 0))
+            Color.clear.frame(width: 1, height: max(CGFloat(grid.openingHour) * Self.hourHeight
+                                                    - CGFloat(CalendarTimeGrid.openingLead) * Self.hourHeight, 0))
             Color.clear.frame(width: 1, height: 1).id(Self.scrollAnchor)
             Spacer(minLength: 0)
         }
@@ -357,47 +371,39 @@ struct CalendarEventBlockView: View {
 
     var body: some View {
         let event = block.event
-        let color = CalendarDayView.calendarColor(block.colorIndex, theme: theme)
-        let fill = block.isOutlined ? (isSelected ? 0.3 : 0.06) : (isSelected ? 0.5 : 0.2)
-        HStack(alignment: .top, spacing: theme.space1) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(event.title)
-                    .themeFont(theme.typeCaption).fontWeight(.medium)
-                    .foregroundStyle(theme.textPrimary.color)
-                    .strikethrough(block.isDeclined)
-                    .lineLimit(height > 34 ? 2 : 1)
-                if height > 28 {
-                    Text(model.timeText(event)).themeFont(theme.typeCaption).foregroundStyle(theme.textSecondary.color)
-                        .lineLimit(1)
-                }
-                if height > 48, let place = event.location {
-                    Text(place).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color).lineLimit(1)
-                }
-                if height > 62, let account = event.account {
-                    Text(verbatim: account).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
-                        .lineLimit(1).truncationMode(.middle)
+        let state = CalendarPalette.state(isSelected: isSelected, isDeclined: block.isDeclined,
+                                          needsAnswer: event.canRespond && event.myResponse == .needsAction,
+                                          isOutlined: block.isOutlined, isPast: block.isPast)
+        let colors = CalendarPalette.block(block.colorIndex, state: state, tokens: theme.tokens)
+        let content = CalendarPalette.content(height: Double(height))
+        let shape = RoundedRectangle(cornerRadius: theme.radiusSM)
+        HStack(alignment: .top, spacing: 0) {
+            Rectangle().fill(colors.bar.color).frame(width: 3)
+            Group {
+                if content == .oneLine {
+                    oneLine(event, ink: colors.text)
+                } else {
+                    stacked(event, ink: colors.text, content: content)
                 }
             }
+            .padding(.leading, theme.space1 + 2)
+            .padding(.top, content == .oneLine ? 1 : 3)
             Spacer(minLength: 0)
             if let link = event.meetLink, height > 20 {
                 Button { openURL(link) } label: { Image(systemName: "video").font(.system(size: 10)) }
-                    .buttonStyle(.plain).foregroundStyle(theme.textSecondary.color)
+                    .buttonStyle(.plain).foregroundStyle(colors.text.color)
+                    .padding(.top, 3).padding(.trailing, theme.space1)
                     .help("Join Google Meet").accessibilityLabel("Join Google Meet")
             }
         }
-        .padding(.horizontal, theme.space1 + 1)
-        .padding(.vertical, 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .clipped()
-        .background(RoundedRectangle(cornerRadius: 4).fill(color.opacity(fill)))
+        .background(colors.fill.color)
+        .clipShape(shape)
         .overlay {
-            if block.isOutlined {
-                RoundedRectangle(cornerRadius: 4).strokeBorder(color, lineWidth: 1.5)
-            } else if isSelected {
-                RoundedRectangle(cornerRadius: 4).strokeBorder(color.opacity(0.9), lineWidth: 1)
+            if let border = colors.border {
+                shape.strokeBorder(border.color, style: StrokeStyle(lineWidth: 1, dash: colors.dashedBorder ? [3, 2] : []))
             }
         }
-        .opacity(block.isDeclined ? 0.55 : 1)
         .contentShape(Rectangle())
         .help(event.title + "\n" + model.timeText(event) + (event.location.map { "\n" + $0 } ?? "")
               + (event.account.map { "\n" + $0 } ?? ""))
@@ -405,5 +411,43 @@ struct CalendarEventBlockView: View {
         .accessibilityLabel("\(event.title), \(model.timeText(event))")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("calendar.window.event")
+    }
+
+    private func title(_ event: CalendarEvent, ink: ThemeColor) -> Text {
+        Text(event.title)
+            .font(theme.typeCaption.swiftUIFont)
+            .fontWeight(.semibold)
+            .foregroundStyle(ink.color)
+            .strikethrough(block.isDeclined)
+    }
+
+    private func startText(_ event: CalendarEvent) -> String {
+        event.start.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: model.timeZone))
+    }
+
+    private func oneLine(_ event: CalendarEvent, ink: ThemeColor) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: theme.space1) {
+                title(event, ink: ink).lineLimit(1).fixedSize()
+                Text(verbatim: startText(event)).themeFont(theme.typeCaption).fontWeight(.regular)
+                    .foregroundStyle(ink.color).lineLimit(1).fixedSize()
+            }
+            title(event, ink: ink).lineLimit(1)
+        }
+    }
+
+    private func stacked(_ event: CalendarEvent, ink: ThemeColor, content: CalendarPalette.BlockContent) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            title(event, ink: ink).lineLimit(height >= 44 ? 2 : 1)
+            Text(model.timeText(event)).themeFont(theme.typeCaption).fontWeight(.regular)
+                .foregroundStyle(ink.color).lineLimit(1)
+            if content == .withPlace || content == .withAccount, let place = event.location {
+                Text(place).themeFont(theme.typeCaption).fontWeight(.regular).foregroundStyle(ink.color).lineLimit(1)
+            }
+            if content == .withAccount, let account = event.account {
+                Text(verbatim: account).themeFont(theme.typeCaption).fontWeight(.regular).foregroundStyle(ink.color)
+                    .lineLimit(1).truncationMode(.middle)
+            }
+        }
     }
 }

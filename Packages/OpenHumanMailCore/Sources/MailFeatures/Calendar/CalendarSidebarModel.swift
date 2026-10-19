@@ -792,9 +792,32 @@ public final class CalendarSidebarModel {
         if let key { environment.pendingEvents.remove(key) }
     }
 
+    public struct DraftCalendarChoice: Sendable, Hashable, Identifiable {
+        public let account: AccountID
+        public let title: String
+        public var id: String { title.lowercased() }
+    }
+
+    public func draftCalendarChoices() async -> [DraftCalendarChoice] {
+        guard routesByAccount, let connections = environment.calendarConnections else { return [] }
+        let accounts = await AIThreadLoader.first(environment.data.accounts()) ?? []
+        return accounts.compactMap { owner in
+            guard let found = connections.calendarProvider(for: owner), found.info.createRefusal == nil else { return nil }
+            return DraftCalendarChoice(account: owner.id, title: owner.email)
+        }
+    }
+
+    public func guestSuggestions(_ prefix: String) async -> [EmailAddress] {
+        var account = draftThread?.account ?? activeAccount()
+        if account == nil { account = (await AIThreadLoader.first(environment.data.accounts()) ?? []).first?.id }
+        guard let account else { return [] }
+        return (try? await environment.data.contactSuggestions(account, prefix: prefix,
+                                                               limit: RecipientFieldModel.maxSuggestions)) ?? []
+    }
+
     @discardableResult
     public func chooseDraftCalendar(account: AccountID) async -> Bool {
-        guard draft != nil, draftThread == nil else { return false }
+        guard draft != nil else { return false }
         let chosen = await calendarOf(account)
         guard routesByAccount ? chosen.provider != nil : true else { return false }
         draftProvider = chosen.provider ?? provider

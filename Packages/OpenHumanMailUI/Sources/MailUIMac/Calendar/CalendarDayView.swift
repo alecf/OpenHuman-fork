@@ -73,13 +73,15 @@ struct CalendarDayView: View {
     private func allDayBars(_ events: [CalendarEvent]) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             ForEach(events) { event in
-                let color = Self.calendarColor(CalendarDayTimeline.colorIndex(for: event), theme: theme)
                 let opened = model.isOpened(event)
-                Text(event.title).themeFont(theme.typeCaption).foregroundStyle(theme.textPrimary.color)
+                let colors = CalendarPalette.block(CalendarDayTimeline.colorIndex(for: event),
+                                                   state: opened ? .selected : .normal, tokens: theme.tokens)
+                Text(event.title).themeFont(theme.typeCaption).fontWeight(.semibold)
+                    .foregroundStyle(colors.text.color)
                     .lineLimit(1).truncationMode(.tail)
                     .padding(.horizontal, theme.space2).padding(.vertical, 2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 4).fill(color.opacity(opened ? 0.4 : 0.22)))
+                    .background(RoundedRectangle(cornerRadius: theme.radiusSM).fill(colors.fill.color))
                     .overlay { if model.isFocused(event) { focusRing } }
                     .contentShape(Rectangle())
                     .onTapGesture { open(event) }
@@ -225,45 +227,55 @@ struct CalendarDayView: View {
     private func eventBlock(_ block: CalendarDayTimeline.Block, width: CGFloat, height: CGFloat) -> some View {
         let gap: CGFloat = 2
         let columnWidth = (width - gap * CGFloat(block.columns - 1)) / CGFloat(max(block.columns, 1))
-        let color = Self.calendarColor(block.colorIndex, theme: theme)
         let struck = strikesConflicts && block.isConflict
         let opened = model.isOpened(block.event)
+        let event = block.event
+        let state = CalendarPalette.state(isSelected: opened, isDeclined: event.myResponse == .declined,
+                                          needsAnswer: event.canRespond && event.myResponse == .needsAction,
+                                          isOutlined: false, isPast: event.end <= model.now())
+        let colors = CalendarPalette.block(block.colorIndex, state: state, tokens: theme.tokens)
+        let ink = struck ? theme.textTertiary : colors.text
         let blockHeight = max(CGFloat(block.height) * height - 1, 14)
+        let shape = RoundedRectangle(cornerRadius: theme.radiusSM)
         return HStack(alignment: .top, spacing: theme.space1) {
-            RoundedRectangle(cornerRadius: 1.5).fill(color).frame(width: 3)
+            Rectangle().fill(colors.bar.color).frame(width: 3)
             VStack(alignment: .leading, spacing: 0) {
                 Text(block.event.title)
-                    .themeFont(theme.typeCaption).fontWeight(.medium)
-                    .foregroundStyle((struck ? theme.textTertiary : theme.textPrimary).color)
-                    .strikethrough(struck)
+                    .themeFont(theme.typeCaption).fontWeight(.semibold)
+                    .foregroundStyle(ink.color)
+                    .strikethrough(struck || event.myResponse == .declined)
                     .lineLimit(blockHeight > 30 ? 2 : 1)
                 if blockHeight > 26 {
                     Text(model.timeText(block.event.start, block.event.end))
-                        .themeFont(theme.typeCaption).foregroundStyle(theme.textSecondary.color)
+                        .themeFont(theme.typeCaption).fontWeight(.regular).foregroundStyle(ink.color)
                         .strikethrough(struck)
                         .lineLimit(1)
                 }
                 if let account = block.event.account, blockHeight > 40 {
-                    Text(verbatim: account).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
+                    Text(verbatim: account).themeFont(theme.typeCaption).fontWeight(.regular).foregroundStyle(ink.color)
                         .lineLimit(1).truncationMode(.middle)
                         .accessibilityLabel("Calendar of \(account)")
                 }
             }
+            .padding(.top, 2)
             Spacer(minLength: 0)
             if let link = block.event.meetLink, blockHeight > 18 {
                 Button { openURL(link) } label: { Image(systemName: "video").font(.system(size: 10)) }
-                    .buttonStyle(.plain).foregroundStyle(theme.textSecondary.color)
+                    .buttonStyle(.plain).foregroundStyle(ink.color)
+                    .padding(.top, 2)
                     .help("Join Google Meet").accessibilityLabel("Join Google Meet")
                     .accessibilityIdentifier("calendar.event.meet")
             }
         }
         .padding(.trailing, theme.space1)
         .frame(width: max(columnWidth, 8), height: blockHeight, alignment: .topLeading)
-        .clipped()
-        .background(RoundedRectangle(cornerRadius: 4).fill(color.opacity(opened ? 0.4 : block.isConflict ? 0.28 : 0.18)))
+        .background(colors.fill.color)
+        .clipShape(shape)
         .overlay {
             if block.isConflict {
-                RoundedRectangle(cornerRadius: 4).strokeBorder(theme.textDanger.color, lineWidth: 1.5)
+                shape.strokeBorder(theme.textDanger.color, lineWidth: 1.5)
+            } else if let border = colors.border {
+                shape.strokeBorder(border.color, style: StrokeStyle(lineWidth: 1, dash: colors.dashedBorder ? [3, 2] : []))
             }
         }
         .overlay { if model.isFocused(block.event) { focusRing } }
@@ -300,9 +312,7 @@ struct CalendarDayView: View {
     }
 
     static func calendarColor(_ index: Int, theme: ResolvedTheme) -> Color {
-        let palette: [ThemeColor] = [theme.accentFill, theme.textAI, theme.textSuccess, theme.textWarning, theme.textLink,
-                                     theme.textSecondary]
-        return palette[((index % palette.count) + palette.count) % palette.count].color
+        CalendarPalette.ink(index, tokens: theme.tokens).color
     }
 }
 
