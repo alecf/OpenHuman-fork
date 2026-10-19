@@ -93,23 +93,28 @@ struct CalendarMonthView: View {
     }
 
     private func chip(_ event: CalendarEvent) -> some View {
-        let color = CalendarDayView.calendarColor(model.colorIndex(for: event), theme: theme)
+        let index = model.colorIndex(for: event)
         let selected = model.selectedEventID == event.id
+        let filled = event.isAllDay || CalendarTimeGrid.belongsInAllDayRow(event)
+        let colors = CalendarPalette.block(index, state: selected ? .selected : .normal, tokens: theme.tokens)
+        let declined = event.myResponse == .declined
         return HStack(spacing: theme.space1) {
-            Circle().fill(color).frame(width: 6, height: 6)
-            if !event.isAllDay {
+            if !filled {
+                Circle().fill(colors.bar.color).frame(width: 6, height: 6)
                 Text(event.start.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: model.timeZone)))
-                    .themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
+                    .themeFont(theme.typeCaption).fontWeight(.regular)
+                    .foregroundStyle((selected ? colors.text : theme.textTertiary).color)
                     .lineLimit(1).fixedSize()
             }
-            Text(event.title).themeFont(theme.typeCaption).foregroundStyle(theme.textPrimary.color)
-                .strikethrough(event.myResponse == .declined)
+            Text(event.title).themeFont(theme.typeCaption).fontWeight(filled ? .semibold : .medium)
+                .foregroundStyle((filled || selected ? colors.text : declined ? theme.textTertiary : theme.textPrimary).color)
+                .strikethrough(declined)
                 .lineLimit(1).truncationMode(.tail)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 3)
-        .background(RoundedRectangle(cornerRadius: 3)
-            .fill(event.isAllDay || selected ? color.opacity(selected ? 0.45 : 0.2) : Color.clear))
+        .padding(.horizontal, theme.space1 + 1)
+        .frame(height: 18)
+        .background(RoundedRectangle(cornerRadius: theme.radiusSM).fill(filled || selected ? colors.fill.color : Color.clear))
         .contentShape(Rectangle())
         .help(event.title + "\n" + model.timeText(event))
         .accessibilityLabel("\(event.title), \(model.timeText(event))")

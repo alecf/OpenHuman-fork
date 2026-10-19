@@ -21,8 +21,9 @@ struct CalendarEventDetailsOverlay: View {
                 }
                 .frame(maxHeight: max(proxy.size.height - 2 * theme.space4, 160))
                 .fixedSize(horizontal: false, vertical: true)
+                .clipShape(RoundedRectangle(cornerRadius: theme.radiusLG))
+                .themeShadow(theme.component.popover.shadow)
                 .padding(theme.space4)
-                .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }
@@ -40,32 +41,17 @@ struct CalendarEventDetailsView: View {
     var onClose: (_ byKeyboard: Bool) -> Void = { _ in }
     var onEdit: (() -> Void)?
     @Environment(\.theme) private var theme
-    @Environment(\.openURL) private var openURL
     @AccessibilityFocusState private var titleFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.space3) {
             header
-            when
-            if let place = details.location {
-                row(symbol: "mappin.and.ellipse") {
-                    Text(verbatim: place).foregroundStyle(theme.textSecondary.color)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Location: \(place)")
-                .accessibilityIdentifier("calendar.details.location")
-            }
-            if let link = details.joinLink { join(link) }
-            guests
-            notes
-            calendarRow
+            CalendarEventDetailRows(details: details, colorIndex: details.colorIndex, idPrefix: "calendar.details",
+                                    compact: true)
             if let answer = details.answerText {
-                row(symbol: "checkmark.circle") {
-                    Text(verbatim: answer).foregroundStyle(theme.textSecondary.color)
-                }
-                .accessibilityIdentifier("calendar.details.answer")
+                Text(verbatim: answer).themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
+                    .padding(.leading, CalendarDraftEditor.iconColumn)
+                    .accessibilityIdentifier("calendar.details.answer")
             }
             if let organizer = details.organizerText {
                 Text(verbatim: organizer).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
@@ -76,6 +62,7 @@ struct CalendarEventDetailsView: View {
             if let onEdit {
                 Button("Edit in Calendar", action: onEdit)
                     .help("Opens this event in Calendar to change it")
+                    .padding(.leading, CalendarDraftEditor.iconColumn)
                     .accessibilityIdentifier("calendar.details.edit")
             }
         }
@@ -83,7 +70,7 @@ struct CalendarEventDetailsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: theme.radiusLG).fill(theme.bgWindow.color))
         .overlay(RoundedRectangle(cornerRadius: theme.radiusLG)
-            .strokeBorder(theme.borderHairline.color, lineWidth: theme.borderWidthHairline))
+            .strokeBorder(theme.component.popover.border.color, lineWidth: theme.borderWidthHairline))
         .onExitCommand { onClose(true) }
         .onAppear { titleFocused = true }
         .onChange(of: details.event.id) { titleFocused = true }
@@ -94,6 +81,11 @@ struct CalendarEventDetailsView: View {
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: theme.space2) {
+            RoundedRectangle(cornerRadius: theme.radiusXS)
+                .fill(CalendarDayView.calendarColor(details.colorIndex, theme: theme))
+                .frame(width: 10, height: 10)
+                .frame(width: CalendarDraftEditor.iconColumn - theme.space2, alignment: .leading)
+                .accessibilityHidden(true)
             Text(verbatim: details.title).themeFont(theme.typeHeadline).foregroundStyle(theme.textPrimary.color)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
@@ -103,46 +95,13 @@ struct CalendarEventDetailsView: View {
             Spacer(minLength: 0)
             Button { onClose(false) } label: {
                 Image(systemName: "xmark").font(.system(size: 11, weight: .semibold))
-                    .frame(width: 20, height: 20).contentShape(Rectangle())
+                    .frame(width: 24, height: 24).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(theme.textSecondary.color)
             .help("Close  Esc")
             .accessibilityLabel("Close event details")
             .accessibilityIdentifier("calendar.details.close")
-        }
-    }
-
-    private var when: some View {
-        row(symbol: "clock") {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(verbatim: details.dayText).foregroundStyle(theme.textPrimary.color)
-                if let time = details.timeText {
-                    Text(verbatim: time).foregroundStyle(theme.textSecondary.color)
-                }
-                ForEach([details.zoneText, details.eventZoneText, details.repeatText].compactMap { $0 }, id: \.self) { line in
-                    Text(verbatim: line).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
-                }
-            }
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel([details.spokenTime, details.repeatText].compactMap { $0 }.joined(separator: ", "))
-        .accessibilityIdentifier("calendar.details.time")
-    }
-
-    private func join(_ link: URL) -> some View {
-        row(symbol: "video") {
-            VStack(alignment: .leading, spacing: 1) {
-                Button("Join Google Meet") { openURL(link) }
-                    .buttonStyle(.link)
-                    .help(link.absoluteString)
-                    .accessibilityIdentifier("calendar.details.join")
-                Text(verbatim: Self.shortLink(link)).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
-                    .lineLimit(1).truncationMode(.middle)
-                    .textSelection(.enabled)
-                    .accessibilityHidden(true)
-            }
         }
     }
 
@@ -153,44 +112,98 @@ struct CalendarEventDetailsView: View {
         }
         return text
     }
+}
+
+struct CalendarEventDetailRows: View {
+    let details: CalendarEventDetails
+    let colorIndex: Int
+    let idPrefix: String
+    var compact = false
+    var showsZone = true
+    @Environment(\.theme) private var theme
+    @Environment(\.openURL) private var openURL
+    @State private var showsAllGuests = false
+    @State private var showsAllNotes = false
+
+    static let guestPreview = 6
+    static let notesPreviewLines = 10
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? theme.space3 : theme.space4) {
+            when
+            if let link = details.joinLink { join(link) }
+            if let place = details.location {
+                row(symbol: "mappin.and.ellipse") {
+                    Text(verbatim: place).foregroundStyle(theme.textPrimary.color)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Location: \(place)")
+                .accessibilityIdentifier("\(idPrefix).location")
+            }
+            guests
+            notes
+            calendarRow
+        }
+        .onChange(of: details.event.id) {
+            showsAllGuests = false
+            showsAllNotes = false
+        }
+    }
+
+    private var when: some View {
+        row(symbol: "clock") {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: [details.dayText, details.timeText].compactMap { $0 }.joined(separator: " · "))
+                    .foregroundStyle(theme.textPrimary.color)
+                ForEach([showsZone ? details.zoneText : nil, details.eventZoneText, details.repeatText].compactMap { $0 },
+                        id: \.self) { line in
+                    Text(verbatim: line).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([details.spokenTime, details.repeatText].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityIdentifier("\(idPrefix).time")
+    }
+
+    private func join(_ link: URL) -> some View {
+        row(symbol: "video") {
+            HStack(alignment: .center, spacing: theme.space3) {
+                Button("Join Google Meet") { openURL(link) }
+                    .buttonStyle(CalendarJoinButtonStyle())
+                    .help(link.absoluteString)
+                    .accessibilityIdentifier(idPrefix == "calendar.card" ? "calendar.card.meet" : "\(idPrefix).join")
+                Text(verbatim: CalendarEventDetailsView.shortLink(link))
+                    .themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
+                    .lineLimit(1).truncationMode(.middle)
+                    .textSelection(.enabled)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
 
     @ViewBuilder
     private var guests: some View {
         if let summary = details.guestSummary {
+            let shown = showsAllGuests ? details.guests : Array(details.guests.prefix(Self.guestPreview))
             row(symbol: "person.2") {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: theme.space2) {
                     Text(verbatim: summary).foregroundStyle(theme.textPrimary.color)
-                    ForEach(details.guests) { guest in
-                        HStack(alignment: .firstTextBaseline, spacing: theme.space2) {
-                            Text(verbatim: guest.line).foregroundStyle(theme.textSecondary.color)
-                                .lineLimit(1).truncationMode(.middle)
-                            if guest.isOptional {
-                                Text("Optional").themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
-                            }
-                            Spacer(minLength: 0)
-                            if let answer = guest.responseText {
-                                Text(verbatim: answer).themeFont(theme.typeCaption)
-                                    .foregroundStyle(answerColor(guest.response).color)
-                            }
-                        }
-                        .help(guest.email)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(guest.spokenText)
+                    ForEach(shown) { guest in CalendarGuestRow(guest: guest) }
+                    if details.guests.count > shown.count {
+                        Button("Show all \(details.guests.count) guests") { showsAllGuests = true }
+                            .buttonStyle(.link)
+                            .themeFont(theme.typeMeta)
+                            .accessibilityIdentifier("\(idPrefix).allGuests")
                     }
                 }
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel(summary)
-            .accessibilityIdentifier("calendar.details.guests")
-        }
-    }
-
-    private func answerColor(_ response: CalendarResponse?) -> ThemeColor {
-        switch response ?? .needsAction {
-        case .accepted: theme.textSuccess
-        case .declined: theme.textDanger
-        case .tentative: theme.textWarning
-        case .needsAction: theme.textTertiary
+            .accessibilityIdentifier(idPrefix == "calendar.card" ? "calendar.card.attendees" : "\(idPrefix).guests")
         }
     }
 
@@ -198,24 +211,34 @@ struct CalendarEventDetailsView: View {
     private var notes: some View {
         if let parsed = details.notes {
             row(symbol: "text.alignleft") {
-                Text(CalendarDescription.attributed(parsed.document))
-                    .foregroundStyle(theme.textSecondary.color)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .environment(\.openURL, OpenURLAction { url in
-                        guard let safe = CalendarDescription.openableURL(url) else { return .discarded }
-                        openURL(safe)
-                        return .handled
-                    })
+                VStack(alignment: .leading, spacing: theme.space1) {
+                    Text(CalendarDescription.attributed(parsed.document))
+                        .foregroundStyle(theme.textSecondary.color)
+                        .lineLimit(showsAllNotes ? nil : Self.notesPreviewLines)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .environment(\.openURL, OpenURLAction { url in
+                            guard let safe = CalendarDescription.openableURL(url) else { return .discarded }
+                            openURL(safe)
+                            return .handled
+                        })
+                    if !showsAllNotes, parsed.editableText.split(separator: "\n", omittingEmptySubsequences: false).count
+                        > Self.notesPreviewLines || parsed.editableText.count > Self.notesPreviewLines * 60 {
+                        Button("Show more") { showsAllNotes = true }
+                            .buttonStyle(.link)
+                            .themeFont(theme.typeMeta)
+                            .accessibilityIdentifier("\(idPrefix).moreNotes")
+                    }
+                }
             }
-            .accessibilityIdentifier("calendar.details.notes")
+            .accessibilityIdentifier("\(idPrefix).notes")
         }
     }
 
     private var calendarRow: some View {
         row(symbol: "calendar") {
             HStack(spacing: theme.space2) {
-                Circle().fill(CalendarDayView.calendarColor(details.colorIndex, theme: theme))
+                Circle().fill(CalendarDayView.calendarColor(colorIndex, theme: theme))
                     .frame(width: 8, height: 8)
                     .accessibilityHidden(true)
                 Text(verbatim: details.calendarName).foregroundStyle(theme.textSecondary.color)
@@ -224,7 +247,7 @@ struct CalendarEventDetailsView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Calendar: \(details.calendarName)")
-        .accessibilityIdentifier("calendar.details.calendar")
+        .accessibilityIdentifier("\(idPrefix).calendar")
     }
 
     private func row<Content: View>(symbol: String, @ViewBuilder _ content: () -> Content) -> some View {
@@ -234,6 +257,84 @@ struct CalendarEventDetailsView: View {
                 .accessibilityHidden(true)
             content()
         }
-        .themeFont(theme.typeMeta)
+        .themeFont(compact ? theme.typeMeta : theme.typeBody)
+    }
+}
+
+struct CalendarGuestRow: View {
+    let guest: CalendarEventDetails.Guest
+    @Environment(\.theme) private var theme
+
+    static let avatarSize: CGFloat = 24
+
+    var body: some View {
+        HStack(alignment: .center, spacing: theme.space2) {
+            avatar
+            Text(verbatim: guest.name ?? guest.email).foregroundStyle(theme.textPrimary.color)
+                .lineLimit(1).truncationMode(.middle)
+            if let marker {
+                Text(verbatim: marker).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
+                    .lineLimit(1).fixedSize()
+            }
+            Spacer(minLength: 0)
+        }
+        .help(guest.email)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(guest.spokenText)
+    }
+
+    private var marker: String? {
+        let parts = [guest.isMe ? String(localized: "you") : nil, guest.isOptional ? String(localized: "optional") : nil]
+            .compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private var avatar: some View {
+        let initials = ThreadRowFormatting().initials(name: guest.name, email: guest.email)
+        return Text(verbatim: initials)
+            .themeFont(theme.typeCaption)
+            .minimumScaleFactor(0.7)
+            .foregroundStyle(theme.component.avatar.text.color)
+            .frame(width: Self.avatarSize, height: Self.avatarSize)
+            .background(Circle().fill(theme.component.avatar.bg.color))
+            .overlay(Circle().strokeBorder(theme.component.avatar.ring.color, lineWidth: theme.borderWidthHairline))
+            .overlay(alignment: .bottomTrailing) { badge.offset(x: 3, y: 3) }
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var badge: some View {
+        if let style = badgeStyle {
+            Image(systemName: style.symbol).font(.system(size: 6, weight: .heavy)).foregroundStyle(theme.bgWindow.color)
+                .frame(width: 12, height: 12)
+                .background(Circle().fill(style.color.color))
+                .overlay(Circle().strokeBorder(theme.bgWindow.color, lineWidth: 1.5))
+        }
+    }
+
+    private var badgeStyle: (symbol: String, color: ThemeColor)? {
+        switch guest.response {
+        case .accepted: ("checkmark", theme.textSuccess)
+        case .tentative: ("questionmark", theme.textWarning)
+        case .declined: ("xmark", theme.textDanger)
+        case .needsAction, nil: nil
+        }
+    }
+}
+
+struct CalendarJoinButtonStyle: ButtonStyle {
+    @Environment(\.theme) private var theme
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .themeFont(theme.typeLabel)
+            .fontWeight(.semibold)
+            .foregroundStyle(theme.accentOnFill.color)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, theme.space4)
+            .frame(height: 26)
+            .background(Capsule().fill((configuration.isPressed ? theme.accentFillHover : theme.accentFill).color))
+            .contentShape(Capsule())
     }
 }

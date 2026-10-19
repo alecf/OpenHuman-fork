@@ -1,14 +1,15 @@
 {
   "id": "calendar.full-edit.rights",
   "area": "Calendar",
-  "title": "Fields you may not change are dimmed, with the reason in their tooltip",
+  "title": "Someone else's event opens as details; fields you may not change are dimmed in its edit form",
   "steps": [
     "With -UseFakeData -UseFakeCalendar open Calendar (2) and click an afternoon meeting with Sam Rivera (someone else organizes it)",
+    "Read the card, then open ••• and choose Edit…",
     "Look at each row: title, time, repeat and visibility are disabled; reminders, Busy or Free and colour still work",
-    "Try to type in any field, then hold the pointer over a dimmed row"
+    "Hold the pointer over a dimmed row"
   ],
   "deepLink": null,
-  "expected": "Rows you cannot change are dimmed and do nothing; no amber or lock sentence shows anywhere in the card. Holding the pointer over a dimmed row shows why (for example that someone else organizes the event); VoiceOver reads the same. Decline replaces the trash.",
+  "expected": "The card first shows the event's details with the Going? answers at the bottom, not a form. Edit… shows the form: rows you cannot change are dimmed and do nothing; no amber or lock sentence shows anywhere. Holding the pointer over a dimmed row shows why (for example that someone else organizes the event); VoiceOver reads the same. Decline is in the ••• menu instead of Delete.",
   "requires": "fake",
   "addedIn": "2026-10-13"
 }

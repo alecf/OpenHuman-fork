@@ -8,48 +8,240 @@ import SwiftUI
 
 struct CalendarEventCardView: View {
     @Bindable var model: CalendarWindowModel
+    var maxHeight: CGFloat = 640
     @Environment(\.theme) private var theme
     @Environment(\.openURL) private var openURL
+    @State private var editing = false
+
+    static let headerHeight: CGFloat = 48
+    static let footerHeight: CGFloat = 52
 
     var body: some View {
-        if let card = model.card, card.form != nil {
-            formBody(card)
-        } else if let card = model.card {
-            VStack(alignment: .leading, spacing: theme.space3) {
-                title(card)
-                timeRow(card)
-                attendees(card)
-                if let link = card.event.meetLink {
-                    fieldRow(symbol: "video") {
-                        Button("Join Google Meet") { openURL(link) }
-                            .buttonStyle(.link)
-                            .accessibilityIdentifier("calendar.card.meet")
-                    }
+        if let card = model.card {
+            let mode = CalendarCardMode.make(card, userAskedToEdit: editing)
+            let footer = hasFooter(card, mode)
+            VStack(alignment: .leading, spacing: 0) {
+                header(card, mode)
+                ScrollView(.vertical) {
+                    content(card, mode)
+                        .padding(.horizontal, theme.space6)
+                        .padding(.top, mode == .detail ? theme.space1 : theme.space2)
+                        .padding(.bottom, theme.space5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                place(card)
-                notes(card)
-                fieldRow(symbol: "calendar") {
-                    HStack(spacing: theme.space2) {
-                        Circle().fill(CalendarDayView.calendarColor(model.colorIndex(for: card.event), theme: theme))
-                            .frame(width: 8, height: 8)
-                        Text(verbatim: card.calendarKey.isEmpty ? model.sidebar.providerName : card.calendarKey)
-                            .themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
-                            .lineLimit(1).truncationMode(.middle)
-                    }
-                }
-                .accessibilityIdentifier("calendar.card.calendar")
-                if card.event.canRespond { answers(card) }
-                notesAndReasons(card)
-                actions(card)
+                .frame(maxHeight: max(maxHeight - Self.headerHeight - (footer ? Self.footerHeight : 0), 120))
+                .fixedSize(horizontal: false, vertical: true)
+                if footer { footerBar(card, mode) }
             }
-            .padding(theme.space4)
-            .background(RoundedRectangle(cornerRadius: theme.radiusLG).fill(theme.bgWindow.color))
-            .overlay(RoundedRectangle(cornerRadius: theme.radiusLG)
-                .strokeBorder(theme.borderHairline.color, lineWidth: theme.borderWidthHairline))
+            .background(RoundedRectangle(cornerRadius: theme.radiusXL).fill(theme.bgWindow.color))
+            .overlay(RoundedRectangle(cornerRadius: theme.radiusXL)
+                .strokeBorder(theme.component.popover.border.color, lineWidth: theme.borderWidthHairline))
+            .clipShape(RoundedRectangle(cornerRadius: theme.radiusXL))
+            .themeShadow(theme.component.popover.shadow)
             .onExitCommand { model.closeCard() }
+            .onChange(of: card.event.id) { editing = false }
             .accessibilityElement(children: .contain)
             .accessibilityLabel(card.event.title)
+            .accessibilityHint(mode == .detail ? (card.reason ?? "") : "")
             .accessibilityIdentifier("calendar.card")
+        }
+    }
+
+    private func color(_ card: CalendarEventCard) -> Color {
+        CalendarDayView.calendarColor(model.colorIndex(for: card.event), theme: theme)
+    }
+
+    private func header(_ card: CalendarEventCard, _ mode: CalendarCardMode) -> some View {
+        HStack(alignment: .center, spacing: theme.space3) {
+            RoundedRectangle(cornerRadius: theme.radiusXS).fill(color(card)).frame(width: 12, height: 12)
+                .accessibilityHidden(true)
+            Text(verbatim: headerTitle(card, mode))
+                .themeFont(theme.typeLabel).foregroundStyle(theme.textSecondary.color)
+                .lineLimit(1).truncationMode(.middle)
+            Spacer(minLength: theme.space2)
+            moreMenu(card, mode)
+            Button { model.closeCard() } label: {
+                Image(systemName: "xmark").font(.system(size: 12, weight: .semibold))
+                    .frame(width: 28, height: 28).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.textSecondary.color)
+            .help("Close  Esc")
+            .accessibilityLabel("Close")
+            .accessibilityIdentifier("calendar.card.close")
+        }
+        .padding(.leading, theme.space6)
+        .padding(.trailing, theme.space3)
+        .frame(height: Self.headerHeight)
+    }
+
+    private func headerTitle(_ card: CalendarEventCard, _ mode: CalendarCardMode) -> String {
+        if card.pendingMove != nil { return String(localized: "Move event") }
+        let calendar = card.calendarKey.isEmpty ? model.sidebar.providerName : card.calendarKey
+        switch mode {
+        case .detail: return calendar
+        case .form, .legacyEdit: return card.event.id.isEmpty ? String(localized: "New event") : calendar
+        }
+    }
+
+    @ViewBuilder
+    private func moreMenu(_ card: CalendarEventCard, _ mode: CalendarCardMode) -> some View {
+        let offersEdit = CalendarCardMode.offersEdit(card, mode: mode)
+        let duplicates = mode == .form && !card.event.id.isEmpty && card.rights.hasAnyEditable && card.pendingMove == nil
+        let link = card.event.meetLink
+        let removal = removal(card, mode)
+        if offersEdit || duplicates || link != nil || removal != nil {
+            Menu {
+                if offersEdit {
+                    Button("Edit…") { editing = true }.accessibilityIdentifier("calendar.card.edit")
+                }
+                if duplicates {
+                    Button("Duplicate") { Task { await model.duplicateCardEvent() } }
+                        .accessibilityIdentifier("calendar.card.duplicate")
+                }
+                if let link {
+                    Button("Copy Meet link") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(link.absoluteString, forType: .string)
+                    }
+                }
+                if let removal {
+                    Divider()
+                    removalItem(removal)
+                }
+            } label: {
+                Image(systemName: "ellipsis").font(.system(size: 13, weight: .semibold))
+                    .frame(width: 28, height: 28).contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .tint(theme.textSecondary.color)
+            .foregroundStyle(theme.textSecondary.color)
+            .help("More")
+            .accessibilityLabel("More actions")
+            .accessibilityIdentifier("calendar.card.more")
+        }
+    }
+
+    private func removal(_ card: CalendarEventCard, _ mode: CalendarCardMode) -> CalendarDeleteRight? {
+        guard card.pendingMove == nil, !card.event.id.isEmpty else { return nil }
+        if card.form != nil { return card.rights.delete }
+        return card.canRemove ? .delete : nil
+    }
+
+    @ViewBuilder
+    private func removalItem(_ removal: CalendarDeleteRight) -> some View {
+        switch removal {
+        case .delete:
+            Button("Delete…", role: .destructive) { model.askToRemoveCardEvent() }
+                .accessibilityIdentifier("calendar.card.delete")
+        case .declineInstead(let why):
+            Button("Decline") { Task { await model.declineInsteadOfDelete() } }
+                .help(why).accessibilityIdentifier("calendar.card.decline")
+        case .unavailable(let why):
+            Button("Delete") {}.disabled(true).help(why)
+                .accessibilityLabel("Delete unavailable: \(why)").accessibilityIdentifier("calendar.card.deleteDisabled")
+        }
+    }
+
+    @ViewBuilder
+    private func content(_ card: CalendarEventCard, _ mode: CalendarCardMode) -> some View {
+        switch mode {
+        case .detail: detail(card)
+        case .form: formBody(card)
+        case .legacyEdit: legacyBody(card)
+        }
+    }
+
+    private func detail(_ card: CalendarEventCard) -> some View {
+        let details = CalendarEventDetails(event: card.event, timeZone: model.cardTimeZone,
+                                           calendarName: card.calendarKey.isEmpty ? model.sidebar.providerName : card.calendarKey,
+                                           calendarKey: card.calendarKey,
+                                           myAddresses: card.calendarKey.isEmpty ? [] : [card.calendarKey],
+                                           myResponse: card.response)
+        return VStack(alignment: .leading, spacing: theme.space4) {
+            Text(verbatim: details.title).themeFont(theme.typeTitle).foregroundStyle(theme.textPrimary.color)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("calendar.card.title")
+            CalendarEventDetailRows(details: details, colorIndex: model.colorIndex(for: card.event), idPrefix: "calendar.card",
+                                    showsZone: false)
+            note(card)
+        }
+    }
+
+    @ViewBuilder
+    private func note(_ card: CalendarEventCard) -> some View {
+        if let note = card.note, note != card.reason, note != card.rights.summary {
+            Text(note).themeFont(theme.typeMeta).foregroundStyle(theme.textDanger.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("calendar.card.note")
+        }
+    }
+
+    private func formBody(_ card: CalendarEventCard) -> some View {
+        VStack(alignment: .leading, spacing: theme.space3) {
+            if let move = card.pendingMove { pendingHeader(move, card) }
+            CalendarEventFormView(
+                form: Binding(get: { model.card?.form ?? card.form! }, set: { model.card?.form = $0 }),
+                rights: card.rights, timeZone: model.cardTimeZone, idPrefix: "calendar.card",
+                meetLink: card.event.meetLink,
+                calendarChoices: model.sources.map { (key: $0.key, title: $0.title) },
+                asksSendUpdates: model.asksSendUpdates(for: card),
+                sendUpdates: Binding(get: { model.sendUpdates(for: model.card ?? card) },
+                                     set: { model.chooseSendUpdates($0) }),
+                calendarName: card.calendarKey.isEmpty ? model.sidebar.providerName : card.calendarKey)
+                .id(card.event.id)
+            note(card)
+        }
+    }
+
+    private func pendingHeader(_ move: CalendarPendingMove, _ card: CalendarEventCard) -> some View {
+        let shown = card.form
+        return VStack(alignment: .leading, spacing: theme.space1) {
+            Text(move.kind == .resized ? "Change the length?" : "Move this event?")
+                .themeFont(theme.typeHeadline).foregroundStyle(theme.textPrimary.color)
+            Grid(alignment: .leading, horizontalSpacing: theme.space3, verticalSpacing: 2) {
+                GridRow {
+                    Text("From").foregroundStyle(theme.textTertiary.color)
+                    Text(CalendarPendingMove.line(move.originalStart, move.originalEnd, zone: model.cardTimeZone))
+                        .foregroundStyle(theme.textSecondary.color).strikethrough(true, color: theme.textTertiary.color)
+                }
+                GridRow {
+                    Text("To").foregroundStyle(theme.textTertiary.color)
+                    Text(CalendarPendingMove.line(shown?.start ?? move.proposedStart, shown?.end ?? move.proposedEnd,
+                                                  zone: model.cardTimeZone))
+                        .foregroundStyle(theme.textPrimary.color)
+                }
+            }
+            .themeFont(theme.typeMeta)
+            Text("Nothing changes until you accept.")
+                .themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
+        }
+        .padding(theme.space3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: theme.radiusMD).fill(theme.accentSubtle.color))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("calendar.card.pendingMove")
+    }
+
+    private func legacyBody(_ card: CalendarEventCard) -> some View {
+        VStack(alignment: .leading, spacing: theme.space3) {
+            title(card)
+            timeRow(card)
+            attendees(card)
+            if let link = card.event.meetLink {
+                fieldRow(symbol: "video") {
+                    Button("Join Google Meet") { openURL(link) }
+                        .buttonStyle(.link)
+                        .accessibilityIdentifier("calendar.card.meet")
+                }
+            }
+            place(card)
+            notes(card)
+            note(card)
         }
     }
 
@@ -58,10 +250,10 @@ struct CalendarEventCardView: View {
         if card.canEditDetails {
             TextField("Title", text: binding(\.title, card))
                 .textFieldStyle(.plain)
-                .themeFont(theme.typeHeadline).foregroundStyle(theme.textPrimary.color)
+                .themeFont(theme.typeTitle).foregroundStyle(theme.textPrimary.color)
                 .accessibilityIdentifier("calendar.card.title")
         } else {
-            Text(card.event.title).themeFont(theme.typeHeadline).foregroundStyle(theme.textPrimary.color)
+            Text(card.event.title).themeFont(theme.typeTitle).foregroundStyle(theme.textPrimary.color)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .lockedReason(card.reason)
@@ -141,149 +333,72 @@ struct CalendarEventCardView: View {
         }
     }
 
+    private func hasFooter(_ card: CalendarEventCard, _ mode: CalendarCardMode) -> Bool {
+        card.event.canRespond || mode == .form || mode == .legacyEdit
+    }
+
+    private func footerBar(_ card: CalendarEventCard, _ mode: CalendarCardMode) -> some View {
+        HStack(spacing: theme.space2) {
+            if card.event.canRespond { answers(card) }
+            Spacer(minLength: theme.space2)
+            switch mode {
+            case .form: formActions(card)
+            case .legacyEdit: legacyActions(card)
+            case .detail: EmptyView()
+            }
+        }
+        .padding(.horizontal, theme.space6)
+        .frame(height: Self.footerHeight)
+        .overlay(alignment: .top) {
+            Rectangle().fill(theme.borderHairline.color).frame(height: theme.borderWidthHairline)
+        }
+    }
+
     private func answers(_ card: CalendarEventCard) -> some View {
         HStack(spacing: theme.space2) {
-            Text("Going?").themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
-            ForEach(CalendarResponse.choices, id: \.self) { choice in
-                let chosen = card.response == choice
-                Button { Task { await model.respond(choice) } } label: {
-                    Text(choice.title).themeFont(theme.typeMeta)
-                        .foregroundStyle((chosen ? theme.accentOnFill : theme.textPrimary).color)
-                        .padding(.horizontal, theme.space3).padding(.vertical, 3)
-                        .background(Capsule().fill((chosen ? theme.accentFill : theme.bgSunken).color))
-                        .contentShape(Capsule())
+            Text("Going?").themeFont(theme.typeLabel).foregroundStyle(theme.textSecondary.color)
+                .padding(.trailing, theme.space1)
+            ForEach(CalendarCardMode.rsvpOrder, id: \.self) { choice in
+                CalendarAnswerPill(title: choice.title, chosen: card.response == choice) {
+                    Task { await model.respond(choice) }
                 }
-                .buttonStyle(.plain)
                 .disabled(!card.canRespond)
-                .accessibilityAddTraits(chosen ? .isSelected : [])
                 .accessibilityIdentifier("calendar.card.rsvp.\(choice.rawValue)")
             }
         }
         .help(card.canRespond ? String(localized: "Google tells the organizer after a few seconds (Undo ⌘Z stops it).")
                               : (card.reason ?? ""))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Going?")
     }
 
     @ViewBuilder
-    private func notesAndReasons(_ card: CalendarEventCard) -> some View {
-        if card.reason == nil, card.hasChanges, card.emailsPeople {
-            Text("Saved after a few seconds, so Undo (⌘Z) can stop it. Google emails the attendees.")
-                .themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
-        }
-        if let note = card.note, note != card.reason {
-            Text(note).themeFont(theme.typeMeta).foregroundStyle(theme.textDanger.color)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private func actions(_ card: CalendarEventCard) -> some View {
-        HStack(spacing: theme.space3) {
-            if card.canMove || card.canEditDetails {
-                Button("Save") { Task { await model.saveCard() } }
-                    .buttonStyle(.borderedProminent)
-                    .tint(theme.accentFill.color)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(!card.hasChanges)
-                    .help("Save the changes  ⌘↵")
-                    .accessibilityIdentifier("calendar.card.save")
-            }
-            Button(card.canMove || card.canEditDetails ? "Cancel" : "Close") { model.closeCard() }
-                .help("Esc")
-                .accessibilityIdentifier("calendar.card.cancel")
-            Spacer(minLength: 0)
-            if card.canRemove {
-                Button(role: .destructive) { model.askToRemoveCardEvent() } label: {
-                    Image(systemName: "trash")
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(theme.textDanger.color)
-                .help("Delete the event (asks first; Undo ⌘Z for a few seconds)")
-                .accessibilityLabel("Delete event")
-                .accessibilityIdentifier("calendar.card.delete")
-            }
-        }
-    }
-
-
-    private func formBody(_ card: CalendarEventCard) -> some View {
-        VStack(alignment: .leading, spacing: theme.space3) {
-            if let move = card.pendingMove { pendingHeader(move, card) }
-            CalendarEventFormView(
-                form: Binding(get: { model.card?.form ?? card.form! }, set: { model.card?.form = $0 }),
-                rights: card.rights, timeZone: model.cardTimeZone, idPrefix: "calendar.card",
-                meetLink: card.event.meetLink,
-                calendarChoices: model.sources.map { (key: $0.key, title: $0.title) },
-                asksSendUpdates: model.asksSendUpdates(for: card),
-                sendUpdates: Binding(get: { model.sendUpdates(for: model.card ?? card) },
-                                     set: { model.chooseSendUpdates($0) }),
-                calendarName: card.calendarKey.isEmpty ? model.sidebar.providerName : card.calendarKey)
-                .id(card.event.id)
-            if card.event.canRespond { answers(card) }
-            if let note = card.note, note != card.rights.summary {
-                Text(note).themeFont(theme.typeMeta).foregroundStyle(theme.textDanger.color)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("calendar.card.note")
-            }
-            formActions(card)
-        }
-        .padding(theme.space4)
-        .background(RoundedRectangle(cornerRadius: theme.radiusLG).fill(theme.bgWindow.color))
-        .overlay(RoundedRectangle(cornerRadius: theme.radiusLG)
-            .strokeBorder(theme.borderHairline.color, lineWidth: theme.borderWidthHairline))
-        .onExitCommand { model.closeCard() }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(card.event.title)
-        .accessibilityIdentifier("calendar.card")
-    }
-
-    private func pendingHeader(_ move: CalendarPendingMove, _ card: CalendarEventCard) -> some View {
-        let shown = card.form
-        return VStack(alignment: .leading, spacing: 2) {
-            Text(move.kind == .resized ? "Change the length?" : "Move this event?")
-                .themeFont(theme.typeHeadline).foregroundStyle(theme.textPrimary.color)
-            Text("From  \(CalendarPendingMove.line(move.originalStart, move.originalEnd, zone: model.cardTimeZone))")
-                .themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
-            Text("To  \(CalendarPendingMove.line(shown?.start ?? move.proposedStart, shown?.end ?? move.proposedEnd, zone: model.cardTimeZone))")
-                .themeFont(theme.typeMeta).foregroundStyle(theme.textPrimary.color)
-            Text("Nothing changes and nobody is told until you accept. Change the length or anything else below first.")
-                .themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
-        }
-        .accessibilityIdentifier("calendar.card.pendingMove")
-    }
-
     private func formActions(_ card: CalendarEventCard) -> some View {
         let editable = card.rights.hasAnyEditable
         let accepting = card.pendingMove != nil
-        return HStack(spacing: theme.space3) {
-            if editable {
-                Button(accepting ? "Accept" : "Save") { Task { await model.saveCard() } }
-                    .buttonStyle(.borderedProminent).tint(theme.accentFill.color)
-                    .keyboardShortcut(accepting ? .defaultAction : KeyboardShortcut(.return, modifiers: .command))
-                    .disabled(!card.hasChanges)
-                    .help(accepting ? "Accept the change  ↵" : "Save the changes  ⌘↵")
-                    .accessibilityIdentifier(accepting ? "calendar.card.accept" : "calendar.card.save")
-            }
-            Button(editable ? "Cancel" : "Close") { model.closeCard() }
-                .help("Esc").accessibilityIdentifier("calendar.card.cancel")
-            Spacer(minLength: 0)
-            if card.event.id.isEmpty == false, card.rights.hasAnyEditable {
-                Button { Task { await model.duplicateCardEvent() } } label: { Image(systemName: "plus.square.on.square") }
-                    .buttonStyle(.borderless).help("Duplicate this event")
-                    .accessibilityLabel("Duplicate event").accessibilityIdentifier("calendar.card.duplicate")
-            }
-            switch card.rights.delete {
-            case .delete:
-                Button(role: .destructive) { model.askToRemoveCardEvent() } label: { Image(systemName: "trash") }
-                    .buttonStyle(.borderless).foregroundStyle(theme.textDanger.color)
-                    .help("Delete the event (asks first; Undo ⌘Z for a few seconds)")
-                    .accessibilityLabel("Delete event").accessibilityIdentifier("calendar.card.delete")
-            case .declineInstead(let why):
-                Button("Decline") { Task { await model.declineInsteadOfDelete() } }
-                    .help(why).accessibilityIdentifier("calendar.card.decline")
-            case .unavailable(let why):
-                Image(systemName: "trash").foregroundStyle(theme.textTertiary.color).help(why)
-                    .accessibilityLabel("Delete unavailable: \(why)").accessibilityIdentifier("calendar.card.deleteDisabled")
-            }
+        Button(editable ? "Cancel" : "Close") { model.closeCard() }
+            .help("Esc").accessibilityIdentifier("calendar.card.cancel")
+        if editable {
+            Button(accepting ? "Accept" : "Save") { Task { await model.saveCard() } }
+                .buttonStyle(.borderedProminent).tint(theme.accentFill.color)
+                .keyboardShortcut(accepting ? .defaultAction : KeyboardShortcut(.return, modifiers: .command))
+                .disabled(!card.hasChanges)
+                .help(accepting ? "Accept the change  ↵" : "Save the changes  ⌘↵")
+                .accessibilityIdentifier(accepting ? "calendar.card.accept" : "calendar.card.save")
         }
+    }
+
+    @ViewBuilder
+    private func legacyActions(_ card: CalendarEventCard) -> some View {
+        Button("Cancel") { model.closeCard() }
+            .help("Esc").accessibilityIdentifier("calendar.card.cancel")
+        Button("Save") { Task { await model.saveCard() } }
+            .buttonStyle(.borderedProminent)
+            .tint(theme.accentFill.color)
+            .keyboardShortcut(.return, modifiers: .command)
+            .disabled(!card.hasChanges)
+            .help("Save the changes  ⌘↵")
+            .accessibilityIdentifier("calendar.card.save")
     }
 
     private func fieldRow<Content: View>(symbol: String, @ViewBuilder _ content: () -> Content) -> some View {
@@ -309,6 +424,40 @@ struct CalendarEventCardView: View {
             card.end = start.addingTimeInterval(length)
             model.card = card
         })
+    }
+}
+
+struct CalendarAnswerPill: View {
+    let title: String
+    let chosen: Bool
+    let action: () -> Void
+    @Environment(\.theme) private var theme
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .themeFont(chosen ? theme.typeBodyStrong : theme.typeBody)
+                .foregroundStyle(textColor.color)
+                .padding(.horizontal, theme.space4)
+                .frame(minWidth: 52, minHeight: 28)
+                .background(Capsule().fill(fillColor))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
+        .accessibilityAddTraits(chosen ? .isSelected : [])
+    }
+
+    private var textColor: ThemeColor {
+        if !isEnabled { return chosen ? theme.textSecondary : theme.textDisabled }
+        return chosen ? theme.accentOnFill : theme.textPrimary
+    }
+
+    private var fillColor: Color {
+        if chosen { return (isEnabled ? theme.accentFill : theme.bgSunken).color }
+        return (hovered && isEnabled ? theme.bgRowHover : theme.bgSunken).color
     }
 }
 

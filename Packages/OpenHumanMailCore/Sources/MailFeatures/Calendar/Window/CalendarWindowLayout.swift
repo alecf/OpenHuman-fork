@@ -96,6 +96,7 @@ public struct CalendarTimeGrid: Sendable, Hashable {
         public let isDeclined: Bool
         public let startsBefore: Bool
         public let endsAfter: Bool
+        public let isPast: Bool
     }
 
     public struct AllDayBar: Identifiable, Sendable, Hashable {
@@ -120,6 +121,7 @@ public struct CalendarTimeGrid: Sendable, Hashable {
     public let todayIndex: Int?
     public let zoneLabel: String
     public let scrollTarget: Double
+    public let openingHour: Int
 
     public init(days: [Date], events: [CalendarEvent], timeZone: TimeZone, now: Date, owner: String? = nil,
                 colorIndex: (CalendarEvent) -> Int = CalendarDayTimeline.colorIndex(for:)) {
@@ -145,7 +147,8 @@ public struct CalendarTimeGrid: Sendable, Hashable {
                                     columns: item.columns, colorIndex: colorIndex(event),
                                     isOutlined: Self.isOutlined(event, owner: event.account ?? owner),
                                     isDeclined: event.myResponse == .declined,
-                                    startsBefore: event.start < day, endsAfter: event.end > next))
+                                    startsBefore: event.start < day, endsAfter: event.end > next,
+                                    isPast: event.end <= now))
             }
         }
         blocks = placed
@@ -185,6 +188,33 @@ public struct CalendarTimeGrid: Sendable, Hashable {
         } else {
             scrollTarget = 8.0 / 24
         }
+        openingHour = Self.openingHour(nowHour: self.now.map { $0.offset * 24 }, blocks: placed)
+    }
+
+    public static let openingLead = 0.25
+    public static let shortestDrawnHours = 20.0 / 60
+    public static let openingMaxLift = 3
+
+    // Why: a quarter hour of lead keeps the hour label visible, and lifting the hour beats cutting a block
+    public static func openingHour(nowHour: Double?, blocks: [Block]) -> Int {
+        let starts = blocks.filter { !$0.startsBefore }.map { (top: $0.top * 24, height: $0.height * 24) }
+        var hour: Int
+        if let nowHour {
+            hour = Int(nowHour.rounded(.down)) - 1
+        } else if let first = starts.map(\.top).min() {
+            hour = Int(first.rounded(.down))
+        } else {
+            hour = 8
+        }
+        hour = min(max(hour, 0), 23)
+        let highest = max(hour - openingMaxLift, 0)
+        while hour > highest {
+            let edge = Double(hour) - openingLead
+            let cut = starts.filter { $0.top < edge && max($0.top + $0.height, $0.top + shortestDrawnHours) > edge }
+            guard let earliest = cut.map(\.top).min() else { break }
+            hour = max(Int(earliest.rounded(.down)), highest)
+        }
+        return hour
     }
 
     public static func belongsInAllDayRow(_ event: CalendarEvent) -> Bool {

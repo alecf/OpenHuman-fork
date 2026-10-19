@@ -12,7 +12,6 @@ public struct CalendarWindowView: View {
     @Environment(\.theme) private var theme
 
     static let tickInterval: Duration = .seconds(15)
-    static let cardWidth: CGFloat = 340
 
     public init(model: CalendarWindowModel, router: AppRouter) {
         self.model = model
@@ -71,56 +70,26 @@ public struct CalendarWindowView: View {
     private var cardOverlay: some View {
         if model.card != nil {
             GeometryReader { proxy in
-                ScrollView(.vertical) {
-                    CalendarEventCardView(model: model)
-                }
-                .frame(width: Self.cardWidth)
-                .frame(maxHeight: max(proxy.size.height - 2 * theme.space5, 160))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(theme.space5)
-                .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                CalendarEventCardView(model: model, maxHeight: max(proxy.size.height - 2 * theme.space5, 220))
+                    .frame(width: CGFloat(CalendarCardMode.width(available: Double(proxy.size.width - 2 * theme.space5))))
+                    .padding(theme.space5)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
         } else if model.showsPendingCard {
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: theme.space3) {
+            GeometryReader { proxy in
+                ScrollView(.vertical) {
                     CalendarDraftEditor(model: model.sidebar, showsDay: false,
                                         onCancel: { Task { await model.cancelPending() } })
-                    calendarChooser
                 }
-                .frame(width: Self.cardWidth)
+                .frame(width: CGFloat(CalendarCardMode.width(available: Double(proxy.size.width - 2 * theme.space5))))
+                .frame(maxHeight: max(proxy.size.height - 2 * theme.space5, 220))
+                .fixedSize(horizontal: false, vertical: true)
+                .clipShape(RoundedRectangle(cornerRadius: theme.radiusLG))
+                .themeShadow(theme.component.popover.shadow)
+                .padding(theme.space5)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .accessibilityIdentifier("calendar.window.pendingCard")
             }
-            .frame(width: Self.cardWidth)
-            .frame(maxHeight: 680)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(theme.space5)
-            .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
-            .accessibilityIdentifier("calendar.window.pendingCard")
-        }
-    }
-
-    @ViewBuilder
-    private var calendarChooser: some View {
-        let visible = model.sources.filter { !$0.key.isEmpty }
-        if model.pendingIsFromCalendar, visible.count > 1 {
-            HStack(spacing: theme.space2) {
-                Text("Put it on").themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
-                Menu(model.sidebar.draftCalendarAccount ?? String(localized: "Choose a calendar")) {
-                    ForEach(visible) { source in
-                        Button(source.title) {
-                            Task {
-                                if let account = await model.account(forCalendar: source.key) {
-                                    await model.sidebar.chooseDraftCalendar(account: account)
-                                }
-                            }
-                        }
-                    }
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .accessibilityIdentifier("calendar.window.chooseCalendar")
-            }
-            .padding(.horizontal, theme.space4)
         }
     }
 
@@ -199,9 +168,10 @@ struct CalendarWindowToolbar: View {
     var body: some View {
         HStack(spacing: theme.space3) {
             Button { Task { await model.goToToday() } } label: {
-                Text("TODAY").themeFont(theme.typeLabel).foregroundStyle(theme.textPrimary.color)
-                    .padding(.horizontal, theme.space3).padding(.vertical, theme.space1)
-                    .overlay(RoundedRectangle(cornerRadius: theme.radiusSM)
+                Text("Today").themeFont(theme.typeLabel).foregroundStyle(theme.textPrimary.color)
+                    .padding(.horizontal, theme.space4)
+                    .frame(height: 26)
+                    .overlay(RoundedRectangle(cornerRadius: theme.radiusMD)
                         .strokeBorder(theme.borderControl.color, lineWidth: theme.borderWidthHairline))
                     .contentShape(Rectangle())
             }

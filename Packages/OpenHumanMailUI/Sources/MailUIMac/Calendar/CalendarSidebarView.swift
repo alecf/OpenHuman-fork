@@ -304,6 +304,7 @@ struct CalendarDraftEditor: View {
     var takeKeys: () -> Void = {}
     @Environment(\.theme) private var theme
     @State private var feedback: PendingEventStore.Feedback?
+    @State private var calendarChoices: [CalendarSidebarModel.DraftCalendarChoice] = []
 
     var body: some View {
         if let draft = model.draft {
@@ -314,7 +315,8 @@ struct CalendarDraftEditor: View {
                     rights: CalendarFieldRights.forNewEvent(refusal: model.createRefusal),
                     timeZone: model.timeZone, idPrefix: "calendar.draft", meetLink: nil,
                     titleIsSuggested: model.titleIsSuggested, focusesTitle: model.titleIsSuggested,
-                    calendarName: model.calendarLine)
+                    calendarName: model.calendarLine, calendarMenu: calendarMenu,
+                    suggestGuests: { [model] prefix in await model.guestSuggestions(prefix) })
                 if !draft.provenance.isEmpty {
                     Text(draft.provenance).themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
                         .padding(.leading, CalendarDraftEditor.iconColumn)
@@ -332,6 +334,7 @@ struct CalendarDraftEditor: View {
                 actions
             }
             .environment(\.timeZone, model.timeZone)
+            .task { calendarChoices = await model.draftCalendarChoices() }
             .onExitCommand { cancel() }
             .padding(theme.space4)
             .background(RoundedRectangle(cornerRadius: theme.radiusLG).fill(theme.bgWindow.color))
@@ -359,12 +362,20 @@ struct CalendarDraftEditor: View {
         }
     }
 
+    private var calendarMenu: CalendarFormCalendarMenu? {
+        guard calendarChoices.count > 1 else { return nil }
+        let current = (model.draftCalendarAccount ?? "").lowercased()
+        return CalendarFormCalendarMenu(
+            selected: current,
+            choices: calendarChoices.map { (id: $0.id, title: $0.title) },
+            choose: { [model, calendarChoices] id in
+                guard let choice = calendarChoices.first(where: { $0.id == id }) else { return }
+                Task { await model.chooseDraftCalendar(account: choice.account) }
+            })
+    }
+
     @ViewBuilder
     private func status(_ draft: CalendarEventDraft) -> some View {
-        Text(draft.mayEmailAttendees
-             ? "Saved after a few seconds, so Undo (⌘Z) can stop it. Google may email attendees even when invitations are off."
-             : "No attendees: nobody is emailed.")
-            .themeFont(theme.typeCaption).foregroundStyle(theme.textTertiary.color)
         if model.createRefusal == nil, let problem = draft.problem {
             Text(problem).themeFont(theme.typeMeta).foregroundStyle(theme.textWarning.color)
         }
