@@ -18,9 +18,12 @@ requirements. Do not commit binaries, archives, OAuth clients, or credentials.
 - For signing, install your **Developer ID Application** certificate and its
   private key in the signing Mac's login Keychain. An Apple Development
   certificate is insufficient. See [Apple's Developer ID guide](https://developer.apple.com/developer-id/).
-- Run app-hosted tests and signing directly in Terminal.app on the Mac's
-  logged-in desktop. An SSH/headless shell is not an equivalent app-launch or
-  Keychain environment.
+- Run app-hosted tests directly in Terminal.app on the Mac's logged-in
+  desktop. An SSH/headless shell is not an equivalent app-launch environment.
+- Sign in Terminal.app too, unless you have run the one-time setup in
+  [Signing without prompts](LOCAL-SIGNING.md): an SSH login cannot unlock the
+  login keychain. After that setup, signing and notarization also work from SSH
+  logins and scripts.
 
 `Tools/bootstrap.sh` checks Xcode/Swift, downloads checksum-verified XcodeGen,
 and generates the ignored Xcode project. `Tools/versions.env` is authoritative
@@ -161,6 +164,12 @@ tokens, signing keys, or `.p8` files in Git or command arguments. Edit the ignor
 needed, and an optional provisioning-profile path. Names are not the stored
 credentials. The wrapper checks the identity and notary profile before building;
 keep the normal login Keychain available for prompts.
+
+To sign and notarize without prompts, including from SSH logins and scripts,
+run `Tools/signing/setup.sh` once in Terminal.app instead. It keeps a Developer
+ID identity and the notary profile in a separate signing keychain and writes
+`~/.config/openhuman/release.env`, which `make-dmg.sh` reads in every checkout.
+See [Signing without prompts](LOCAL-SIGNING.md).
 
 See [Apple's notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
 
@@ -336,6 +345,10 @@ maintainer's `gh` login and explicitly supply the existing signed artifact:
 Tools/release/publish-github.sh --repo owner/repo \
   --dmg "$DMG" --notes "$OUTPUT/release-notes.md" "$VERSION"
 ```
+
+Outside GitHub Actions the publisher runs only in a terminal: it lists what it
+will send and continues after you type the tag. This is the release's one manual
+step ([Signing without prompts](LOCAL-SIGNING.md#where-the-line-is)).
 
 **Always pass `--dmg` to reuse a signed build.** Without it the publisher builds
 a new unsigned DMG. It checks the clean source/version/channel, tag consistency,

@@ -16,6 +16,8 @@ SCRIPTS = [
     "Tools/release/publish-github.sh",
     "Tools/render-ios.sh",
     "Tools/render-sweep.sh",
+    "Tools/signing/setup.sh",
+    "Tools/signing/verify.sh",
 ]
 NOT_FOR_USERS = re.compile(r"§|\bagents?\b|\bauthor\b", re.IGNORECASE)
 REPO_PATH = re.compile(r"\b(?:Apps|Packages|Tools|docs)/[\w./*-]*\w")

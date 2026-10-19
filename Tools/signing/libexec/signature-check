@@ -1,0 +1,42 @@
+#!/bin/bash
+# Global git hook: warns after an unsigned commit and refuses to push commits you made without a good signature.
+set -u
+dir="$(cd "$(dirname "$0")/.." && pwd)"
+mode="${1:-}"
+[[ $# == 0 ]] || shift
+me="$(git config user.email 2>/dev/null || true)"
+since="$(/bin/cat "$dir/enforce-since" 2>/dev/null || true)"
+
+case "$mode" in
+    post-commit)
+        status="$(git log -1 --format=%G? HEAD 2>/dev/null || true)"
+        [[ "$status" == G ]] && exit 0
+        printf '\ngit-signing: WARNING: commit %s has no good signature (status %s).\n' \
+            "$(git rev-parse --short HEAD 2>/dev/null)" "${status:-?}" >&2
+        printf 'git-signing: sign it before you push: git commit --amend --no-edit -S\n\n' >&2
+        exit 0 ;;
+    pre-push)
+        bad=""
+        while read -r local_ref local_sha _ remote_sha; do
+            [[ "$local_sha" =~ ^0+$ ]] && continue
+            if [[ "$remote_sha" =~ ^0+$ ]] || ! git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+                range=("$local_sha" --not --remotes)
+            else
+                range=("$remote_sha..$local_sha")
+            fi
+            [[ -z "$since" ]] || range+=("--since=$since")
+            while IFS=$'\t' read -r sha email status; do
+                [[ -n "$me" && "$email" == "$me" && "$status" != G ]] || continue
+                bad+="  ${sha:0:12}  status ${status:-?}  ($local_ref)"$'\n'
+            done < <(git log --format='%H%x09%ce%x09%G?' "${range[@]}")
+        done
+        [[ -z "$bad" ]] && exit 0
+        printf 'git-signing: refusing to push commits you made without a good signature (%%G? is not G):\n%s' "$bad" >&2
+        printf 'git-signing: sign the last commit with: git commit --amend --no-edit -S\n' >&2
+        printf 'git-signing: sign a series with:       git rebase --exec "git commit --amend --no-edit -S" <base>\n' >&2
+        printf 'git-signing: check the setup with:     Tools/signing/verify.sh --commits\n' >&2
+        exit 1 ;;
+    *)
+        printf 'usage: signature-check post-commit|pre-push\n' >&2
+        exit 2 ;;
+esac

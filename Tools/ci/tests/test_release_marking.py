@@ -3,6 +3,7 @@ import importlib.util
 import os
 import pathlib
 import plistlib
+import pty
 import re
 import shutil
 import subprocess
@@ -289,7 +290,8 @@ UNSIGNED_NOTES = (NOTICE + "\n\n## Opening an unsigned build\n\nmacOS may block 
 
 class PublishGitHubTests(unittest.TestCase):
     """A throwaway Git repository with copies of the release scripts, invented artifacts outside it, and a stand-in
-    `gh` on PATH that logs each call. Nothing reaches GitHub."""
+    `gh` on PATH that logs each call. Nothing reaches GitHub. GITHUB_ACTIONS is set as on a hosted runner, except in
+    the tests of the confirmation asked for everywhere else."""
 
     def setUp(self):
         self.root = pathlib.Path(tempfile.mkdtemp())
@@ -307,7 +309,8 @@ class PublishGitHubTests(unittest.TestCase):
         (bin_dir / "gh").chmod(0o755)
         self.log = bin_dir / "calls"
         self.env = dict(os.environ, PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}", FAKE_GH_LOG=str(self.log),
-                        FAKE_GH_STATE="missing", GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+                        FAKE_GH_STATE="missing", GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1",
+                        GITHUB_ACTIONS="true")
         self.env.pop("GH_REPO", None)
         self.git("init", "-q")
         self.commit("fixture")
@@ -406,6 +409,41 @@ class PublishGitHubTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("published already", result.stderr)
         self.assertFalse(any(c.startswith(("release edit", "release upload")) for c in self.calls()))
+
+    def publish_at_terminal(self, answer):
+        self.env.pop("GITHUB_ACTIONS")
+        primary, secondary = pty.openpty()
+        try:
+            process = subprocess.Popen([str(self.root / "Tools" / "release" / "publish-github.sh"), "--dmg", str(self.dmg),
+                                        "0.1.0"], env=self.env, stdin=secondary, stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE, text=True)
+            os.close(secondary)
+            os.write(primary, f"{answer}\n".encode())
+            out, err = process.communicate()
+        finally:
+            os.close(primary)
+        return process.returncode, out, err
+
+    def test_outside_github_actions_uploading_needs_a_terminal(self):
+        self.env.pop("GITHUB_ACTIONS")
+        result = subprocess.run([str(self.root / "Tools" / "release" / "publish-github.sh"), "--dmg", str(self.dmg),
+                                 "0.1.0"], env=self.env, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                                check=False)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("the manual release step", result.stderr)
+        self.assertEqual(self.calls(), [])
+
+    def test_typing_the_tag_at_a_terminal_uploads(self):
+        code, out, err = self.publish_at_terminal("v0.1.0")
+        self.assertEqual(code, 0, out + err)
+        self.assertIn(f"upload: {self.dmg}", out)
+        self.assertTrue(any(c.startswith("release create v0.1.0") for c in self.calls()))
+
+    def test_any_other_answer_sends_nothing(self):
+        code, out, err = self.publish_at_terminal("yes")
+        self.assertEqual(code, 1, out + err)
+        self.assertIn("not confirmed. Nothing was sent to GitHub.", err)
+        self.assertEqual(self.calls(), [])
 
     def test_it_refuses_a_dirty_tree(self):
         (self.root / "notes.txt").write_text("untracked\n")

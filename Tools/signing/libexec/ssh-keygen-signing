@@ -1,0 +1,41 @@
+#!/bin/bash
+# Installed as git's gpg.ssh.program. ssh-keygen ignores ~/.ssh/config (IdentityAgent), so the socket is set here.
+set -u
+dir="$(cd "$(dirname "$0")/.." && pwd)"
+sock="$dir/agent.sock"
+label=local.git-signing
+
+signing=0; keyfile=""; prev=""
+for arg in "$@"; do
+    if [[ "$prev" == -Y && "$arg" == sign ]]; then signing=1; fi
+    if [[ "$prev" == -f ]]; then keyfile="$arg"; fi
+    prev="$arg"
+done
+
+fail() {
+    printf 'git-signing: %s\n' "$@" >&2
+    printf 'git-signing: nothing was signed, so git stops here. Fix the signing setup; do not commit without a signature.\n' >&2
+    exit 1
+}
+
+if [[ "$signing" == 1 ]]; then
+    [[ -S "$sock" ]] || fail "the commit-signing key service is not running ($sock is missing)." \
+        "It starts when you log in to the Mac's desktop. Restart it with: launchctl kickstart -k gui/$(id -u)/$label"
+    export SSH_AUTH_SOCK="$sock" SSH_ASKPASS_REQUIRE=never
+    unset SSH_ASKPASS
+    listed="$(/usr/bin/ssh-add -L 2>&1)"; rc=$?
+    if [[ "$rc" == 2 ]]; then
+        fail "cannot connect to $sock: $listed" \
+            "A sandbox may be blocking Unix sockets: allow this socket path, or run the commit outside the sandbox."
+    fi
+    if [[ -n "$keyfile" && -f "$keyfile" ]]; then
+        read -r keytype blob _ <"$keyfile" || true
+        case "${keytype:-}" in
+            ssh-*|sk-*|ecdsa-*)
+                [[ "$listed" == *"${blob:-missing}"* ]] || fail "the signing key is not loaded in $sock." \
+                    "Restart the key service: launchctl kickstart -k gui/$(id -u)/$label" \
+                    "If it stays unloaded, run Tools/signing/setup.sh --commits in Terminal on the Mac." ;;
+        esac
+    fi
+fi
+exec /usr/bin/ssh-keygen "$@"

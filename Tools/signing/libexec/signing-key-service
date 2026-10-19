@@ -1,0 +1,43 @@
+#!/bin/bash
+# launchd entry point: an ssh-agent on a fixed socket that holds only the commit-signing key.
+set -u
+dir="$(cd "$(dirname "$0")/.." && pwd)"
+sock="$dir/agent.sock"
+key="$dir/signing_ed25519"
+umask 077
+
+log() { printf '%s %s\n' "$(/bin/date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
+
+if [[ "${1:-}" != --serve ]]; then
+    /bin/rm -f "$sock"
+    # Why: in command mode ssh-agent exits when this script does, so launchd restarts both together.
+    exec /usr/bin/ssh-agent -a "$sock" /bin/bash "$0" --serve
+fi
+
+unset SSH_ASKPASS
+blob="$(/usr/bin/awk '{ print $2; exit }' "$key.pub" 2>/dev/null)"
+loaded() {
+    local listed
+    listed="$(/usr/bin/ssh-add -L 2>/dev/null)" || return 1
+    [[ -n "$blob" && "$listed" == *"$blob"* ]]
+}
+load() {
+    # Why: --apple-use-keychain reads the passphrase saved in the login keychain; never prompt without a terminal.
+    SSH_ASKPASS_REQUIRE=never /usr/bin/ssh-add --apple-use-keychain "$key" </dev/null >/dev/null 2>&1
+    loaded
+}
+
+if load; then
+    log "signing key loaded"
+else
+    log "signing key not loaded: its passphrase is not in the login keychain, or the keychain is locked; retrying every minute"
+fi
+while :; do
+    /bin/sleep 60
+    /usr/bin/ssh-add -l >/dev/null 2>&1
+    if [[ $? == 2 ]]; then
+        log "ssh-agent stopped answering; exiting so launchd restarts it"
+        exit 1
+    fi
+    if ! loaded && load; then log "signing key loaded"; fi
+done
