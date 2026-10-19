@@ -408,7 +408,7 @@ fi
 if [[ "$UNSIGNED" == 1 ]]; then
     say "NOT signed with a Developer ID and NOT notarized: macOS blocks it at first open until the person allows it."
 else
-    say "next (yours): open it on another Mac first (RELEASE-HOWTO, 'Signed build')."
+    say "next (yours): open it on another Mac first (RELEASE-HOWTO, 'Build the signed DMG without iCloud')."
 fi
 say "To put it on a draft GitHub pre-release (every release is an early development build):"
 say "  Tools/release/publish-github.sh --dmg '$DMG' $VERSION"
