@@ -223,6 +223,28 @@ private final class Suspension: @unchecked Sendable {
     func resume() { release.signal() }
 }
 
+private final class BlockingCall<T: Sendable>: @unchecked Sendable {
+    private let results: AsyncStream<Result<T, Error>>
+
+    init(_ work: @escaping @Sendable () throws -> T) {
+        let (results, sink) = AsyncStream<Result<T, Error>>.makeStream()
+        self.results = results
+        let thread = Thread {
+            sink.yield(Result { try work() })
+            sink.finish()
+        }
+        thread.start()
+    }
+
+    var value: T {
+        get async throws {
+            var iterator = results.makeAsyncIterator()
+            guard let result = await iterator.next() else { throw CancellationError() }
+            return try result.get()
+        }
+    }
+}
+
 private struct LoginItem: Hashable, Sendable {
     var service: String
     var account: String
@@ -831,7 +853,7 @@ private func refusedStatus(_ error: any Error) -> OSStatus? {
         let clients = KeychainClientStore(service: Fixture.clientService, items: items, isAppProcess: { true })
         #expect(try tokens.load(account: Self.other) != nil)
         let waiting = keychain.suspend(service: Fixture.tokenService, account: Fixture.existing)
-        let pending = Task.detached { try tokens.load(account: Fixture.existing) }
+        let pending = BlockingCall { try tokens.load(account: Fixture.existing) }
         await waiting.entered()
 
         let mark = keychain.mark()
@@ -854,7 +876,7 @@ private func refusedStatus(_ error: any Error) -> OSStatus? {
         try plantOther(keychain)
         let install = Install.launch(keychain: keychain, canSync: false)
         let waiting = keychain.suspend(service: Fixture.tokenService, account: Fixture.existing)
-        let pending = Task.detached { try install.synced.load(account: Fixture.existing) }
+        let pending = BlockingCall { try install.synced.load(account: Fixture.existing) }
         await waiting.entered()
 
         #expect(try install.synced.load(account: Self.other)?.refreshToken == "synthetic-refresh-c")
@@ -872,16 +894,16 @@ private func refusedStatus(_ error: any Error) -> OSStatus? {
         let items = KeychainItems(backend: keychain, canHoldSynchronizableItems: false)
         let tokens = KeychainTokenStore(service: Fixture.tokenService, items: items, isAppProcess: { true })
         let waiting = keychain.suspend(service: Fixture.tokenService, account: Fixture.existing)
-        let first = Task.detached { () -> OSStatus? in
+        let first = BlockingCall { () -> OSStatus? in
             do { _ = try tokens.load(account: Fixture.existing); return nil } catch { return refusedStatus(error) }
         }
         await waiting.entered()
-        let second = Task.detached { () -> OSStatus? in
+        let second = BlockingCall { () -> OSStatus? in
             do { _ = try tokens.load(account: Fixture.existing); return nil } catch { return refusedStatus(error) }
         }
         waiting.resume()
-        #expect(await first.value == errSecUserCanceled)
-        #expect(await second.value == errSecUserCanceled)
+        #expect(try await first.value == errSecUserCanceled)
+        #expect(try await second.value == errSecUserCanceled)
         #expect(Budget(ops: keychain.ops(since: 0)).dataReads[LoginItem(service: Fixture.tokenService,
                                                                          account: Fixture.existing)] == 1)
     }
