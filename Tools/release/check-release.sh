@@ -326,7 +326,7 @@ check_dmg() {
         else bad "no valid stapled ticket on the dmg (xcrun stapler validate failed: no ticket, or no internet access)"; fi
         rc=0; out="$(spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg" 2>&1)" || rc=$?
         if [[ "$rc" == 0 ]] && printf '%s\n' "$out" | grep -q 'source=Notarized Developer ID'; then ok "Gatekeeper accepts the dmg (source=Notarized Developer ID)"
-        elif [[ "$rc" == 2 ]]; then warn "spctl did not accept the disk-image arguments on this macOS. Open the dmg on another Mac instead (RELEASE-HOWTO, 'Signed build')"
+        elif [[ "$rc" == 2 ]]; then warn "spctl did not accept the disk-image arguments on this macOS. Open the dmg on another Mac instead (RELEASE-HOWTO, 'Build the signed DMG without iCloud')"
         else bad "Gatekeeper does not accept the dmg as notarized (spctl exit $rc):"; printf '%s\n' "$out" | sed 's/^/          /' | tail -4; fi
     fi
 
