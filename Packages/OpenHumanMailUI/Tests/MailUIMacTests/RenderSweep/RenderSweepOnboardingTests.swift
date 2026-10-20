@@ -129,6 +129,19 @@ extension RenderSweepTests {
             summary.inboxRows.count == 2 && summary.inboxRows[0].syncLine != nil && summary.inboxRows[1].syncLine != nil
         }
         try await shoot(summary, "first-run-guide-ready-two")
+
+        let unavailable: [(String, String)] = [
+            ("first-run-guide-ai-older-macos", "Apple's on-device model in Mail needs macOS 27"),
+            ("first-run-guide-ai-unavailable", "Turn on Apple Intelligence in System Settings"),
+        ]
+        for (screen, hint) in unavailable {
+            let step = OnboardingModel(store: InMemoryOnboardingProgress(), ports: OnboardingModel.Ports(
+                data: data, accounts: data, ai: FakeAIOnboarding(status: .unavailable(hint: hint)),
+                notifier: FakeSystemNotifier(), loginItem: FakeLoginItem(), calendars: calendars, settings: data,
+                openAISettings: {}))
+            await step.go(to: .ai)
+            try await shoot(step, screen)
+        }
     }
 
     @Test(arguments: SweepTheme.lightAndDark)

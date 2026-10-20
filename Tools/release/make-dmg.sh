@@ -413,7 +413,7 @@ DR="$({ codesign -d -r- "$APP" 2>&1 || true; } | sed -n 's/^designated => //p')"
 {
     echo "$NOTICE"
     echo
-    echo "Requires Apple silicon and macOS 27. During onboarding you import your own Google Desktop OAuth client."
+    echo "Requires Apple silicon and macOS 26.0 or later. During onboarding you import your own Google Desktop OAuth client."
     if [[ "$UNSIGNED" == 1 ]]; then
         echo
         echo "## Opening an unsigned build"

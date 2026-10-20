@@ -1,0 +1,14 @@
+{
+  "id": "ai.older-macos",
+  "area": "AI",
+  "title": "AI on macOS 26",
+  "steps": [
+    "On a Mac running macOS 26, open Help › Show Welcome Guide and go to the AI step",
+    "Click Set Up… next to Use Claude Code or Codex",
+    "Look at Models in Settings › AI"
+  ],
+  "deepLink": null,
+  "expected": "The AI step says Apple's on-device model isn't available on this Mac because Mail needs macOS 27 for it, shows Download a small model as Coming in a later version and offers Use Claude Code or Codex. Set Up… opens Settings › AI, where the Apple row says it needs macOS 27 and Claude Code and Codex can be allowed.",
+  "requires": "real",
+  "addedIn": "2026-10-19"
+}

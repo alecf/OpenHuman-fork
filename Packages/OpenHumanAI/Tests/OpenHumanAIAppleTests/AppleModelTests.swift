@@ -6,10 +6,13 @@ import Testing
 @testable import OpenHumanAIApple
 @testable import OpenHumanAITesting
 
-let systemModelIsAvailable = ProcessInfo.processInfo.environment["OH_REAL_SERVICES"] == "1"
-    && SystemLanguageModel.default.isAvailable
+let systemModelIsAvailable: Bool = {
+    guard ProcessInfo.processInfo.environment["OH_REAL_SERVICES"] == "1", #available(macOS 27, iOS 27, *) else { return false }
+    return SystemLanguageModel.default.isAvailable
+}()
 
 @Suite struct AppleModelAvailabilityTests {
+    @available(macOS 27, iOS 27, *)
     @Test func reportsAvailabilityOfTheSystemModelOnThisMac() async {
         let provider = AppleSystemProvider(source: SystemModelSource())
         let availability = await provider.availability()
@@ -22,9 +25,9 @@ let systemModelIsAvailable = ProcessInfo.processInfo.environment["OH_REAL_SERVIC
 }
 
 @Suite(.enabled(if: systemModelIsAvailable, "needs the Apple system model")) struct AppleModelTests {
-    let provider = AppleSystemProvider(source: SystemModelSource())
-
+    @available(macOS 27, iOS 27, *)
     @Test func contextSizeAndTokenCountsComeFromTheRuntime() async throws {
+        let provider = AppleSystemProvider(source: SystemModelSource())
         let capabilities = await provider.capabilities()
         let contextSize = try #require(capabilities.contextTokens)
         #expect(contextSize > 0)
@@ -39,7 +42,9 @@ let systemModelIsAvailable = ProcessInfo.processInfo.environment["OH_REAL_SERVIC
         print("apple.system contextSize=\(contextSize) tokenCount=\(exact) heuristic=\(heuristic) os=\(ProcessInfo.processInfo.operatingSystemVersionString) guided=\(capabilities.structuredOutput)")
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func aFixtureThreadSummaryStreams() async throws {
+        let provider = AppleSystemProvider(source: SystemModelSource())
         let thread = SyntheticThreads.short()
         let features = makeFeatures([provider])
         var chunks = 0
@@ -54,7 +59,9 @@ let systemModelIsAvailable = ProcessInfo.processInfo.environment["OH_REAL_SERVIC
         #expect(chunks >= 1)
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func aRequestLargerThanTheContextWindowIsAContextOverflow() async throws {
+        let provider = AppleSystemProvider(source: SystemModelSource())
         let contextSize = try #require(await provider.capabilities().contextTokens)
         let words = SyntheticThreads.words(contextSize * 3, sentences: true, using: &overflowRNG)
         var request = makeSampleRequest()
@@ -67,6 +74,7 @@ let systemModelIsAvailable = ProcessInfo.processInfo.environment["OH_REAL_SERVIC
         #expect(limit > 0)
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func guidedGenerationDecodesExactlyThreeReplyOptions() async throws {
         let session = LanguageModelSession(model: SystemLanguageModel.default, instructions: "Write short reply options to the email.")
         let response = try await session.respond(
@@ -75,6 +83,7 @@ let systemModelIsAvailable = ProcessInfo.processInfo.environment["OH_REAL_SERVIC
         #expect(response.content.options.allSatisfy { !$0.body.isEmpty })
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func theClassifierReturnsAValidCategory() async throws {
         let classifier = AppleSystemClassifier()
         let thread = AIThreadInput(

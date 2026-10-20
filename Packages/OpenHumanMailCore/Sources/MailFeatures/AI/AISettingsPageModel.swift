@@ -148,6 +148,13 @@ public final class AISettingsPageModel {
                         action: row.needsConsent ? (row.consented ? .stopUsing : .allow) : nil)
         }
         rows += offered.filter { row in !rows.contains { $0.id == row.id } }
+        if let reason = center.appleModel.unavailableReason,
+           !rows.contains(where: { $0.id == AIProviderID.appleSystem.rawValue }) {
+            rows.insert(ProviderRow(id: AIProviderID.appleSystem.rawValue, name: Self.appleModelName,
+                                    status: AIWording.reason(reason), isReady: false,
+                                    badge: AIProviderBadge(providerName: "Apple on-device model", location: .onDevice),
+                                    warning: nil), at: 0)
+        }
         guard listsUnavailableModels else { return rows }
         if !rows.contains(where: { $0.id.hasPrefix("local.") }) {
             rows.append(ProviderRow(id: "local", name: String(localized: "Local model"),
@@ -163,8 +170,10 @@ public final class AISettingsPageModel {
         return rows
     }
 
+    static let appleModelName = String(localized: "On this Mac (Apple Intelligence)")
+
     static func name(_ row: AIProviderRow) -> String {
-        row.id == .appleSystem ? String(localized: "On this Mac (Apple Intelligence)") : row.name
+        row.id == .appleSystem ? appleModelName : row.name
     }
 
     public var accounts: [AccountRow] {

@@ -5,7 +5,7 @@ let ai: Target.Dependency = .product(name: "OpenHumanAI", package: "OpenHumanAI"
 
 let package = Package(
     name: "OpenHumanSemanticIndex",
-    platforms: [.macOS(.v27), .iOS(.v27)],
+    platforms: [.macOS(.v26), .iOS(.v27)],
     products: [
         .library(name: "OpenHumanSemanticIndex", targets: ["OpenHumanSemanticIndex"]),
         .library(name: "OpenHumanSemanticIndexTesting", targets: ["OpenHumanSemanticIndexTesting"]),

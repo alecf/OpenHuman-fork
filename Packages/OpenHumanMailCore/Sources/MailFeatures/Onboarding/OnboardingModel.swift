@@ -65,7 +65,7 @@ public final class OnboardingModel {
                 }
             }
             return nil
-        })
+        }, openAISettings: ports.openAISettings)
     }
 
     public struct Ports {
@@ -77,11 +77,13 @@ public final class OnboardingModel {
         public var signedIn: @MainActor () -> Bool
         public var calendars: (any CalendarConnectionsProviding)?
         public var settings: (any SettingsPort)?
+        public var openAISettings: (@MainActor () -> Void)?
 
         public init(data: any MailDataSource, accounts: (any AccountManaging)?, ai: any AIOnboardingPort,
                     notifier: any SystemNotifying, loginItem: any LoginItemControlling,
                     signedIn: @escaping @MainActor () -> Bool = { true },
-                    calendars: (any CalendarConnectionsProviding)? = nil, settings: (any SettingsPort)? = nil) {
+                    calendars: (any CalendarConnectionsProviding)? = nil, settings: (any SettingsPort)? = nil,
+                    openAISettings: (@MainActor () -> Void)? = nil) {
             self.data = data
             self.accounts = accounts
             self.ai = ai
@@ -90,6 +92,7 @@ public final class OnboardingModel {
             self.signedIn = signedIn
             self.calendars = calendars
             self.settings = settings
+            self.openAISettings = openAISettings
         }
     }
 

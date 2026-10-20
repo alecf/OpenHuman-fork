@@ -3,6 +3,7 @@ import FoundationModels
 import OpenHumanAI
 import Synchronization
 
+@available(macOS 27, iOS 27, *)
 public struct FoundationModelsProvider<Source: FMModelSource>: AIProvider {
     private let source: Source
     private let cache = RuntimeCache()
@@ -122,5 +123,7 @@ public struct FoundationModelsProvider<Source: FMModelSource>: AIProvider {
     }
 }
 
+@available(macOS 27, iOS 27, *)
 public typealias AppleSystemProvider = FoundationModelsProvider<SystemModelSource>
+@available(macOS 27, iOS 27, *)
 public typealias ApplePrivateCloudComputeProvider = FoundationModelsProvider<PrivateCloudComputeSource>

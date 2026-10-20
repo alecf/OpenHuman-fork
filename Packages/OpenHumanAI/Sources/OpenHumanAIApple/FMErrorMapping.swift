@@ -2,6 +2,7 @@ import Foundation
 import FoundationModels
 import OpenHumanAI
 
+@available(macOS 27, iOS 27, *)
 enum FMErrorMapping {
     static func map(_ error: any Error, estimatedTokens: Int, contextLimit: Int?) -> AIError {
         if let error = error as? AIError { return error }

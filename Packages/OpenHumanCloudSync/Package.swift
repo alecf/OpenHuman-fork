@@ -5,7 +5,7 @@ let crypto: Target.Dependency = .product(name: "Crypto", package: "swift-crypto"
 
 let package = Package(
     name: "OpenHumanCloudSync",
-    platforms: [.macOS(.v27), .iOS(.v27)],
+    platforms: [.macOS(.v26), .iOS(.v27)],
     products: [
         .library(name: "OpenHumanCloudSync", targets: ["OpenHumanCloudSync"]),
         .library(name: "OpenHumanCloudSyncTesting", targets: ["OpenHumanCloudSyncTesting"]),

@@ -7,6 +7,7 @@ import Testing
 @testable import OpenHumanAITesting
 
 @Suite struct AppleAdapterTests {
+    @available(macOS 27, iOS 27, *)
     @Test func systemAvailabilityMapsOneToOne() {
         #expect(SystemModelSource.map(.available) == .available)
         #expect(SystemModelSource.map(.unavailable(.deviceNotEligible)) == .unavailable(reason: .deviceNotEligible))
@@ -16,6 +17,7 @@ import Testing
         #expect(SystemModelSource.map(.unavailable(.modelNotReady)) == .unavailable(reason: .modelNotReady))
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func onlyTheRewriteUsesTheContentTransformationGuardrails() async throws {
         #expect(SystemModelSource.usesTransformationGuardrails(.rewrite))
         for task in AITask.allCases where task != .rewrite {
@@ -25,6 +27,7 @@ import Testing
         _ = try await tagging.makeModel(for: .rewrite)
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func privateCloudComputeIsNeverAvailableWithoutTheEntitlement() async {
         let provider = ApplePrivateCloudComputeProvider(source: PrivateCloudComputeSource())
         #expect(provider.id == .applePCC)
@@ -38,15 +41,17 @@ import Testing
         }
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func registrationAddsSystemProviderAndClassifierButNotPCC() {
         #expect(!AppleProviders.registersPrivateCloudComputeInV1)
-        let registry = AppleProviders.makeRegistry()
+        let registry = AppleProviders.makeRegistry(support: .supported)
         #expect(registry.providers.map(\.id) == [.appleSystem])
         #expect(registry.classifiers.map(\.id) == [AppleSystemClassifier.providerID])
         #expect(registry.provider(.applePCC) == nil)
         #expect(registry.classifiers.allSatisfy { $0.dataLocation == .onDevice })
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func foundationModelsErrorsMapPerSection412() {
         func map(_ error: any Error) -> AIError { FMErrorMapping.map(error, estimatedTokens: 77, contextLimit: 1000) }
         let secret = "ZEBRA email text that must not leak"
@@ -70,11 +75,13 @@ import Testing
         }
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func caseNameDropsThePayload() {
         #expect(FMErrorMapping.caseName(LanguageModelError.timeout(.init(debugDescription: "ZEBRA"))) == "timeout")
         #expect(!FMErrorMapping.caseName(LanguageModelError.refusal(.init(explanation: "ZEBRA", debugDescription: "ZEBRA"))).contains("ZEBRA"))
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func generableTriageProducesJSONThatTheCoreValidates() throws {
         for category in [FMTriageCategory.needsReply, .fyi, .newsletter, .notification, .receipt, .calendar, .personal, .other] {
             let triage = FMTriage(category: category, priority: 2, reason: "Because.")
@@ -85,6 +92,7 @@ import Testing
         #expect(Set(TriageCategory.allCases.map(\.rawValue)).count == 8)
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func generableReplyOptionsProduceJSONThatTheCoreValidates() throws {
         let options = FMReplyOptions(options: [
             FMReplyOption(label: "Yes", body: "Yes, Friday works."),
@@ -96,6 +104,7 @@ import Testing
         #expect(parsed[0].label == "Yes")
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func generableSchemasExposeTheClosedCategorySet() throws {
         let schema = try JSONEncoder().encode(FMTriage.generationSchema)
         let text = String(decoding: schema, as: UTF8.self)

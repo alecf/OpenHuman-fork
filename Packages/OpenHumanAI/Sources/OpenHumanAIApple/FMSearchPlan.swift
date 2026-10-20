@@ -2,6 +2,7 @@ import Foundation
 import FoundationModels
 import OpenHumanAI
 
+@available(macOS 27, iOS 27, *)
 @Generable
 enum FMSearchTimeframe {
     case none, today, yesterday, thisWeek, lastWeek, thisMonth, lastMonth, thisYear, lastYear
@@ -31,6 +32,7 @@ enum FMSearchTimeframe {
     }
 }
 
+@available(macOS 27, iOS 27, *)
 @Generable
 enum FMSearchAttachment {
     case notMentioned, any, pdf, document, spreadsheet, presentation, image, calendar
@@ -49,6 +51,7 @@ enum FMSearchAttachment {
     }
 }
 
+@available(macOS 27, iOS 27, *)
 @Generable
 enum FMSearchMailbox {
     case any, inbox, sent, drafts, anywhere
@@ -64,6 +67,7 @@ enum FMSearchMailbox {
     }
 }
 
+@available(macOS 27, iOS 27, *)
 @Generable
 struct FMSearchPlan {
     @Guide(description: "Words that say what the mail is about, as the user wrote them; at most 6")
@@ -92,6 +96,7 @@ struct FMSearchPlan {
     var topic: String
 }
 
+@available(macOS 27, iOS 27, *)
 extension FMSearchPlan {
     var json: Data {
         var object: [String: Any] = [

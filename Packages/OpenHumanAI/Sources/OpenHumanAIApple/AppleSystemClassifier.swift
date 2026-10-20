@@ -14,6 +14,7 @@ extension TriageGenerating {
     }
 }
 
+@available(macOS 27, iOS 27, *)
 struct SystemModelTriageGenerator: TriageGenerating {
     let source: SystemModelSource
 
@@ -36,6 +37,7 @@ struct SystemModelTriageGenerator: TriageGenerating {
     }
 }
 
+@available(macOS 27, iOS 27, *)
 public struct AppleSystemClassifier: AIClassificationProvider {
     public static let providerID: AIProviderID = .appleSystemClassifier
 

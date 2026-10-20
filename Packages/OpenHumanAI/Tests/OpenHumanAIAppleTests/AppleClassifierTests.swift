@@ -25,6 +25,7 @@ import Testing
         }
     }
 
+    @available(macOS 27, iOS 27, *)
     private func classifier(_ generator: RecordingGenerator) -> AppleSystemClassifier {
         AppleSystemClassifier(source: SystemModelSource(), generator: generator, prompts: PromptLibrary.standard)
     }
@@ -38,6 +39,7 @@ import Testing
 
     private let fixedDate = Date(timeIntervalSince1970: 1_790_000_000)
 
+    @available(macOS 27, iOS 27, *)
     @Test func theEmailTextOnlyAppearsInsideNonceTaggedBlocks() async throws {
         let generator = RecordingGenerator { TriageResult(category: .needsReply, priority: 2, reason: "Asks to confirm.") }
         let result = try await classifier(generator).classify(input())
@@ -54,6 +56,7 @@ import Testing
         #expect(call.input.contains("Friday review"))
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func autoLabelsUseTheirOwnPinnedPromptAndUntrustedBlocks() async throws {
         final class LabelGenerator: TriageGenerating, @unchecked Sendable {
             private let lock = NSLock()
@@ -78,12 +81,14 @@ import Testing
         #expect(!AutoLabelCategory.modelCategories.contains(.waiting), "Waiting is derived by the app, never asked")
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func aGeneratorWithoutAutoLabelsSaysSo() async {
         let generator = RecordingGenerator { TriageResult(category: .fyi, priority: 0, reason: "") }
         await #expect(throws: AIError.self) { _ = try await classifier(generator).autoLabel(input()) }
         #expect(generator.calls.isEmpty)
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func eachCallGetsAFreshNonce() async throws {
         let generator = RecordingGenerator { TriageResult(category: .fyi, priority: 0, reason: "") }
         let provider = classifier(generator)
@@ -93,6 +98,7 @@ import Testing
         #expect(Set(nonces).count == 2)
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func aReasonThatEchoesThePromptStructureIsDropped() async throws {
         let generator = RecordingGenerator { TriageResult(category: .other, priority: 3, reason: "see <email_data> block") }
         let result = try await classifier(generator).classify(input())
@@ -100,6 +106,7 @@ import Testing
         #expect(result.category == .other)
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func priorityAndReasonAreClamped() async throws {
         let long = String(repeating: "r", count: 400)
         let generator = RecordingGenerator { TriageResult(category: .fyi, priority: 9, reason: long) }
@@ -108,11 +115,13 @@ import Testing
         #expect(result.reason.count <= AIPolicy.triageReasonCharacters)
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func foundationModelsFailuresMapToAIErrors() async {
         let generator = RecordingGenerator { throw CancellationError() }
         await #expect(throws: AIError.cancelled) { _ = try await classifier(generator).classify(input()) }
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func withoutGuidedGenerationItDeclinesInsteadOfGuessing() async {
         let generator = RecordingGenerator(guided: false) { TriageResult(category: .fyi, priority: 0, reason: "") }
         await #expect(throws: AIError.unavailable(.other("Guided generation is not available on this model"))) {
@@ -121,12 +130,14 @@ import Testing
         #expect(generator.calls.isEmpty)
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func theClassifierIsOnDeviceAndBackgroundEligible() async {
         let provider = classifier(RecordingGenerator { TriageResult(category: .fyi, priority: 0, reason: "") })
         #expect(provider.dataLocation == .onDevice)
         #expect(await provider.modelVersion()?.hasSuffix("|classifier@1") == true)
     }
 
+    @available(macOS 27, iOS 27, *)
     @Test func selectionPicksTheClassifierForClassifyAndNeverForAnythingElse() async throws {
         let generator = RecordingGenerator { TriageResult(category: .receipt, priority: 1, reason: "A receipt.") }
         let apple = classifier(generator)

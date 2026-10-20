@@ -12,8 +12,8 @@ requirements. Do not commit binaries, archives, OAuth clients, or credentials.
 
 ## Prerequisites
 
-- The app requires Apple silicon and macOS 27. Build with full Xcode 27 and
-  Swift 6.4 or later, including Xcode's Metal toolchain component.
+- The app requires Apple silicon and macOS 26.0 or later. Build with full
+  Xcode 27 and Swift 6.4 or later, including Xcode's Metal toolchain component.
 - Install Git and Python 3. Install GitHub CLI (`gh`) for the later upload step.
 - For signing, install your **Developer ID Application** certificate and its
   private key in the signing Mac's login Keychain. An Apple Development
@@ -218,12 +218,14 @@ alone does not prove another Mac can install and launch the app.
 
 ### Smoke-check on another Mac or user account
 
-Use an Apple silicon Mac running macOS 27. Download through a browser so the
-normal quarantine/Gatekeeper path is exercised; verify the checksum, open the
-DMG and drag OpenHuman Mail to Applications. Confirm first launch and rendering.
-Follow the in-app Google setup guide to create/import your own **Desktop app
-OAuth client JSON**, or use Settings › Accounts › Import client JSON…. No shared
-Google client is bundled. Calendar consent is a separate, optional step.
+Use an Apple silicon Mac running macOS 27; if you can, repeat on one running
+macOS 26, where Apple's on-device model is not available. Download through a
+browser so the normal quarantine/Gatekeeper path is exercised; verify the
+checksum, open the DMG and drag OpenHuman Mail to Applications. Confirm first
+launch and rendering. Follow the in-app Google setup guide to create/import your
+own **Desktop app OAuth client JSON**, or use Settings › Accounts › Import client
+JSON…. No shared Google client is bundled. Calendar consent is a separate,
+optional step.
 
 Check sign-in, relaunch with the saved sign-in, recovery after refused Keychain
 access, and features changed by the release. Perform real Gmail/Calendar

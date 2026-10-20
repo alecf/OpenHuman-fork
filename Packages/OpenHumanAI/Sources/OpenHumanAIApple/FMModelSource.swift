@@ -2,6 +2,7 @@ import Foundation
 import FoundationModels
 import OpenHumanAI
 
+@available(macOS 27, iOS 27, *)
 public protocol FMModelSource: Sendable {
     associatedtype Model: LanguageModel
     var providerID: AIProviderID { get }
@@ -17,15 +18,19 @@ public protocol FMModelSource: Sendable {
     func modelVersion() async -> String
 }
 
+@available(macOS 27, iOS 27, *)
 extension FMModelSource {
     public func makeModel(for task: AITask) async throws -> Model { try await makeModel() }
 }
 
+public enum AppleModelUseCase: Sendable, Hashable {
+    case general
+    case contentTagging
+}
+
+@available(macOS 27, iOS 27, *)
 public struct SystemModelSource: FMModelSource {
-    public enum UseCase: Sendable, Hashable {
-        case general
-        case contentTagging
-    }
+    public typealias UseCase = AppleModelUseCase
 
     private let model: SystemLanguageModel
     private let transforming: SystemLanguageModel?
@@ -104,6 +109,7 @@ public struct SystemModelSource: FMModelSource {
     }
 }
 
+@available(macOS 27, iOS 27, *)
 public struct PrivateCloudComputeSource: FMModelSource {
     private let entitlementConfirmed: Bool
 

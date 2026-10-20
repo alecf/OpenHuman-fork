@@ -2,6 +2,7 @@ import Foundation
 import FoundationModels
 import OpenHumanAI
 
+@available(macOS 27, iOS 27, *)
 struct FMSearchMailTool: Tool {
     let session: AISearchToolSession
 

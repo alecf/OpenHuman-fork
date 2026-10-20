@@ -12,6 +12,30 @@ public struct AIChoiceOption: Identifiable, Hashable, Sendable {
     public var id: DraftRepliesChoice { choice }
 }
 
+public enum AIFallbackChoice: String, Hashable, Sendable {
+    case localModel
+    case agentCLI
+}
+
+public struct AIFallbackOption: Identifiable, Hashable, Sendable {
+    public let choice: AIFallbackChoice
+    public let title: String
+    public let detail: String
+    public let actionTitle: String
+    public let isEnabled: Bool
+    public var id: AIFallbackChoice { choice }
+}
+
+public struct LocalModelOffer: Hashable, Sendable {
+    public let downloadBytes: Int64
+    public let memoryBytes: Int64
+
+    public init(downloadBytes: Int64, memoryBytes: Int64) {
+        self.downloadBytes = downloadBytes
+        self.memoryBytes = memoryBytes
+    }
+}
+
 public struct SampleSummary: Hashable, Sendable {
     public let text: String
     public let badge: String
@@ -24,6 +48,9 @@ public final class AIStepModel {
     public static let footnote = "You can change this any time in Settings › AI. Agent CLIs (Claude Code, Codex) are off, and "
         + "quick replies are never auto-generated with them unless you opt in."
     public static let badge = "On this Mac"
+    public static let unavailableTitle = "Apple's on-device model isn't available on this Mac."
+    // Why: no small local model ships in this version; an offer here turns the download choice on
+    nonisolated public static let localModelOffer: LocalModelOffer? = nil
 
     public private(set) var status: OnDeviceAIStatus = .unavailable(hint: "Checking this Mac…")
     public private(set) var options: [AIChoiceOption] = []
@@ -33,13 +60,25 @@ public final class AIStepModel {
     public private(set) var sample: SampleSummary?
     public private(set) var sampleNote: String?
     public private(set) var errorMessage: String?
+    public private(set) var fallbacks: [AIFallbackOption] = []
 
     @ObservationIgnored private let port: any AIOnboardingPort
     @ObservationIgnored private let sampleThread: @MainActor () async -> ThreadKey?
+    @ObservationIgnored private let localModel: LocalModelOffer?
+    @ObservationIgnored private let openAISettings: (@MainActor () -> Void)?
 
-    public init(port: any AIOnboardingPort, sampleThread: @escaping @MainActor () async -> ThreadKey? = { nil }) {
+    public init(port: any AIOnboardingPort, sampleThread: @escaping @MainActor () async -> ThreadKey? = { nil },
+                localModel: LocalModelOffer? = AIStepModel.localModelOffer,
+                openAISettings: (@MainActor () -> Void)? = nil) {
         self.port = port
         self.sampleThread = sampleThread
+        self.localModel = localModel
+        self.openAISettings = openAISettings
+    }
+
+    public var unavailableReason: String? {
+        guard !fallbacks.isEmpty, case .unavailable(let hint) = status else { return nil }
+        return hint
     }
 
     public func load(previous: DraftRepliesChoice? = nil) async {
@@ -56,11 +95,35 @@ public final class AIStepModel {
             AIChoiceOption(choice: .off, title: "Not at all", detail: "Reply drafting is off.", isEnabled: true,
                            disabledReason: nil),
         ]
+        fallbacks = available ? [] : Self.fallbacks(localModel: localModel, canOpenSettings: openAISettings != nil)
         if let previous, options.first(where: { $0.choice == previous })?.isEnabled == true {
             selected = previous
         } else {
             selected = available ? .onDeviceAuto : .onDemand
         }
+    }
+
+    public func choose(_ fallback: AIFallbackChoice) {
+        guard fallbacks.first(where: { $0.choice == fallback })?.isEnabled == true else { return }
+        openAISettings?()
+    }
+
+    static func fallbacks(localModel: LocalModelOffer?, canOpenSettings: Bool) -> [AIFallbackOption] {
+        let download: AIFallbackOption
+        if let localModel {
+            let size = ByteCountFormatter.string(fromByteCount: localModel.downloadBytes, countStyle: .file)
+            let memory = ByteCountFormatter.string(fromByteCount: localModel.memoryBytes, countStyle: .memory)
+            download = AIFallbackOption(choice: .localModel, title: "Download a small model",
+                                        detail: "Runs on this Mac. About \(size) to download; needs \(memory) of memory.",
+                                        actionTitle: "Download…", isEnabled: canOpenSettings)
+        } else {
+            download = AIFallbackOption(choice: .localModel, title: "Download a small model",
+                                        detail: "Coming in a later version", actionTitle: "Download…", isEnabled: false)
+        }
+        let agents = AIFallbackOption(choice: .agentCLI, title: "Use Claude Code or Codex",
+                                      detail: "Sends the text of the email it works on to that company. You choose which accounts.",
+                                      actionTitle: "Set Up…", isEnabled: canOpenSettings)
+        return [download, agents]
     }
 
     public func confirm() async {

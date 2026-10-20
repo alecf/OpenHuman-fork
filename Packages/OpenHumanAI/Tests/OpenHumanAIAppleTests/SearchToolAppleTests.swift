@@ -6,6 +6,7 @@ import Testing
 @testable import OpenHumanAITesting
 
 @Suite struct SearchToolAppleTests {
+    @available(macOS 27, iOS 27, *)
     @Test func theToolPassesTheModelsArgumentsToTheSessionAndReturnsDelimitedText() async throws {
         let backend = FakeSearchToolBackend(hits: [
             AISearchToolHit(id: "t1", sender: "Sam Sample", subject: "Invoice 42", date: nil, snippet: "Attached."),
