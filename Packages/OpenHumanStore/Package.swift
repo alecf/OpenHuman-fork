@@ -5,7 +5,7 @@ let grdb: Target.Dependency = .product(name: "GRDB", package: "GRDB.swift")
 
 let package = Package(
     name: "OpenHumanStore",
-    platforms: [.macOS(.v27), .iOS(.v27)],
+    platforms: [.macOS(.v26), .iOS(.v27)],
     products: [
         .library(name: "OpenHumanStore", targets: ["OpenHumanStore"]),
         .library(name: "OpenHumanStoreTesting", targets: ["OpenHumanStoreTesting"]),

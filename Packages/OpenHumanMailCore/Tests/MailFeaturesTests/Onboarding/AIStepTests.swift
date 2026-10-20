@@ -111,6 +111,50 @@ struct AIStepTests {
         #expect(AIStepModel.explanation.contains("never turned on unless you do it yourself"))
         #expect(AIStepModel.footnote.contains("never auto-generated"))
     }
+
+    @Test func withoutApplesModelTheStepOffersADisabledDownloadAndClaudeOrCodex() async {
+        var opened = 0
+        let hint = "Apple's on-device model in Mail needs macOS 27"
+        let ai = FakeAIOnboarding(status: .unavailable(hint: hint))
+        let model = AIStepModel(port: ai, openAISettings: { opened += 1 })
+        await model.load()
+        #expect(model.unavailableReason == hint)
+        #expect(model.fallbacks.map(\.choice) == [.localModel, .agentCLI])
+        let download = model.fallbacks.first { $0.choice == .localModel }
+        #expect(download?.isEnabled == false && download?.detail == "Coming in a later version")
+        let agents = model.fallbacks.first { $0.choice == .agentCLI }
+        #expect(agents?.isEnabled == true && agents?.title == "Use Claude Code or Codex")
+        #expect(agents?.detail == "Sends the text of the email it works on to that company. You choose which accounts.")
+        model.choose(.localModel)
+        #expect(opened == 0, "a choice that is not offered yet does nothing")
+        model.choose(.agentCLI)
+        #expect(opened == 1, "Claude Code and Codex are allowed in Settings › AI, never from here")
+        #expect(ai.log == ["status"], "choosing a fallback stores nothing and calls no model")
+        let agentAuto = await ai.agentCLIAutoQuickReplies()
+        #expect(!agentAuto)
+    }
+
+    @Test func withApplesModelReadyNoFallbackIsShown() async {
+        let model = AIStepModel(port: FakeAIOnboarding(status: .available), openAISettings: {})
+        await model.load()
+        #expect(model.fallbacks.isEmpty && model.unavailableReason == nil)
+    }
+
+    @Test func withoutAWayToOpenSettingsTheChoicesAreShownButNotEnabled() async {
+        let model = AIStepModel(port: FakeAIOnboarding(status: .unavailable(hint: "nope")))
+        await model.load()
+        #expect(model.fallbacks.count == 2 && model.fallbacks.allSatisfy { !$0.isEnabled })
+    }
+
+    @Test func aSmallModelOfferTurnsTheDownloadChoiceOnWithItsSize() async throws {
+        let offer = LocalModelOffer(downloadBytes: 1_000_000_000, memoryBytes: 2_147_483_648)
+        let model = AIStepModel(port: FakeAIOnboarding(status: .unavailable(hint: "nope")), localModel: offer,
+                                openAISettings: {})
+        await model.load()
+        let download = try #require(model.fallbacks.first { $0.choice == .localModel })
+        #expect(download.isEnabled && download.detail.hasPrefix("Runs on this Mac. About "))
+        #expect(AIStepModel.localModelOffer == nil, "this version ships no small model")
+    }
 }
 
 @MainActor

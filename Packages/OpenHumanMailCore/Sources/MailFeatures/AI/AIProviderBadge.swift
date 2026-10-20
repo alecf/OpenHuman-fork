@@ -52,6 +52,8 @@ public enum AIWording {
             return String(localized: "Turn on Apple Intelligence in System Settings")
         case .modelNotReady:
             return String(localized: "Apple's on-device model is still getting ready. Try again in a few minutes")
+        case .requiresNewerOS:
+            return String(localized: "Apple's on-device model in Mail needs macOS 27")
         case .entitlementMissing:
             return String(localized: "Not available in this version of Mail")
         case .usageLimitReached:

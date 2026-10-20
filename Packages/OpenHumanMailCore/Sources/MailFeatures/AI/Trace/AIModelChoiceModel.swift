@@ -198,6 +198,7 @@ public final class AIModelChoiceModel {
         switch reason {
         case .appleIntelligenceNotEnabled: String(localized: "Apple Intelligence is off")
         case .modelNotReady: String(localized: "still getting ready")
+        case .requiresNewerOS: String(localized: "needs macOS 27")
         case .notLoggedIn: String(localized: "not signed in")
         case .unsupportedVersion: String(localized: "needs an update")
         case .localeNotSupported: String(localized: "doesn't support this language")

@@ -21,7 +21,7 @@ DATA_LAYER="OpenHumanCore OpenHumanLinks OpenHumanStore OpenHumanGmail OpenHuman
 for manifest in Packages/*/Package.swift; do
     pkg="$(basename "$(dirname "$manifest")")"
     head -1 "$manifest" | grep -qx '// swift-tools-version: 6.4' || fail "$manifest: first line must be '// swift-tools-version: 6.4'"
-    grep -q '\.macOS(\.v27)' "$manifest" || fail "$manifest: platforms must include .macOS(.v27)"
+    grep -q '\.macOS(\.v26)' "$manifest" || fail "$manifest: platforms must include .macOS(.v26)"
     if [[ "$pkg" != "OpenHumanCLI" ]]; then
         grep -q '\.iOS(\.v27)' "$manifest" || fail "$manifest: platforms must include .iOS(.v27)"
     fi

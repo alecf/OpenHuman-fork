@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "OpenHumanCLI",
-    platforms: [.macOS(.v27)],
+    platforms: [.macOS(.v26)],
     products: [
         .executable(name: "openhuman", targets: ["openhuman"]),
         .library(name: "OpenHumanCLIKit", targets: ["OpenHumanCLIKit"]),

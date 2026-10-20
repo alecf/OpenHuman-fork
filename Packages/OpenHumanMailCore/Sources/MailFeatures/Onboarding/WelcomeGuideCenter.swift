@@ -38,7 +38,8 @@ public final class WelcomeGuideCenter {
                 ai: environment.aiOnboarding ?? UnavailableAIOnboarding(), notifier: system.platform.notifier,
                 loginItem: system.platform.loginItem,
                 signedIn: { true },
-                calendars: environment.calendarConnections, settings: environment.settings))
+                calendars: environment.calendarConnections, settings: environment.settings,
+                openAISettings: { [weak environment] in environment?.settingsNavigator.open(SettingsPageID.ai.rawValue) }))
         self.model = model
         Task { await model.enter() }
     }

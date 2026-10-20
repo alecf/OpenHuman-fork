@@ -2,6 +2,7 @@ import Foundation
 import FoundationModels
 import OpenHumanAI
 
+@available(macOS 27, iOS 27, *)
 @Generable
 enum FMTriageCategory {
     case needsReply, fyi, newsletter, notification, receipt, calendar, personal, other
@@ -20,6 +21,7 @@ enum FMTriageCategory {
     }
 }
 
+@available(macOS 27, iOS 27, *)
 @Generable
 struct FMTriage {
     @Guide(description: "The best matching category")
@@ -32,6 +34,7 @@ struct FMTriage {
     var result: TriageResult { TriageResult(category: category.category, priority: priority, reason: reason) }
 }
 
+@available(macOS 27, iOS 27, *)
 @Generable
 enum FMAutoLabelCategory {
     case other, meeting, invoice, travel, news, marketing, social, pitch, respond
@@ -51,12 +54,14 @@ enum FMAutoLabelCategory {
     }
 }
 
+@available(macOS 27, iOS 27, *)
 @Generable
 struct FMAutoLabel {
     @Guide(description: "The one auto label that clearly fits, or other when unsure")
     var category: FMAutoLabelCategory
 }
 
+@available(macOS 27, iOS 27, *)
 @Generable
 struct FMReplyOption {
     @Guide(description: "At most 4 words")
@@ -64,12 +69,14 @@ struct FMReplyOption {
     var body: String
 }
 
+@available(macOS 27, iOS 27, *)
 @Generable
 struct FMReplyOptions {
     @Guide(.count(3))
     var options: [FMReplyOption]
 }
 
+@available(macOS 27, iOS 27, *)
 @Generable
 struct FMFollowUp {
     @Guide(description: "true when the message asks a question, requests something, proposes a meeting or waits on a decision")
@@ -80,6 +87,7 @@ struct FMFollowUp {
     var suggestedDays: Int
 }
 
+@available(macOS 27, iOS 27, *)
 extension FMFollowUp {
     var json: Data {
         let days: Any = suggestedDays > 0 ? suggestedDays : NSNull()
@@ -88,6 +96,7 @@ extension FMFollowUp {
     }
 }
 
+@available(macOS 27, iOS 27, *)
 extension FMTriage {
     var json: Data {
         let object: [String: Any] = ["category": category.category.rawValue, "priority": priority, "reason": reason]
@@ -95,6 +104,7 @@ extension FMTriage {
     }
 }
 
+@available(macOS 27, iOS 27, *)
 extension FMReplyOptions {
     var json: Data {
         let object: [String: Any] = ["options": options.map { ["label": $0.label, "body": $0.body] }]

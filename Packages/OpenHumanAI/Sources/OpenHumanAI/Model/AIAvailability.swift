@@ -12,7 +12,7 @@ public enum AIAvailability: Sendable, Hashable {
     }
 
     public enum UnavailableReason: Sendable, Hashable {
-        case deviceNotEligible, appleIntelligenceNotEnabled, modelNotReady
+        case deviceNotEligible, appleIntelligenceNotEnabled, modelNotReady, requiresNewerOS
         case entitlementMissing, usageLimitReached
         case modelNotDownloaded(sizeBytes: Int64), downloading(progress: Double)
         case binaryNotFound(name: String), notLoggedIn(name: String), unsupportedVersion(found: String, minimum: String)

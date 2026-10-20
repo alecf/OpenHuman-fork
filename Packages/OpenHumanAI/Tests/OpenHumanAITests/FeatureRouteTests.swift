@@ -63,6 +63,21 @@ import Testing
         #expect(offOnly.origin == .firstReady && offOnly.defaultModel == nil)
     }
 
+    @Test func withOnlyClaudeAndCodexTheFeaturesYouAskForUseClaudeAndOnDeviceOnesStayOff() {
+        let candidates = [Self.claude, ProviderSelectionTests.codex]
+        let summary = route(.summarize, candidates)
+        #expect(summary.origin == .firstReady && summary.defaultModel == nil)
+        #expect(summary.selection.candidate?.id == .agentClaude)
+        #expect(route(.rewrite, candidates).selection.candidate?.id == .agentClaude)
+        #expect(route(.followUp, candidates, workload: .background).selection
+            == .unavailable(.onDeviceOnly, providerID: .agentClaude))
+        #expect(route(.askInbox, candidates).selection == .unavailable(.onDeviceOnly, providerID: .agentClaude),
+                "Ask needs a pin")
+        var settings = AISettings()
+        settings.featurePins[.askInbox] = .agentClaude
+        #expect(route(.askInbox, candidates, settings).selection.candidate?.id == .agentClaude)
+    }
+
     static let appleClassifier = ProviderCandidate(
         id: .appleSystemClassifier, displayName: "Apple classifier", kind: .classifier, dataLocation: .onDevice,
         availability: .available, consented: true, autoSelectable: true)

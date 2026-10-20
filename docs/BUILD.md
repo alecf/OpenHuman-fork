@@ -1,7 +1,8 @@
 # Build and test
 
-The application targets Apple silicon and macOS 27. Use Xcode 27 with Swift 6.4
-or later; older Swift toolchains cannot parse the package platform declarations.
+The application targets Apple silicon and macOS 26.0 or later. Use Xcode 27
+with Swift 6.4 or later; older Swift toolchains cannot parse the package platform
+declarations.
 MLX compiles Metal shaders, which needs Xcode's Metal toolchain component
 (`xcodebuild -downloadComponent MetalToolchain` installs it).
 

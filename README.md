@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="macOS 27 on Apple silicon" src="https://img.shields.io/badge/macOS-27%20%C2%B7%20Apple%20silicon-17614d?style=flat-square&logo=apple&logoColor=white">
+  <img alt="macOS 26 or later on Apple silicon" src="https://img.shields.io/badge/macOS-26%2B%20%C2%B7%20Apple%20silicon-17614d?style=flat-square&logo=apple&logoColor=white">
   <img alt="Swift 6.4" src="https://img.shields.io/badge/Swift-6.4-F05138?style=flat-square&logo=swift&logoColor=white">
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-3a3a3a?style=flat-square"></a>
   <img alt="Status: early development" src="https://img.shields.io/badge/status-early%20development-c98a1b?style=flat-square">
@@ -17,7 +17,7 @@
 
 <p align="center">
   <a href="#core-features">Core features</a> ·
-  <a href="#opening-an-unsigned-build">Unsigned builds</a> ·
+  <a href="#download-and-install">Download</a> ·
   <a href="#build">Build</a> ·
   <a href="docs/cli/README.md">CLI</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
@@ -29,9 +29,9 @@ OpenHuman is an open-source, clean-room clone of Superhuman.
 
 It is Swift-native, runs locally (including its AI features), and is agent-ready, with a command-line interface for external AI agents.
 
-It has only been tested on Apple silicon, macOS 27, Xcode 27, and Swift 6.4.
+This is a very early alpha, so expect bugs. It runs on Apple silicon Macs with macOS 26.0 or later. Its author has only tested it on macOS 27 on Apple silicon. Features that depend on macOS 27, such as Apple's on-device model, degrade gracefully on macOS 26 and offer alternatives. It is built with Xcode 27 and Swift 6.4.
 
-This is early software under active development. Downloadable builds, when published, are on [Releases](https://github.com/michaelmagan/OpenHuman/releases). You can also build from source. Maintainers can follow the [release guide](docs/release/RELEASE-HOWTO.md) to build, verify and publish a DMG. Homebrew installation will be announced when ready.
+[Download the signed and notarized release](https://github.com/michaelmagan/OpenHuman/releases/tag/v0.1.0), or build from source. Maintainers can follow the [release guide](docs/release/RELEASE-HOWTO.md) to build, verify and publish a DMG. Homebrew installation will be announced when ready.
 
 <br>
 
@@ -81,9 +81,17 @@ This is early software under active development. Downloadable builds, when publi
 - **Themes.** Six built-in themes, and [your own](docs/themes.md) as plain JSON files.
 - **A CLI for agents.** `openhuman` reads the same local mail, writes drafts for you to review, and never sends. It includes an MCP server. See the [CLI documentation](docs/cli/README.md).
 
+## Download and install
+
+[Download version 0.1.0](https://github.com/michaelmagan/OpenHuman/releases/tag/v0.1.0). This early alpha release is a Developer ID signed, Apple-notarized DMG for Apple silicon Macs running macOS 26.0 or later.
+
+Open the DMG and drag OpenHuman Mail to Applications. On first launch, follow onboarding to create and import your own Google Desktop app OAuth client. No shared Google client is bundled.
+
 ## Opening an unsigned build
 
 macOS may block unsigned builds because they are not notarized by Apple. To open one, try to open the app once. Then open System Settings, click Privacy & Security, and scroll to Security. Click Open Anyway, enter your login password, and click OK. The Open Anyway button stays available for about an hour after you first try to open the app.
+
+Local development builds and CI development artifacts use ad-hoc signing and are not notarized by Apple.
 
 ## Build
 

@@ -1,7 +1,7 @@
 name: Mail
 options:
   bundleIdPrefix: dev.openhuman
-  deploymentTarget: { macOS: "27.0" }
+  deploymentTarget: { macOS: "26.0" }
   createIntermediateGroups: true
   preGenCommand: python3 ../../Tools/ci/checklist.py build
 configs:
@@ -39,7 +39,7 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.productivity
-        LSMinimumSystemVersion: "27.0"
+        LSMinimumSystemVersion: "26.0"
         LSFileQuarantineEnabled: true
         CFBundleURLTypes:
           - { CFBundleURLName: dev.openhuman.mail.link, CFBundleURLSchemes: [openhuman] }

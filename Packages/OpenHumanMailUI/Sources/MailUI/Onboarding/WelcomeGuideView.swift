@@ -508,6 +508,9 @@ private struct AIStep: View {
         VStack(alignment: .leading, spacing: theme.space4) {
             Text(AIStepModel.explanation).themeFont(theme.typeReader).foregroundStyle(theme.textSecondary.color)
                 .fixedSize(horizontal: false, vertical: true)
+            if let reason = model.unavailableReason {
+                fallbacks(reason: reason)
+            }
             ForEach(model.options) { option in
                 Button { model.selected = option.choice } label: {
                     HStack(alignment: .top, spacing: theme.space3) {
@@ -517,7 +520,7 @@ private struct AIStep: View {
                             Text(option.title).themeFont(theme.typeBodyStrong)
                                 .foregroundStyle(option.isEnabled ? theme.textPrimary.color : theme.textTertiary.color)
                             Text(option.detail).themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
-                            if let reason = option.disabledReason {
+                            if let reason = option.disabledReason, model.unavailableReason == nil {
                                 Text(reason).themeFont(theme.typeMeta).foregroundStyle(theme.textWarning.color)
                             }
                         }
@@ -547,5 +550,50 @@ private struct AIStep: View {
                 Text(error).themeFont(theme.typeBody).foregroundStyle(theme.textDanger.color)
             }
         }
+    }
+
+    private func fallbacks(reason: String) -> some View {
+        VStack(alignment: .leading, spacing: theme.space3) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(AIStepModel.unavailableTitle).themeFont(theme.typeBodyStrong).foregroundStyle(theme.textPrimary.color)
+                Text(reason).themeFont(theme.typeMeta).foregroundStyle(theme.textWarning.color)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .combine)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(model.fallbacks) { option in
+                    if option.id != model.fallbacks.first?.id {
+                        Rectangle().fill(theme.borderHairline.color).frame(height: theme.borderWidthHairline)
+                            .accessibilityHidden(true)
+                    }
+                    fallbackRow(option)
+                }
+            }
+            .padding(.horizontal, theme.space3)
+            .background(RoundedRectangle(cornerRadius: theme.radiusMD).fill(theme.bgSunken.color))
+        }
+    }
+
+    private func fallbackRow(_ option: AIFallbackOption) -> some View {
+        HStack(spacing: theme.space3) {
+            Image(systemName: option.choice == .localModel ? "arrow.down.circle" : "arrow.up.right")
+                .foregroundStyle((option.isEnabled ? theme.textSecondary : theme.textTertiary).color)
+                .frame(width: 16)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(option.title).themeFont(theme.typeBodyStrong)
+                    .foregroundStyle((option.isEnabled ? theme.textPrimary : theme.textTertiary).color)
+                Text(option.detail).themeFont(theme.typeMeta).foregroundStyle(theme.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            if option.isEnabled {
+                Button(option.actionTitle) { model.choose(option.choice) }
+                    .accessibilityLabel(option.title)
+            }
+        }
+        .padding(.vertical, theme.space3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
     }
 }

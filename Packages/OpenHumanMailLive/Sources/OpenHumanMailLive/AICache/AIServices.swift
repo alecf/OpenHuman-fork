@@ -14,7 +14,8 @@ public enum AIServices {
     public static var cacheDirectory: URL?
 
     public static func aiCenter(model: Model, persistent: Bool,
-                                environment: [String: String] = ProcessInfo.processInfo.environment) -> AICenter {
+                                environment: [String: String] = ProcessInfo.processInfo.environment,
+                                appleModel: AppleModelSupport = .current) -> AICenter {
         let underTest = environment["XCTestConfigurationFilePath"] != nil
             || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         PromptServices.install(persistent: persistent && !underTest && model != .fake, directory: cacheDirectory)
@@ -30,11 +31,12 @@ public enum AIServices {
                 : [FakeClassifier(id: "fake.autolabels", displayName: "Fake classifier",
                                   autoLabel: { FakeClassifier.keywordAutoLabel($0) })]
             return AICenter.make(registry: ProviderRegistry(providers: [provider], classifiers: classifiers),
-                                 settings: AISettingsBox(store: InMemoryAISettingsStore()), traces: InMemoryAITraceStore())
+                                 settings: AISettingsBox(store: InMemoryAISettingsStore()), traces: InMemoryAITraceStore(),
+                                 appleModel: appleModel)
         }
         let settings = AISettingsBox(store: persistent ? AISettingsStore() as any AISettingsStoring : InMemoryAISettingsStore())
         let registry = ProviderRegistry()
-        AppleProviders.register(in: registry)
+        AppleProviders.register(in: registry, support: appleModel)
         ClassifierServices.install(registry: registry, settings: settings)
         let makeProvider: @Sendable (AIProviderID) -> (any AIProvider)? = { id in agentCLI(id, settings: settings.current) }
         for id in [AIProviderID.agentClaude, .agentCodex] where settings.current.consents[id] != nil {
@@ -51,7 +53,7 @@ public enum AIServices {
             traces = file
         }
         return AICenter.make(registry: registry, settings: settings, cache: cache, traces: traces,
-                             makeProvider: makeProvider)
+                             makeProvider: makeProvider, appleModel: appleModel)
     }
 
     nonisolated static func agentCLI(_ id: AIProviderID, settings: AISettings) -> (any AIProvider)? {

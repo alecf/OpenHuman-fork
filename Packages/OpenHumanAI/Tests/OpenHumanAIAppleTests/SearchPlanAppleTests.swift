@@ -5,6 +5,7 @@ import Testing
 @testable import OpenHumanAIApple
 
 @Suite(.enabled(if: systemModelIsAvailable, "needs the Apple system model")) struct SearchPlanAppleTests {
+    @available(macOS 27, iOS 27, *)
     @Test func theSystemModelPlansASearchOnThisMac() async throws {
         let features = makeFeatures([AppleSystemProvider(source: SystemModelSource())])
         let clock = ContinuousClock()

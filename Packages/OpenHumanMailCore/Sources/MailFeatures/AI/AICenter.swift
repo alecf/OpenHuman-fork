@@ -14,6 +14,7 @@ public final class AICenter {
     public private(set) var providers: [AIProviderRow] = []
     @ObservationIgnored public var pasteboard: (any TextPasteboard)?
     @ObservationIgnored public var instantReplyTiming = InstantReplyTiming()
+    @ObservationIgnored public let appleModel: AppleModelSupport
 
     @ObservationIgnored let settingsBox: AISettingsBox
     @ObservationIgnored let cache: (any AIResultCache)?
@@ -39,7 +40,7 @@ public final class AICenter {
                 cache: (any AIResultCache)? = nil, activity: AIActivityLog = AIActivityLog(),
                 traces: (any AITraceStore)? = nil,
                 makeProvider: @escaping @Sendable (AIProviderID) -> (any AIProvider)? = { _ in nil },
-                bodyTimeout: Duration = .seconds(20)) {
+                bodyTimeout: Duration = .seconds(20), appleModel: AppleModelSupport = .current) {
         self.features = features
         self.registry = registry
         self.settingsBox = settings
@@ -49,19 +50,21 @@ public final class AICenter {
         self.traces = traces
         self.makeProvider = makeProvider
         self.bodyTimeout = bodyTimeout
+        self.appleModel = appleModel
     }
 
     public static func make(registry: ProviderRegistry, settings: AISettingsBox,
                             cache: any AIResultCache = InMemoryAIResultCache(), activity: AIActivityLog = AIActivityLog(),
                             traces: (any AITraceStore)? = nil,
-                            makeProvider: @escaping @Sendable (AIProviderID) -> (any AIProvider)? = { _ in nil })
+                            makeProvider: @escaping @Sendable (AIProviderID) -> (any AIProvider)? = { _ in nil },
+                            appleModel: AppleModelSupport = .current)
         -> AICenter
     {
         let sink = traces.map { store in StoreTraceSink(store: store, settings: { settings.current.traces }) }
         let features = DefaultAIFeatures(registry: registry, settings: { settings.current }, cache: cache,
                                          activity: activity, traces: sink)
         return AICenter(features: features, registry: registry, settings: settings, cache: cache, activity: activity,
-                        traces: traces, makeProvider: makeProvider)
+                        traces: traces, makeProvider: makeProvider, appleModel: appleModel)
     }
 
     func attach(_ environment: AppEnvironment) {
@@ -329,7 +332,9 @@ public final class AICenter {
     }
 
     public func onDeviceStatus() async -> (available: Bool, hint: String?) {
-        guard let registry else { return (false, String(localized: "No on-device model is set up")) }
+        let noModel = appleModel.unavailableReason.map { AIWording.reason($0) }
+            ?? String(localized: "No on-device model is set up")
+        guard let registry else { return (false, noModel) }
         var firstReason: String?
         for provider in registry.providers {
             guard await provider.capabilities().dataLocation == .onDevice else { continue }
@@ -340,7 +345,7 @@ public final class AICenter {
                 if firstReason == nil { firstReason = AIWording.reason(reason, providerName: provider.displayName) }
             }
         }
-        return (false, firstReason ?? String(localized: "No on-device model is set up"))
+        return (false, firstReason ?? noModel)
     }
 
     public func summarizeOnDevice(_ thread: ThreadKey) async throws -> String? {
