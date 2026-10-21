@@ -57,6 +57,34 @@ private func environment() -> AppEnvironment {
 }
 
 @MainActor
+@Test func theSidebarListsSearchResultsWithTheirPageAndSaysWhenNothingMatches() throws {
+    let pages = SettingsShellModel(environment: environment()).pages
+    let results = SettingsSearch.results(for: "dark", pages: pages)
+    #expect(results.contains { $0.entry.title == "Theme when dark" && $0.location == "Appearance › Theme" })
+    let size = NSSize(width: SettingsMetrics.sidebarWidth, height: SettingsMetrics.windowHeight)
+    let sidebar = SettingsSidebar(pages: pages, selection: .constant("appearance"), query: .constant("dark"), results: results)
+    let hosting = try host(sidebar, size: size, name: "settings-search-results")
+    #expect(hosting.frame.width == SettingsMetrics.sidebarWidth)
+    _ = try host(SettingsSidebar(pages: pages, selection: .constant("general"), query: .constant("zzz")), size: size,
+                 name: "settings-search-empty", theme: .dark)
+}
+
+@MainActor
+@Test func aRevealedRowAndSectionLayOutHighlighted() throws {
+    let row = SettingsSearchEntry(page: "general", kind: .row, title: "Zoom", section: "Window")
+    let page = SettingsPageScaffold(title: "General") {
+        SettingsSection("Window") {
+            SettingsRow("Tab counts")
+            SettingsRow("Zoom", detail: "Makes everything bigger.")
+        }
+    }
+    _ = try host(page.environment(\.settingsReveal, SettingsReveal(entry: row, serial: 1)), name: "settings-reveal-row")
+    let section = SettingsSearchEntry(page: "general", kind: .section, title: "Window")
+    _ = try host(page.environment(\.settingsReveal, SettingsReveal(entry: section, serial: 2)), name: "settings-reveal-section",
+                 theme: .dark)
+}
+
+@MainActor
 @Test func everyPageLaysOutOnFakes() async throws {
     let env = environment()
     let extras: () -> AnyView = { AnyView(EmptyView()) }

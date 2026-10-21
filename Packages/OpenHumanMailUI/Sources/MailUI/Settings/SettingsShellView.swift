@@ -37,6 +37,7 @@ public struct SettingsHosting {
 
 public struct SettingsShellView: View {
     @State private var shell: SettingsShellModel
+    @State private var query = ""
     let environment: AppEnvironment?
     let hosting: SettingsHosting
     @Environment(\.theme) private var theme
@@ -65,17 +66,28 @@ public struct SettingsShellView: View {
         pages.filter { $0.builtIn == .appearance || (showsAdvanced && $0.builtIn == .advanced) }
     }
 
+    private var results: [SettingsSearchResult] {
+        SettingsSearch.results(for: query, pages: pages, includesDeveloperItems: hosting.showsDeveloperItems)
+    }
+
     public var body: some View {
         HStack(spacing: 0) {
-            SettingsSidebar(pages: pages, selection: $shell.selected, build: hosting.build)
+            SettingsSidebar(pages: pages, selection: $shell.selected, query: $query, results: results,
+                            open: { shell.openResult($0.entry) }, build: hosting.build)
             Rectangle().fill(theme.borderHairline.color).frame(width: theme.borderWidthHairline)
             page
+                .environment(\.settingsReveal, shell.reveal)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .background(theme.bgWindow.color)
         .navigationTitle(shell.selectedEntry?.title ?? "Settings")
         .onAppear { followRequest() }
         .onChange(of: environment?.settingsNavigator.requestedPage) { followRequest() }
+        .task(id: shell.reveal?.serial) {
+            guard let serial = shell.reveal?.serial else { return }
+            try? await Task.sleep(for: .seconds(SettingsMetrics.revealSeconds))
+            if !Task.isCancelled { shell.endReveal(serial) }
+        }
     }
 
     private func followRequest() {
@@ -140,22 +152,33 @@ public struct SettingsShellView: View {
 struct SettingsSidebar: View {
     let pages: [SettingsPageEntry]
     @Binding var selection: String
+    @Binding var query: String
+    var results: [SettingsSearchResult]
+    var open: (SettingsSearchResult) -> Void
     var build: BuildLabel?
+    @State private var cursor: String?
+    @State private var opened: String?
     @FocusState private var focused: Bool
+    @FocusState private var searching: Bool
     @Environment(\.theme) private var theme
+
+    init(pages: [SettingsPageEntry], selection: Binding<String>, query: Binding<String> = .constant(""),
+         results: [SettingsSearchResult] = [], open: @escaping (SettingsSearchResult) -> Void = { _ in },
+         build: BuildLabel? = nil) {
+        self.pages = pages
+        _selection = selection
+        _query = query
+        self.results = results
+        self.open = open
+        self.build = build
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: theme.space1) {
-                    ForEach(pages) { entry in
-                        SettingsSidebarRow(entry: entry, isSelected: entry.id == selection, showsCursor: focused) {
-                            selection = entry.id
-                        }
-                    }
-                }
-                .padding(theme.space3)
-            }
+            SettingsSearchField(query: $query, focused: $searching, up: { moveCursor(by: -1) },
+                                down: { moveCursor(by: 1) }, submit: openCursor)
+                .padding([.horizontal, .top], theme.space3)
+            if query.isEmpty { pageList } else { resultList }
             if let build {
                 SettingsBuildFooter(build: build)
             }
@@ -163,14 +186,67 @@ struct SettingsSidebar: View {
         .frame(width: SettingsMetrics.sidebarWidth)
         .frame(maxHeight: .infinity)
         .background(theme.bgSidebar.color)
+        .background {
+            Button("Search settings") { searching = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
+        .onChange(of: query) {
+            cursor = results.first?.id
+            opened = nil
+        }
+    }
+
+    private var pageList: some View {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: theme.space1) {
+                ForEach(pages) { entry in
+                    SettingsSidebarRow(entry: entry, isSelected: entry.id == selection, showsCursor: focused) {
+                        selection = entry.id
+                    }
+                }
+            }
+            .padding(theme.space3)
+        }
         .focusable()
         .focused($focused)
         .focusEffectDisabled()
         .onKeyPress(.upArrow) { move(by: -1) }
         .onKeyPress(.downArrow) { move(by: 1) }
+        .onKeyPress(characters: .alphanumerics, phases: .down) { press in startSearch(press) }
         .onAppear { focused = true }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Settings pages")
+    }
+
+    private var resultList: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: theme.space1) {
+                    if results.isEmpty {
+                        Text("No results for \u{201C}\(query)\u{201D}")
+                            .themeFont(theme.typeMeta)
+                            .foregroundStyle(theme.textSecondary.color)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(theme.space3)
+                            .accessibilityIdentifier("settings.search.empty")
+                    }
+                    ForEach(results) { result in
+                        SettingsSearchResultRow(result: result, isSelected: result.id == opened,
+                                                showsCursor: searching && result.id == cursor) { choose(result) }
+                            .id(result.id)
+                    }
+                }
+                .padding(theme.space3)
+            }
+            .onChange(of: cursor) { _, id in
+                if let id { proxy.scrollTo(id) }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Settings search results")
     }
 
     private func move(by offset: Int) -> KeyPress.Result {
@@ -178,10 +254,138 @@ struct SettingsSidebar: View {
         return .handled
     }
 
+    private func startSearch(_ press: KeyPress) -> KeyPress.Result {
+        guard press.modifiers.subtracting([.shift, .capsLock]).isEmpty else { return .ignored }
+        query = press.characters
+        searching = true
+        return .handled
+    }
+
+    private func moveCursor(by offset: Int) {
+        let ids = results.map(\.id)
+        if let current = cursor, let next = Self.page(after: current, offset: offset, in: ids) {
+            cursor = next
+        } else if cursor == nil || !ids.contains(cursor ?? "") {
+            cursor = ids.first
+        }
+    }
+
+    private func openCursor() {
+        guard let result = results.first(where: { $0.id == cursor }) ?? results.first else { return }
+        choose(result)
+    }
+
+    private func choose(_ result: SettingsSearchResult) {
+        cursor = result.id
+        opened = result.id
+        open(result)
+    }
+
     static func page(after current: String, offset: Int, in ids: [String]) -> String? {
         guard let index = ids.firstIndex(of: current) else { return ids.first }
         let target = min(max(index + offset, 0), ids.count - 1)
         return target == index ? nil : ids[target]
+    }
+}
+
+struct SettingsSearchField: View {
+    @Binding var query: String
+    var focused: FocusState<Bool>.Binding
+    let up: () -> Void
+    let down: () -> Void
+    let submit: () -> Void
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        HStack(spacing: theme.space2) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: SettingsMetrics.sidebarIconSize))
+                .foregroundStyle(theme.textTertiary.color)
+                .accessibilityHidden(true)
+            TextField("Search settings", text: $query, prompt: Text("Search").settingsPrompt(theme))
+                .textFieldStyle(.plain)
+                .themeFont(theme.typeBody)
+                .labelsHidden()
+                .focused(focused)
+                .onSubmit(submit)
+                .onKeyPress(.upArrow) { up(); return .handled }
+                .onKeyPress(.downArrow) { down(); return .handled }
+                .onKeyPress(.escape) {
+                    guard !query.isEmpty else { return .ignored }
+                    query = ""
+                    return .handled
+                }
+                .accessibilityIdentifier("settings.search")
+            if !query.isEmpty {
+                Button { query = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: SettingsMetrics.sidebarIconSize))
+                        .foregroundStyle(theme.textTertiary.color)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, theme.space2)
+        .frame(height: SettingsMetrics.sidebarRowHeight)
+        .background(RoundedRectangle(cornerRadius: theme.radiusMD).fill(theme.bgWindow.color))
+        .overlay(RoundedRectangle(cornerRadius: theme.radiusMD)
+            .strokeBorder((focused.wrappedValue ? theme.accentRing : theme.borderControl).color,
+                          lineWidth: theme.borderWidthControl))
+    }
+}
+
+struct SettingsSearchResultRow: View {
+    let result: SettingsSearchResult
+    let isSelected: Bool
+    let showsCursor: Bool
+    let action: () -> Void
+    @State private var hovering = false
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .firstTextBaseline, spacing: theme.space3) {
+                Image(systemName: result.symbol)
+                    .font(.system(size: SettingsMetrics.sidebarIconSize))
+                    .foregroundStyle((isSelected ? theme.accentText : theme.textSecondary).color)
+                    .frame(width: theme.space6)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(result.entry.title)
+                        .themeFont(isSelected ? theme.typeBodyStrong : theme.typeBody)
+                        .foregroundStyle(theme.textPrimary.color)
+                    if let location = result.location {
+                        Text(location)
+                            .themeFont(theme.typeMeta)
+                            .foregroundStyle(theme.textSecondary.color)
+                    }
+                }
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, theme.space3)
+            .padding(.vertical, theme.space1)
+            .frame(minHeight: SettingsMetrics.sidebarRowHeight)
+            .background(plate)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel([result.entry.title, result.location].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier("settings.search.result")
+    }
+
+    private var plate: some View {
+        ZStack(alignment: .leading) {
+            Rectangle().fill(isSelected ? theme.bgRowSelected.color : (hovering ? theme.bgRowHover.color : .clear))
+            if showsCursor {
+                Rectangle().fill(theme.accentRing.color).frame(width: theme.borderWidthCursorBar)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: theme.radiusMD))
     }
 }
 

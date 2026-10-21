@@ -1,0 +1,15 @@
+{
+  "id": "settings.search",
+  "area": "Settings",
+  "title": "Settings › search finds a setting and shows it",
+  "steps": [
+    "Open Settings and type \"dark\" in the search field above the pages (or press ⌘F)",
+    "Use ↓ to move to Theme when dark and press Return",
+    "Search \"hotkey\", then \"traces\", and click each result",
+    "Press Esc in the search field"
+  ],
+  "deepLink": null,
+  "expected": "Results list each setting with its page and section, best match first. Opening one shows its page (and its tab on AI or Importance & labels), scrolls to the row and highlights it briefly. Nothing matching says so. Esc clears the search and the page list comes back.",
+  "requires": "fake",
+  "addedIn": "2026-10-21"
+}

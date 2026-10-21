@@ -22,6 +22,7 @@ public struct AISettingsTabs<Overview: View>: View {
     private let navigator: SettingsNavigator?
     private let overview: Overview
     @Environment(\.theme) private var theme
+    @Environment(\.settingsReveal) private var reveal
 
     public init(prompts: @autoclosure () -> PromptsSettingsModel?, activity: @autoclosure () -> AIActivityModel? = nil,
                 navigator: SettingsNavigator? = nil, initialTab: Tab = .overview, @ViewBuilder overview: () -> Overview) {
@@ -56,6 +57,12 @@ public struct AISettingsTabs<Overview: View>: View {
             }
         }
         .task(id: navigator?.requestedPrompt) { await takeRequest() }
+        .onChange(of: reveal, initial: true) { _, reveal in
+            if reveal?.entry.page == SettingsPageID.ai.rawValue, let shown = reveal?.entry.tab.flatMap(Tab.init(rawValue:)),
+               tabs.contains(shown) {
+                tab = shown
+            }
+        }
     }
 
     private var tabs: [Tab] {

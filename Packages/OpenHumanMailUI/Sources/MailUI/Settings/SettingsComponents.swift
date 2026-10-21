@@ -1,3 +1,4 @@
+import MailFeatures
 import MailTheme
 import SwiftUI
 
@@ -10,6 +11,7 @@ public enum SettingsMetrics {
     public static let compactRowMinHeight: CGFloat = 28
     public static let windowWidth: CGFloat = 780
     public static let windowHeight: CGFloat = 560
+    public static let revealSeconds: Double = 2.5
 }
 
 public enum SettingsTone: Sendable, Hashable {
@@ -32,6 +34,7 @@ public struct SettingsPageScaffold<Content: View>: View {
     let layout: Layout
     let content: Content
     @Environment(\.theme) private var theme
+    @Environment(\.settingsReveal) private var reveal
 
     public init(title: String, layout: Layout = .column, @ViewBuilder content: () -> Content) {
         self.title = title
@@ -43,13 +46,21 @@ public struct SettingsPageScaffold<Content: View>: View {
         Group {
             switch layout {
             case .column:
-                ScrollView(.vertical) {
-                    stack
-                        .frame(maxWidth: SettingsMetrics.contentMaxWidth, alignment: .leading)
-                        .padding(theme.space8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical) {
+                        stack
+                            .frame(maxWidth: SettingsMetrics.contentMaxWidth, alignment: .leading)
+                            .padding(theme.space8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .scrollIndicatorsFlash(onAppear: true)
+                    .task(id: reveal?.serial) {
+                        guard reveal != nil else { return }
+                        // Why: the page (and a tab the result lives on) has to lay out before its row can be scrolled to
+                        try? await Task.sleep(for: .milliseconds(150))
+                        withAnimation { proxy.scrollTo(SettingsRevealHighlight.anchor, anchor: .center) }
+                    }
                 }
-                .scrollIndicatorsFlash(onAppear: true)
             case .fill:
                 stack
                     .padding(theme.space8)
@@ -75,6 +86,7 @@ public struct SettingsSection<Content: View>: View {
     let compact: Bool
     let content: Content
     @Environment(\.theme) private var theme
+    @Environment(\.settingsReveal) private var reveal
 
     public init(_ title: String? = nil, detail: String? = nil, footnote: String? = nil, compact: Bool = false,
                 @ViewBuilder content: () -> Content) {
@@ -92,6 +104,7 @@ public struct SettingsSection<Content: View>: View {
                     if let title {
                         Text(title).themeFont(theme.typeHeadline).foregroundStyle(theme.textPrimary.color)
                             .accessibilityAddTraits(.isHeader)
+                            .modifier(SettingsRevealHighlight(isOn: reveal?.entry.kind == .section && reveal?.entry.title == title))
                     }
                     if let detail {
                         SettingsFootnote(detail)
@@ -121,6 +134,29 @@ public struct SettingsSection<Content: View>: View {
 
 extension EnvironmentValues {
     @Entry var settingsCompactRows = false
+    @Entry var settingsReveal: SettingsReveal? = nil
+}
+
+/// Marks the row or section a Settings search result opened, and gives the page's scroll view something to scroll to.
+struct SettingsRevealHighlight: ViewModifier {
+    static let anchor = "settings.reveal"
+
+    let isOn: Bool
+    @Environment(\.theme) private var theme
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                if isOn {
+                    RoundedRectangle(cornerRadius: theme.radiusMD).fill(theme.accentSubtle.color)
+                        .padding(.horizontal, -theme.space2)
+                        .id(Self.anchor)
+                        .transition(.opacity)
+                        .accessibilityHidden(true)
+                }
+            }
+            .animation(.easeOut(duration: 0.4), value: isOn)
+    }
 }
 
 public struct SettingsRow<Control: View>: View {
@@ -135,6 +171,7 @@ public struct SettingsRow<Control: View>: View {
     @Environment(\.theme) private var theme
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.settingsCompactRows) private var compact
+    @Environment(\.settingsReveal) private var reveal
 
     public init(_ title: String, detail: String? = nil, status: String? = nil, statusTone: SettingsTone = .secondary,
                 alignment: VerticalAlignment = .center, labelsControl: Bool = false, stacked: Bool = false,
@@ -153,6 +190,7 @@ public struct SettingsRow<Control: View>: View {
         arranged
             .padding(.vertical, compact ? theme.space2 : theme.space3)
             .frame(minHeight: compact ? SettingsMetrics.compactRowMinHeight : SettingsMetrics.rowMinHeight)
+            .modifier(SettingsRevealHighlight(isOn: reveal?.entry.kind == .row && reveal?.entry.title == title))
     }
 
     // Why: a wide control beside the title squeezes the title until it wraps a letter per line

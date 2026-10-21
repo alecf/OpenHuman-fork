@@ -24,6 +24,7 @@ struct ImportanceSettingsPage: View {
     @State private var ruleSet: ClassificationRuleSet
     @State private var tracking: ClassificationTrackingModel
     @Environment(\.theme) private var theme
+    @Environment(\.settingsReveal) private var reveal
 
     init(environment: AppEnvironment) {
         self.init(model: ImportanceSettingsModel(environment: environment), learning: environment.learning,
@@ -64,6 +65,11 @@ struct ImportanceSettingsPage: View {
             }
         }
         .onChange(of: ruleSet.pendingDraft) { _, draft in if draft != nil { tab = .rules } }
+        .onChange(of: reveal, initial: true) { _, reveal in
+            if reveal?.entry.page == ImportanceSettingsModel.pageID, let shown = reveal?.entry.tab.flatMap(Tab.init(rawValue:)) {
+                tab = shown
+            }
+        }
     }
 
     @ViewBuilder private var importanceRules: some View {

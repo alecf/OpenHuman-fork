@@ -80,8 +80,13 @@ public final class SettingsShellModel {
 
     public private(set) var pages: [SettingsPageEntry]
     public var selected: String {
-        didSet { if selected != oldValue { defaults?.set(selected, forKey: Self.lastPageKey) } }
+        didSet {
+            if selected != oldValue { defaults?.set(selected, forKey: Self.lastPageKey) }
+            if reveal?.entry.page != selected { reveal = nil }
+        }
     }
+    public private(set) var reveal: SettingsReveal?
+    @ObservationIgnored private var revealSerial = 0
     public let availability: SettingsAvailability
     @ObservationIgnored private let defaults: UserDefaults?
 
@@ -134,6 +139,18 @@ public final class SettingsShellModel {
     }
 
     public var selectedEntry: SettingsPageEntry? { pages.first { $0.id == selected } }
+
+    /// Opens a search result's page and marks its row or section to be scrolled to and highlighted.
+    public func openResult(_ entry: SettingsSearchEntry) {
+        guard pages.contains(where: { $0.id == entry.page }) else { return }
+        revealSerial += 1
+        reveal = entry.kind == .page ? nil : SettingsReveal(entry: entry, serial: revealSerial)
+        selected = entry.page
+    }
+
+    public func endReveal(_ serial: Int) {
+        if reveal?.serial == serial { reveal = nil }
+    }
 
     @discardableResult
     public func takeRequest(from navigator: SettingsNavigator) -> Bool {
