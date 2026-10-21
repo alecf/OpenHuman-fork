@@ -9,9 +9,14 @@ final class SparkleUpdater: SoftwareUpdater {
     static let publicKeyKey = "SUPublicEDKey"
 
     private let controller: SPUStandardUpdaterController
+    // Why: Sparkle holds its delegate weakly, so the updater keeps it
+    private let cycles: UpdateCycleObserver
 
     init() {
-        controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+        let cycles = UpdateCycleObserver()
+        self.cycles = cycles
+        controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: cycles, userDriverDelegate: nil)
+        cycles.finished = { [weak self] in self?.withMutation(keyPath: \.lastUpdateCheckDate) {} }
     }
 
     // Why: Sparkle keeps this setting itself; the Settings switch reads and writes it through here so it redraws
@@ -27,7 +32,11 @@ final class SparkleUpdater: SoftwareUpdater {
         }
     }
 
-    var lastUpdateCheckDate: Date? { controller.updater.lastUpdateCheckDate }
+    // Why: Sparkle sets the date itself; the end of each update cycle tells Settings to read it again
+    var lastUpdateCheckDate: Date? {
+        access(keyPath: \.lastUpdateCheckDate)
+        return controller.updater.lastUpdateCheckDate
+    }
 
     func checkForUpdates() {
         controller.checkForUpdates(nil)
@@ -41,5 +50,14 @@ final class SparkleUpdater: SoftwareUpdater {
         }
         guard let feed = value(feedKey).flatMap(URL.init(string:)), feed.scheme == "https", feed.host() != nil else { return false }
         return value(publicKeyKey).flatMap { Data(base64Encoded: $0) }?.count == 32
+    }
+}
+
+@MainActor
+private final class UpdateCycleObserver: NSObject, SPUUpdaterDelegate {
+    var finished: (@MainActor () -> Void)?
+
+    func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
+        finished?()
     }
 }

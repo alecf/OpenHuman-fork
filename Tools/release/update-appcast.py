@@ -113,8 +113,12 @@ def update(appcast_text: str, *, version: str, build: str, download_url: str, si
     if not MACOS_RE.match(minimum_system_version):
         raise AppcastError(f"the minimum macOS version must look like 26.0 (got {minimum_system_version!r})")
 
+    found = existing_items(appcast_text)
+    if appcast_text.count("<item>") != len(found):
+        raise AppcastError("the appcast has <item> entries this tool cannot read (it expects the layout it writes); "
+                           "fix appcast.xml by hand so no release is dropped")
     kept = []
-    for item in existing_items(appcast_text):
+    for item in found:
         old_build = ITEM_BUILD_RE.search(item)
         old_version = ITEM_VERSION_RE.search(item)
         if old_version and old_version.group(1) == version:

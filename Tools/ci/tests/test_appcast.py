@@ -1,3 +1,4 @@
+import base64
 import importlib.util
 import pathlib
 import platform
@@ -79,6 +80,11 @@ class AppcastTests(unittest.TestCase):
             with self.subTest(build=build), self.assertRaisesRegex(appcast.AppcastError, "not above build 140"):
                 add(first, "0.3.0", build)
 
+    def test_an_item_in_another_layout_stops_the_run_instead_of_being_dropped(self):
+        hand_edited = add("", "0.2.0", "140").replace("    <item>", "  <item>")
+        with self.assertRaisesRegex(appcast.AppcastError, "cannot read"):
+            add(hand_edited, "0.3.0", "150")
+
     def test_notes_cannot_end_the_cdata_section(self):
         text = add("", notes_html="<p>a ]]> b</p>")
         self.assertIn("<p>a ]]> b</p>", items(text)[0].findtext("description"))
@@ -146,10 +152,9 @@ class SparkleKeyCheckTests(unittest.TestCase):
         self.assertEqual(wrong.returncode, 1, wrong.stderr)
         self.assertNotIn(RFC_SEED, wrong.stdout + wrong.stderr, "the private key is never printed")
 
-    def test_an_old_format_key_is_read_from_its_public_half(self):
-        import base64
+    def test_an_old_format_key_is_refused(self):
         old = base64.b64encode(bytes(64) + base64.b64decode(RFC_PUBLIC)).decode()
-        self.assertEqual(self.check(old, RFC_PUBLIC).returncode, 0)
+        self.assertEqual(self.check(old, RFC_PUBLIC).returncode, 2)
 
     def test_unreadable_input_exits_2(self):
         self.assertEqual(self.check("not a key", RFC_PUBLIC).returncode, 2)

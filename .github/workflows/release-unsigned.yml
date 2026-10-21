@@ -53,8 +53,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="$(Tools/release/bump-version.sh)"
-          if gh release view "v$version" >/dev/null 2>&1; then
+          # Only an answer of "not found" lets it continue: any other failure could hide a signed release
+          if answer="$(gh release view "v$version" --json isDraft 2>&1)"; then
             echo "::error::v$version already has a release (signed or a draft). Raise the version to publish an unsigned build."
+            exit 1
+          elif [[ "$answer" != *"release not found"* ]]; then
+            echo "::error::Could not tell whether v$version has a release: $answer"
             exit 1
           fi
           Tools/release/publish-github.sh "$version"

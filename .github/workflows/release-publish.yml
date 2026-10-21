@@ -25,7 +25,8 @@ jobs:
       github.event.pull_request.merged == true &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       startsWith(github.event.pull_request.head.ref, 'release/v')
-    runs-on: ${{ vars.MACOS_RUNNER_LABEL || 'xcode-27' }}
+    # Why: only gh calls, and the appcast entry is on main from the merge on, so this must not queue behind a Mac build
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
@@ -65,6 +66,13 @@ jobs:
           esac
           gh release edit "$TAG" --target "$BUILT_SHA" --draft=false --prerelease
           echo "Published $TAG at $BUILT_SHA (appcast merged in $MERGE_SHA)"
+
+      - name: Say what to undo
+        if: failure()
+        env:
+          TAG: ${{ steps.tag.outputs.TAG }}
+        run: |
+          echo "::error::$TAG was not published, but its appcast entry is on main and points at a download that does not exist. Revert the merge of $HEAD_REF (or remove the $TAG item from appcast.xml), fix the cause, and run release.yml again."
 
       - name: Delete the release branch
         run: gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$HEAD_REF" || true

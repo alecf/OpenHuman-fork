@@ -21,18 +21,12 @@ let input = String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as:
     .trimmingCharacters(in: .whitespacesAndNewlines)
 guard let secret = Data(base64Encoded: input) else { fail("standard input is not a base64 private key", 2) }
 
-let derived: Data
-switch secret.count {
-case 32:
-    // generate_keys -x exports the 32-byte seed
-    guard let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: secret) else { fail("not an Ed25519 seed", 2) }
-    derived = key.publicKey.rawRepresentation
-case 96:
-    // Keys made before Sparkle 2.0.0 store the 64-byte private key followed by the 32-byte public key
-    derived = secret.suffix(32)
-default:
-    fail("the private key is \(secret.count) bytes; expected what generate_keys -x exports", 2)
+// generate_keys -x exports the 32-byte seed. Keys in the format before Sparkle 2 are refused: their stored public half
+// cannot be checked against the private half here, so make a new pair (docs/release/SPARKLE.md)
+guard secret.count == 32, let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: secret) else {
+    fail("the private key is \(secret.count) bytes; expected the 32-byte seed that generate_keys -x exports", 2)
 }
+let derived = key.publicKey.rawRepresentation
 guard derived == expected else {
     fail("SPARKLE_PRIVATE_KEY does not belong to SUPublicEDKey \(arguments.first!). Updates signed with it would be refused", 1)
 }
